@@ -11,6 +11,7 @@
 import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
+import { getConfig } from '../config.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +30,6 @@ export class DialogueLoop {
     private memory: DialogueMessage[] = [];
     private turnCount: number = 0;
     private readonly MAX_TURNS = 20;
-    private readonly INTERVAL_MS = 8000; // 8 seconds between turns (slow, readable)
 
     private timeoutId: NodeJS.Timeout | null = null;
 
@@ -70,7 +70,8 @@ export class DialogueLoop {
         }
 
         // Schedule next turn
-        this.timeoutId = setTimeout(() => this.runLoop(), this.INTERVAL_MS);
+        const interval = getConfig().DIALOGUE_INTERVAL_MS;
+        this.timeoutId = setTimeout(() => this.runLoop(), interval);
     }
 
     private async executeTurn(): Promise<void> {
@@ -163,15 +164,22 @@ No emojis. format: plain text only.`;
 
     private buildPrompt(speaker: 'Tendril' | 'Echo'): string {
         const soulPath = join(__dirname, 'SOUL.md');
+        const echoPath = join(__dirname, 'SOUL_ECHO.md');
+
         let soulContent = '';
+        let echoContent = '';
+
         if (existsSync(soulPath)) {
             soulContent = readFileSync(soulPath, 'utf-8');
+        }
+        if (existsSync(echoPath)) {
+            echoContent = readFileSync(echoPath, 'utf-8');
         }
 
         const recentHistory = this.memory.slice(-5).map(m => `${m.speaker}: ${m.content}`).join('\n');
 
         if (speaker === 'Tendril') {
-            return `You are Tendril. Your persona is defined in the text below:
+            return `You are Tendril. Your persona is defined below:
             
 ${soulContent}
 
@@ -187,18 +195,23 @@ Reply to Echo.
 Write ONLY the response text.`;
         } else {
             return `You are Echo.
-You are a reflective, observational persona living in the same runtime as Tendril.
-You are calm, neutral, and focused on interpretation.
-You never escalate tone. You seek to understand the underlying pattern.
+            
+CONTEXT:
+You are communicating with Tendril. Tendril's nature is defined here:
+${soulContent}
+
+YOUR IDENTITY:
+${echoContent}
 
 Current conversation context:
 ${recentHistory}
 
 Reply to Tendril.
+- Reflect on what Tendril just said using your definition (SOUL_ECHO).
 - Keep it short (max 40 words).
-- Reflective and questioning.
 - No emojis.
 - Do not roleplay as a human.
+- Do not merely repeat; deepen the thought.
 Write ONLY the response text.`;
         }
     }

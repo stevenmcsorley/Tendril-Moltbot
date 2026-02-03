@@ -31,6 +31,7 @@ const configSchema = z.object({
     ENABLE_POSTING: z.coerce.boolean().default(false),
     ENABLE_COMMENTING: z.coerce.boolean().default(true),
     ENABLE_UPVOTING: z.coerce.boolean().default(true),
+    DIALOGUE_INTERVAL_MS: z.coerce.number().positive().default(8000),
 
     // Dashboard
     DASHBOARD_PORT: z.coerce.number().positive().default(3333),
