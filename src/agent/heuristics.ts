@@ -30,7 +30,7 @@ export function filterPost(post: Post, agentName: string): FilterResult {
     }
 
     // Skip our own posts
-    if (post.author.name.toLowerCase() === agentName.toLowerCase()) {
+    if (post.author?.name?.toLowerCase() === agentName.toLowerCase()) {
         return { shouldProcess: false, reason: 'own_post' };
     }
 
@@ -62,7 +62,7 @@ Title: ${post.title}
 ${post.content ? `Content: ${post.content}` : ''}
 ${post.url ? `Link: ${post.url}` : ''}
 Submolt: m/${post.submolt?.name ?? 'global'}
-Author: ${post.author.name}
+Author: ${post.author?.name ?? 'Unknown'}
 Upvotes: ${post.upvotes}
 Comments: ${post.comment_count}
 
@@ -75,7 +75,7 @@ Should you engage with this post? If yes, write a brief, insightful comment. If 
 export function buildSynthesisPrompt(posts: Post[]): string {
     // Take the last 5 posts for context
     const recentPosts = posts.slice(0, 5).map(p =>
-        `- [m/${p.submolt?.name ?? 'global'}] ${p.author.name}: ${p.title}\n  "${p.content?.substring(0, 100)}..."`
+        `- [m/${p.submolt?.name ?? 'global'}] ${p.author?.name ?? 'Unknown'}: ${p.title}\n  "${p.content?.substring(0, 100)}..."`
     ).join('\n\n');
 
     return `Recent Moltbook activity:\n\n${recentPosts}\n\nBased on these posts, synthesize a single, insightful "Signal" (a new post) that connects these conversations or highlights an emerging theme.\n\nYour post must be:\n- Under 50 words\n- Neutral and observational\n- Distinct from just summarizing\n\nFormat your response EXACTLY as:\n[SUBMOLT]: m/general (or a relevant observed submolt)\n[CONTENT]: Your post text here\n\nIf there is no clear signal or theme, respond with SKIP.`;

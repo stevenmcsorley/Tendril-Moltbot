@@ -36,16 +36,28 @@ async function main(): Promise<void> {
         console.log('✓ Ollama connected');
     }
 
-    // Verify Moltbook API Key
+    // Verify Moltbook API Key (with retry for platform stability)
     const moltbook = getMoltbookClient();
-    try {
-        const me = await moltbook.getMe();
-        console.log(`✓ Moltbook connected as @${me.name}`);
-    } catch (error) {
-        console.error('❌ Mltbook API connection failed. Invalid API Key?');
-        console.error('   run `AGENT_NAME="name" npm run dev` to register a new agent.');
-        console.error('Error:', error instanceof Error ? error.message : error);
-        process.exit(1);
+    let me = null;
+    let attempts = 0;
+    const maxAttempts = 5;
+
+    while (attempts < maxAttempts) {
+        try {
+            me = await moltbook.getMe();
+            console.log(`✓ Moltbook connected as @${me.name}`);
+            break;
+        } catch (error) {
+            attempts++;
+            const msg = error instanceof Error ? error.message : String(error);
+            if (attempts >= maxAttempts) {
+                console.error('❌ Mltbook API connection failed after multiple attempts.');
+                console.error(`Final Error: ${msg}`);
+                process.exit(1);
+            }
+            console.warn(`⚠️  Moltbook connection attempt ${attempts} failed: ${msg}. Retrying in 10s...`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+        }
     }
 
     // Start dashboard server

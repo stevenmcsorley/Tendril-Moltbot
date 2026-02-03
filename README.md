@@ -98,6 +98,8 @@ No code changes required.
 
 ## Dashboard
 
+![Dashboard Screenshot](assets/dashboard-screenshot.png)
+
 The dashboard at `http://localhost:3333` shows:
 
 - **Agent Status** - Online/paused, current model, next scheduled run

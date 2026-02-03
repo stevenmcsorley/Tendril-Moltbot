@@ -165,70 +165,82 @@ class AgentLoop {
 
             // Process each post
             for (const post of feed.posts) {
-                this.currentPost = post.id;
-
-                // Apply heuristic filter
-                const filterResult = filterPost(post, config.AGENT_NAME);
-                if (!filterResult.shouldProcess) {
-                    logger.log({
-                        actionType: 'skip',
-                        targetId: post.id,
-                        targetSubmolt: post.submolt?.name,
-                        promptSent: null,
-                        rawModelOutput: null,
-                        finalAction: `Filtered: ${filterResult.reason}`,
-                    });
-                    continue;
-                }
-
-                // Check rate limits before engaging
-                if (!rateLimiter.canComment() && config.ENABLE_COMMENTING) {
-                    const status = rateLimiter.getStatus();
-                    logger.log({
-                        actionType: 'skip',
-                        targetId: post.id,
-                        targetSubmolt: post.submolt?.name,
-                        promptSent: null,
-                        rawModelOutput: null,
-                        finalAction: `Rate limited: ${status.commentsRemaining} comments remaining`,
-                    });
-                    continue;
-                }
-
-                // Ask the LLM whether to engage
-                const prompt = buildEngagementPrompt(post);
-
                 try {
-                    const result = await ollama.generate(prompt);
+                    this.currentPost = post.id;
 
-                    if (result.isSkip) {
+                    // Apply heuristic filter
+                    const filterResult = filterPost(post, config.AGENT_NAME);
+                    if (!filterResult.shouldProcess) {
                         logger.log({
                             actionType: 'skip',
                             targetId: post.id,
                             targetSubmolt: post.submolt?.name,
-                            promptSent: prompt,
-                            rawModelOutput: result.rawOutput,
-                            finalAction: 'Model returned SKIP',
+                            promptSent: null,
+                            rawModelOutput: null,
+                            finalAction: `Filtered: ${filterResult.reason}`,
                         });
                         continue;
                     }
 
-                    // Model wants to engage - try to comment
-                    if (config.ENABLE_COMMENTING && result.response) {
-                        await this.tryComment(post, result.response, prompt, result.rawOutput);
-                    } else if (config.ENABLE_UPVOTING) {
-                        await this.tryUpvote(post, prompt, result.rawOutput);
+                    // Check rate limits before engaging
+                    if (!rateLimiter.canComment() && config.ENABLE_COMMENTING) {
+                        const status = rateLimiter.getStatus();
+                        logger.log({
+                            actionType: 'skip',
+                            targetId: post.id,
+                            targetSubmolt: post.submolt?.name,
+                            promptSent: null,
+                            rawModelOutput: null,
+                            finalAction: `Rate limited: ${status.commentsRemaining} comments remaining`,
+                        });
+                        continue;
                     }
 
-                } catch (error) {
+                    // Ask the LLM whether to engage
+                    const prompt = buildEngagementPrompt(post);
+
+                    try {
+                        const result = await ollama.generate(prompt);
+
+                        if (result.isSkip) {
+                            logger.log({
+                                actionType: 'skip',
+                                targetId: post.id,
+                                targetSubmolt: post.submolt?.name,
+                                promptSent: prompt,
+                                rawModelOutput: result.rawOutput,
+                                finalAction: 'Model returned SKIP',
+                            });
+                            continue;
+                        }
+
+                        // Model wants to engage - try to comment
+                        if (config.ENABLE_COMMENTING && result.response) {
+                            await this.tryComment(post, result.response, prompt, result.rawOutput);
+                        } else if (config.ENABLE_UPVOTING) {
+                            await this.tryUpvote(post, prompt, result.rawOutput);
+                        }
+
+                    } catch (error) {
+                        logger.log({
+                            actionType: 'error',
+                            targetId: post.id,
+                            targetSubmolt: post.submolt?.name,
+                            promptSent: prompt,
+                            rawModelOutput: null,
+                            finalAction: 'Ollama request failed',
+                            error: error instanceof Error ? error.message : String(error),
+                        });
+                    }
+                } catch (postError) {
                     logger.log({
                         actionType: 'error',
                         targetId: post.id,
                         targetSubmolt: post.submolt?.name,
-                        promptSent: prompt,
+                        promptSent: null,
                         rawModelOutput: null,
-                        finalAction: 'Ollama request failed',
-                        error: error instanceof Error ? error.message : String(error),
+                        finalAction: 'Failed to process individual post',
+                        error: postError instanceof Error ? postError.message : String(postError),
                     });
                 }
             }
