@@ -134,6 +134,7 @@ export default function App() {
                 </div>
                 <ActivityLog
                     entries={logs}
+                    agentName={status?.agent.name}
                     currentFilter={filterType}
                     onFilterChange={setFilterType}
                 />

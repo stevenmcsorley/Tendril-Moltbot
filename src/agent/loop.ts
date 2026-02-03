@@ -312,7 +312,7 @@ class AgentLoop {
                 targetSubmolt: post.submolt?.name,
                 promptSent: prompt,
                 rawModelOutput: rawOutput,
-                finalAction: `Commented on post: "${comment}"`,
+                finalAction: `Agent Commented: "${comment}"`,
             });
 
         } catch (error) {

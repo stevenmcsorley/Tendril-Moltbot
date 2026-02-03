@@ -11,6 +11,7 @@ interface LogEntry {
 
 interface ActivityLogProps {
     entries: LogEntry[];
+    agentName?: string;
     currentFilter: string | undefined;
     onFilterChange: (filter: string | undefined) => void;
 }
@@ -25,7 +26,7 @@ function formatDate(iso: string): string {
     return date.toLocaleDateString();
 }
 
-export default function ActivityLog({ entries, currentFilter, onFilterChange }: ActivityLogProps) {
+export default function ActivityLog({ entries, agentName, currentFilter, onFilterChange }: ActivityLogProps) {
     // Group by date
     const grouped: Record<string, LogEntry[]> = {};
     for (const entry of entries) {
@@ -82,7 +83,7 @@ export default function ActivityLog({ entries, currentFilter, onFilterChange }: 
                                 {date}
                             </div>
                             {dateEntries.map((entry, i) => (
-                                <LogEntryItem key={`${entry.timestamp}-${i}`} entry={entry} />
+                                <LogEntryItem key={`${entry.timestamp}-${i}`} entry={entry} agentName={agentName} />
                             ))}
                         </div>
                     ))}
@@ -92,7 +93,7 @@ export default function ActivityLog({ entries, currentFilter, onFilterChange }: 
     );
 }
 
-function LogEntryItem({ entry }: { entry: LogEntry }) {
+function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: string }) {
     const hasDetails = entry.promptSent || entry.rawModelOutput;
 
     return (
@@ -138,7 +139,7 @@ function LogEntryItem({ entry }: { entry: LogEntry }) {
                         )}
                         {entry.rawModelOutput && (
                             <div className="output-section">
-                                <div className="prompt-label">RAW MODEL OUTPUT</div>
+                                <div className="prompt-label">RAW MODEL OUTPUT - {agentName || 'Agent'} - Inner Monologue</div>
                                 <pre className="output-pre">{entry.rawModelOutput}</pre>
                             </div>
                         )}
