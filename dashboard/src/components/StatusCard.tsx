@@ -57,7 +57,11 @@ export default function StatusCard({ status }: StatusCardProps) {
 
             <div className="status-row">
                 <span className="status-label">Agent</span>
-                <span className="status-value">{status.agent.name}</span>
+                <span className="status-value">
+                    <a href={`https://www.moltbook.com/u/${status.agent.name}`} target="_blank" rel="noopener noreferrer" className="status-link">
+                        {status.agent.name}
+                    </a>
+                </span>
             </div>
 
             <div className="status-row">

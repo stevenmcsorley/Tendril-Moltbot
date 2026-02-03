@@ -98,6 +98,15 @@ body {
   font-size: 13px;
 }
 
+.status-link {
+  color: var(--info);
+  text-decoration: none;
+}
+
+.status-link:hover {
+  text-decoration: underline;
+}
+
 .status-value.online {
   color: var(--success);
 }
