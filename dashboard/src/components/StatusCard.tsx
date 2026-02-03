@@ -103,6 +103,15 @@ export default function StatusCard({ status }: StatusCardProps) {
                 </span>
             </div>
 
+            {status.rateLimit.inBackoff && (
+                <div className="status-row">
+                    <span className="status-label">Backoff Until</span>
+                    <span className="status-value error" title={formatTime(status.rateLimit.backoffUntil)}>
+                        <RelativeTime value={status.rateLimit.backoffUntil} />
+                    </span>
+                </div>
+            )}
+
             <div className="status-row">
                 <span className="status-label">Last Heartbeat</span>
                 <span className="status-value">{formatTime(status.lastHeartbeat)}</span>
@@ -127,14 +136,7 @@ export default function StatusCard({ status }: StatusCardProps) {
                 </span>
             </div>
 
-            {status.rateLimit.inBackoff && (
-                <div className="status-row">
-                    <span className="status-label">Backoff Until</span>
-                    <span className="status-value error" title={formatTime(status.rateLimit.backoffUntil)}>
-                        <RelativeTime value={status.rateLimit.backoffUntil} />
-                    </span>
-                </div>
-            )}
+
 
             <div className="status-row">
                 <span className="status-label">Capabilities</span>
