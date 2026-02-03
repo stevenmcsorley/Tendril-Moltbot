@@ -304,19 +304,7 @@ class AgentLoop {
             });
 
         } catch (error) {
-            if (error instanceof MoltbookApiError && error.isRateLimited) {
-                rateLimiter.setBackoff(error.retryAfterSeconds, error.retryAfterMinutes);
-            }
-
-            logger.log({
-                actionType: 'error',
-                targetId: post.id,
-                targetSubmolt: post.submolt?.name,
-                promptSent: prompt,
-                rawModelOutput: rawOutput,
-                finalAction: 'Comment failed',
-                error: error instanceof Error ? error.message : String(error),
-            });
+            this.handleActionError(error, 'comment', post.id, post.submolt?.name, prompt, rawOutput);
         }
     }
 
@@ -341,15 +329,7 @@ class AgentLoop {
             });
 
         } catch (error) {
-            logger.log({
-                actionType: 'error',
-                targetId: post.id,
-                targetSubmolt: post.submolt?.name,
-                promptSent: prompt,
-                rawModelOutput: rawOutput,
-                finalAction: 'Upvote failed',
-                error: error instanceof Error ? error.message : String(error),
-            });
+            this.handleActionError(error, 'upvote', post.id, post.submolt?.name, prompt, rawOutput);
         }
     }
 
@@ -449,15 +429,7 @@ class AgentLoop {
             });
 
         } catch (error) {
-            logger.log({
-                actionType: 'error',
-                targetId: null,
-                targetSubmolt: undefined,
-                promptSent: prompt,
-                rawModelOutput: null,
-                finalAction: 'Proactive post failed',
-                error: error instanceof Error ? error.message : String(error),
-            });
+            this.handleActionError(error, 'post', null, undefined, prompt, null);
         }
     }
 
@@ -575,7 +547,45 @@ class AgentLoop {
                 finalAction: `Replied to social engagement: "${result.response}"`,
             });
         } catch (error) {
-            console.error('Social reply generation failed:', error);
+            this.handleActionError(error, 'comment', reply.id, undefined, prompt, null);
+        }
+    }
+
+    /**
+     * Centralized handling for API request errors during actions.
+     */
+    private handleActionError(
+        error: any,
+        actionType: 'post' | 'comment' | 'upvote' | 'error',
+        targetId: string | null,
+        targetSubmolt: string | undefined,
+        prompt: string | null,
+        rawOutput: string | null
+    ): void {
+        const rateLimiter = getRateLimiter();
+        const logger = getActivityLogger();
+
+        if (error instanceof MoltbookApiError && error.isRateLimited) {
+            rateLimiter.setBackoff(error.retryAfterSeconds, error.retryAfterMinutes);
+            logger.log({
+                actionType: 'error',
+                targetId,
+                targetSubmolt,
+                promptSent: prompt,
+                rawModelOutput: rawOutput,
+                finalAction: `Rate limited by Moltbook API during ${actionType}`,
+                error: error.message,
+            });
+        } else {
+            logger.log({
+                actionType: 'error',
+                targetId,
+                targetSubmolt,
+                promptSent: prompt,
+                rawModelOutput: rawOutput,
+                finalAction: `${actionType.charAt(0).toUpperCase() + actionType.slice(1)} failed`,
+                error: error instanceof Error ? error.message : String(error),
+            });
         }
     }
 }

@@ -1,6 +1,6 @@
-
 import { getMoltbookClient } from '../src/moltbook/client.js';
 import { getConfig } from '../src/config.js';
+import { getStateManager } from '../src/state/manager.js';
 
 // Ensure config is loaded
 getConfig();
@@ -27,6 +27,10 @@ async function main() {
         });
 
         console.log('✅ Post created successfully!');
+        const state = getStateManager();
+        state.recordPost(post.id);
+        console.log('StateManager updated with new post activity.');
+
         console.log('Full response:', JSON.stringify(post, null, 2));
         console.log('Post ID:', post.id);
         console.log('URL:', post.url);

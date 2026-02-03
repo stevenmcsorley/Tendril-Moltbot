@@ -1,6 +1,6 @@
-
 import { getMoltbookClient } from '../src/moltbook/client.js';
 import { getConfig } from '../src/config.js';
+import { getStateManager } from '../src/state/manager.js';
 
 async function main() {
     console.log('🦞 Testing Comment Capability...');
@@ -25,6 +25,10 @@ async function main() {
         console.log(`Attempting to comment: "${content}"`);
 
         const comment = await client.createComment(post.id, content);
+
+        const state = getStateManager();
+        state.recordComment(post.id, comment.id);
+        console.log('StateManager updated with new comment activity.');
 
         console.log('\n✅ Success! Comment posted.');
         console.log(`Comment ID: ${comment.id}`);
