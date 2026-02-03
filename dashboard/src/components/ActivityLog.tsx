@@ -147,8 +147,22 @@ function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: strin
                     <div className="engagement-details" style={{ marginTop: 16 }}>
                         {entry.promptSent && (
                             <div className="prompt-section">
-                                <div className="prompt-label">Prompt Context</div>
-                                <pre className="prompt-pre">{entry.promptSent}</pre>
+                                {entry.promptSent.includes('### ') ? (
+                                    entry.promptSent.split('### ').filter(Boolean).map((section, idx) => {
+                                        const [title, ...content] = section.split('\n');
+                                        return (
+                                            <div key={idx} className="prompt-content-block" style={{ marginBottom: 12 }}>
+                                                <div className="prompt-label">{title}</div>
+                                                <pre className="prompt-pre">{content.join('\n').trim()}</pre>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <>
+                                        <div className="prompt-label">PROMPT SENT</div>
+                                        <pre className="prompt-pre">{entry.promptSent}</pre>
+                                    </>
+                                )}
                             </div>
                         )}
                         {entry.rawModelOutput && (
@@ -157,6 +171,10 @@ function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: strin
                                 <pre className="output-pre">{entry.rawModelOutput}</pre>
                             </div>
                         )}
+                        <div className="final-execution-section" style={{ marginTop: 16 }}>
+                            <div className="prompt-label" style={{ color: 'var(--success)' }}>FINAL ACTION EXECUTED</div>
+                            <pre className="execution-pre" style={{ borderLeft: '2px solid var(--success)' }}>{entry.finalAction}</pre>
+                        </div>
                     </div>
                 </details>
             )}
