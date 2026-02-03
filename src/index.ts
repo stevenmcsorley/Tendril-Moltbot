@@ -11,6 +11,8 @@ import { getActivityLogger } from './logging/activity-log.js';
 import { getMoltbookClient } from './moltbook/client.js';
 import { getLLMClient } from './llm/factory.js';
 
+import { getDialogueLoop } from './agent/dialogue.js';
+
 async function main(): Promise<void> {
     console.log('🦞 Moltbot starting...');
 
@@ -72,6 +74,10 @@ async function main(): Promise<void> {
     const loop = getAgentLoop();
     loop.start();
     console.log('✓ Agent loop started');
+
+    // Start dialogue loop
+    const dialogue = getDialogueLoop();
+    dialogue.start();
 
     // Log startup
     const logger = getActivityLogger();

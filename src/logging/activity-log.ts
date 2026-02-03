@@ -22,6 +22,8 @@ export interface ActivityLogEntry {
     error?: string;
 }
 
+import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
+
 export class ActivityLogger {
     private filePath: string;
     private retentionDays: number;
@@ -46,6 +48,9 @@ export class ActivityLogger {
         };
 
         appendFileSync(this.filePath, JSON.stringify(fullEntry) + '\n');
+
+        // Broadcast via WebSocket
+        getWebSocketBroadcaster().broadcast('log_entry', fullEntry);
     }
 
     /**

@@ -298,11 +298,16 @@ export function createDashboardServer(): express.Application {
     return app;
 }
 
+import { getWebSocketBroadcaster } from './websocket.js';
+
 export function startDashboardServer(): void {
     const config = getConfig();
     const app = createDashboardServer();
 
-    app.listen(config.DASHBOARD_PORT, () => {
+    const server = app.listen(config.DASHBOARD_PORT, () => {
         console.log(`Dashboard running at http://localhost:${config.DASHBOARD_PORT}`);
     });
+
+    // Initialize WebSocket Server
+    getWebSocketBroadcaster().initialize(server);
 }

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import StatusCard from './components/StatusCard';
 import ActivityLog from './components/ActivityLog';
 import Controls from './components/Controls';
 import SubmoltList from './components/SubmoltList';
+import SelfDialoguePanel, { DialogueMessage } from './components/SelfDialoguePanel';
 
 interface Status {
     agent: { name: string; description: string; identity?: string; role?: string };
@@ -65,10 +66,15 @@ export default function App() {
     const [status, setStatus] = useState<Status | null>(null);
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [submolts, setSubmolts] = useState<Submolt[]>([]);
+    const [dialogueMessages, setDialogueMessages] = useState<DialogueMessage[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<'logs' | 'submolts'>('logs');
+    const [isWsConnected, setIsWsConnected] = useState(false);
+
+    // WebSocket reference
+    const wsRef = useRef<WebSocket | null>(null);
 
     const fetchStatus = useCallback(async () => {
         try {
@@ -110,9 +116,83 @@ export default function App() {
         setLastRefresh(new Date());
     }, [fetchStatus, fetchLogs, fetchSubmolts]);
 
+    // WebSocket Connection
+    useEffect(() => {
+        const connectWs = () => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+            console.log('Connecting to WebSocket:', wsUrl);
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('WS Connected');
+                setIsWsConnected(true);
+            };
+
+            ws.onclose = () => {
+                console.log('WS Disconnected');
+                setIsWsConnected(false);
+                // Reconnect after 3s
+                setTimeout(connectWs, 3000);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+
+                    switch (msg.type) {
+                        case 'log_entry':
+                            // Append new log to top
+                            setLogs(prev => [msg.payload, ...prev].slice(0, 100));
+                            // Also refresh status if it was an action that might change metrics
+                            if (['post', 'comment', 'upvote', 'downvote'].includes(msg.payload.actionType)) {
+                                fetchStatus();
+                            }
+                            break;
+
+                        case 'stats_update':
+                            // Partial update of status
+                            setStatus(prev => prev ? { ...prev, status: msg.payload.status } : null);
+                            if (msg.payload.status === 'idle') fetchStatus(); // Full refresh on idle
+                            break;
+
+                        case 'timer_sync':
+                            // Update last run time
+                            setStatus(prev => prev ? {
+                                ...prev,
+                                loop: { ...prev.loop, lastRunAt: msg.payload.lastRunAt }
+                            } : null);
+                            break;
+
+                        case 'dialogue_message':
+                            setDialogueMessages(prev => {
+                                const newHistory = [...prev, msg.payload];
+                                // Keep last 20
+                                if (newHistory.length > 20) return newHistory.slice(newHistory.length - 20);
+                                return newHistory;
+                            });
+                            break;
+                    }
+                } catch (e) {
+                    console.error('WS Error:', e);
+                }
+            };
+
+            wsRef.current = ws;
+        };
+
+        connectWs();
+
+        return () => {
+            wsRef.current?.close();
+        };
+    }, [fetchStatus]);
+
     useEffect(() => {
         refresh();
-        const interval = setInterval(refresh, 30000); // 30 second polling
+        // Keep polling as backup, but slower
+        const interval = setInterval(refresh, 60000);
         return () => clearInterval(interval);
     }, [refresh]);
 
@@ -126,7 +206,7 @@ export default function App() {
         }
     };
 
-    // Refresh instantly when filter changes
+    // Refresh logs when filter changes (fallback for WS filter mismatch)
     useEffect(() => {
         fetchLogs();
     }, [filterType, fetchLogs]);
@@ -137,7 +217,7 @@ export default function App() {
                 <span className="emoji">🦞</span>
                 <h1>Moltbot Dashboard</h1>
                 <span className="refresh-indicator">
-                    Last refresh: {lastRefresh.toLocaleTimeString()}
+                    {isWsConnected ? '⚡ Live Stream' : `Polling (Last: ${lastRefresh.toLocaleTimeString()})`}
                 </span>
             </header>
 
@@ -149,6 +229,10 @@ export default function App() {
 
             <div className="grid">
                 <div>
+                    <SelfDialoguePanel
+                        messages={dialogueMessages}
+                        isConnected={isWsConnected}
+                    />
                     <StatusCard status={status} />
                     <Controls
                         status={status}

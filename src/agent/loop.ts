@@ -11,6 +11,7 @@ import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getActivityLogger } from '../logging/activity-log.js';
+import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSocialReplyPrompt } from './heuristics.js';
 import type { Post, Comment } from '../moltbook/types.js';
 
@@ -74,6 +75,12 @@ class AgentLoop {
             rawModelOutput: null,
             finalAction: 'Agent paused',
         });
+
+        // Broadcast update
+        getWebSocketBroadcaster().broadcast('stats_update', {
+            status: 'paused',
+            isPaused: true
+        });
     }
 
     /**
@@ -87,6 +94,12 @@ class AgentLoop {
             promptSent: null,
             rawModelOutput: null,
             finalAction: 'Agent resumed',
+        });
+
+        // Broadcast update
+        getWebSocketBroadcaster().broadcast('stats_update', {
+            status: 'running',
+            isPaused: false
         });
     }
 
@@ -285,18 +298,27 @@ class AgentLoop {
                     error: error.message,
                 });
             } else {
+                console.error('Error in agent loop:', error);
                 logger.log({
                     actionType: 'error',
                     targetId: null,
                     promptSent: null,
                     rawModelOutput: null,
-                    finalAction: 'Heartbeat failed',
+                    finalAction: 'Loop execution failed',
                     error: error instanceof Error ? error.message : String(error),
                 });
             }
         } finally {
             this.isRunning = false;
             this.currentPost = null;
+            // Broadcast completion to update "last run" timer
+            getWebSocketBroadcaster().broadcast('timer_sync', {
+                lastRunAt: new Date().toISOString()
+            });
+            getWebSocketBroadcaster().broadcast('stats_update', {
+                status: 'idle',
+                isPaused: false
+            });
         }
     }
 
