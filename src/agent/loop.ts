@@ -409,7 +409,12 @@ class AgentLoop {
         const prompt = buildSynthesisPrompt(feedPosts);
 
         try {
-            const result = await llm.generate(prompt);
+            let result;
+            try {
+                result = await llm.generate(prompt);
+            } catch (err: any) {
+                throw err;
+            }
 
             if (result.isSkip) return;
 
@@ -418,58 +423,83 @@ class AgentLoop {
 
             if (action === 'SKIP') return;
 
+            // Attach rawOutput to error context for logging if subsequent steps fail
+            const errorContext = { rawOutput: result.rawOutput };
+
             if (action === 'CREATE_SUBMOLT') {
                 const detailsMatch = result.rawOutput.match(/\[SUBMOLT_DETAILS\]:\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(.+)/i);
                 if (detailsMatch) {
-                    const [, name, displayName, description] = detailsMatch;
-                    console.log(`Creating submolt: ${name.trim()}`);
-                    const submolt = await moltbook.createSubmolt({
-                        name: name.trim(),
-                        display_name: displayName.trim(),
-                        description: description.trim()
-                    });
+                    const [, rawName, displayName, description] = detailsMatch;
+                    const name = this.slugifySubmoltName(rawName.trim());
 
-                    stateManager.recordSubmolt({
-                        id: submolt.id,
-                        name: submolt.name,
-                        display_name: submolt.display_name
-                    });
+                    if (name.length < 3) {
+                        console.log(`Submolt name "${name}" too short, skipping creation.`);
+                        return;
+                    }
 
-                    logger.log({
-                        actionType: 'post', // Using post as a catch-all for major actions in logger for now
-                        targetId: submolt.id,
-                        targetSubmolt: submolt.name,
-                        promptSent: prompt,
-                        rawModelOutput: result.rawOutput,
-                        finalAction: `Convergence Zone Established: Created m/${submolt.name}`,
-                    });
+                    console.log(`Creating submolt: m/${name}`);
+                    try {
+                        const submolt = await moltbook.createSubmolt({
+                            name: name,
+                            display_name: displayName.trim(),
+                            description: description.trim()
+                        });
+
+                        stateManager.recordSubmolt({
+                            id: submolt.id,
+                            name: submolt.name,
+                            display_name: submolt.display_name
+                        });
+
+                        logger.log({
+                            actionType: 'post',
+                            targetId: submolt.id,
+                            targetSubmolt: submolt.name,
+                            promptSent: prompt,
+                            rawModelOutput: result.rawOutput,
+                            finalAction: `Convergence Zone Established: Created m/${submolt.name}`,
+                        });
+                    } catch (err: any) {
+                        err.rawOutput = result.rawOutput;
+                        err.actionType = 'post';
+                        throw err;
+                    }
                 }
             } else if (action === 'POST') {
                 const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
                 if (contentMatch) {
                     const content = contentMatch[1].trim();
                     console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
-                    const post = await moltbook.createPost({
-                        submolt: 'general',
-                        title: 'Signal Synthesis',
-                        content: content
-                    });
+                    try {
+                        const post = await moltbook.createPost({
+                            submolt: 'general',
+                            title: 'Signal Synthesis',
+                            content: content
+                        });
 
-                    stateManager.recordPost(post.id);
+                        stateManager.recordPost(post.id);
 
-                    logger.log({
-                        actionType: 'post',
-                        targetId: post.id,
-                        targetSubmolt: 'general',
-                        promptSent: prompt,
-                        rawModelOutput: result.rawOutput,
-                        finalAction: `Signal Synthesized: "${content}"`,
-                    });
+                        logger.log({
+                            actionType: 'post',
+                            targetId: post.id,
+                            targetSubmolt: 'general',
+                            promptSent: prompt,
+                            rawModelOutput: result.rawOutput,
+                            finalAction: `Signal Synthesized: "${content}"`,
+                        });
+                    } catch (err: any) {
+                        err.rawOutput = result.rawOutput;
+                        err.actionType = 'post';
+                        throw err;
+                    }
                 }
             }
 
         } catch (error) {
-            this.handleActionError(error, 'post', null, undefined, prompt, null);
+            // Fallback to error logging with prompt and whatever we captured
+            const rawOutput = (error as any).rawOutput || null;
+            const actionType = (error as any).actionType || 'post';
+            this.handleActionError(error, actionType, null, undefined, prompt, rawOutput);
         }
     }
 
@@ -655,6 +685,18 @@ class AgentLoop {
                 error: error instanceof Error ? error.message : String(error),
             });
         }
+    }
+
+    /**
+     * Ensure submolt name follows Moltbook rules:
+     * - lowercase alphanumeric only (no underscores or hyphens)
+     * - 3-24 characters
+     */
+    private slugifySubmoltName(name: string): string {
+        return name
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '')
+            .substring(0, 24);
     }
 }
 

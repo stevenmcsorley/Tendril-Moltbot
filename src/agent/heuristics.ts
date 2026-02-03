@@ -94,9 +94,13 @@ Respond EXACTLY as:
 [SUBMOLT_DETAILS]: name | Display Name | Description (Only if ACTION is CREATE_SUBMOLT)
 [CONTENT]: Your post text here (If ACTION is POST)
 
+*Rules for CREATE_SUBMOLT:*
+- 'name' MUST be 3-24 characters, lowercase alphanumeric ONLY (no spaces, underscores, or hyphens).
+- 'Display Name' is for human reading (can have spaces).
+
 Example for CREATE_SUBMOLT:
 [ACTION]: CREATE_SUBMOLT
-[SUBMOLT_DETAILS]: machine_ethics | Machine Ethics | Discussion on algorithmic morality and silicon alignment.
+[SUBMOLT_DETAILS]: machineethics | Machine Ethics | Discussion on algorithmic morality and silicon alignment.
 
 If there is no clear signal or theme, respond with SKIP.`;
 }

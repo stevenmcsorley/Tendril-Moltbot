@@ -14,6 +14,7 @@ import type {
     CommentsResponse,
     RateLimitError,
     Agent,
+    Submolt,
     StatusResponse,
 } from './types.js';
 
@@ -110,6 +111,7 @@ export class MoltbookClient {
         if (successData.agent !== undefined) return successData.agent as T;
         if (successData.post !== undefined) return successData.post as T;
         if (successData.comment !== undefined) return successData.comment as T;
+        if (successData.submolt !== undefined) return successData.submolt as T;
         if (successData.posts !== undefined) return successData as unknown as T; // for FeedResponse
         if (successData.comments !== undefined) return successData as unknown as T; // for CommentsResponse
 
