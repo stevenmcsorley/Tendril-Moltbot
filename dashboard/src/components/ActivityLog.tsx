@@ -109,7 +109,10 @@ function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: strin
                 )}
             </div>
 
-            <div className="log-final">{entry.finalAction}</div>
+            <div className="log-final">
+                <span className="prompt-label" style={{ display: 'block', marginBottom: 4 }}>Final Action</span>
+                {entry.finalAction}
+            </div>
 
             {entry.error && <div className="log-error">Error: {entry.error}</div>}
 
@@ -143,6 +146,10 @@ function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: strin
                                 <pre className="output-pre">{entry.rawModelOutput}</pre>
                             </div>
                         )}
+                        <div className="execution-section">
+                            <div className="prompt-label">FINAL EXECUTION</div>
+                            <pre className="execution-pre">{entry.finalAction}</pre>
+                        </div>
                     </div>
                 </details>
             )}
