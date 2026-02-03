@@ -115,18 +115,34 @@ function LogEntryItem({ entry }: { entry: LogEntry }) {
             {hasDetails && (
                 <details className="log-details">
                     <summary>View prompt & output</summary>
-                    {entry.promptSent && (
-                        <>
-                            <strong style={{ fontSize: 11, color: 'var(--text-muted)' }}>PROMPT SENT:</strong>
-                            <pre>{entry.promptSent}</pre>
-                        </>
-                    )}
-                    {entry.rawModelOutput && (
-                        <>
-                            <strong style={{ fontSize: 11, color: 'var(--text-muted)' }}>RAW MODEL OUTPUT:</strong>
-                            <pre>{entry.rawModelOutput}</pre>
-                        </>
-                    )}
+                    <div className="engagement-details">
+                        {entry.promptSent && (
+                            <div className="prompt-section">
+                                {entry.promptSent.includes('### ') ? (
+                                    entry.promptSent.split('### ').filter(Boolean).map((section, idx) => {
+                                        const [title, ...content] = section.split('\n');
+                                        return (
+                                            <div key={idx} className="prompt-content-block">
+                                                <div className="prompt-label">{title}</div>
+                                                <pre className="prompt-pre">{content.join('\n').trim()}</pre>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <>
+                                        <div className="prompt-label">PROMPT SENT</div>
+                                        <pre className="prompt-pre">{entry.promptSent}</pre>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                        {entry.rawModelOutput && (
+                            <div className="output-section">
+                                <div className="prompt-label">RAW MODEL OUTPUT</div>
+                                <pre className="output-pre">{entry.rawModelOutput}</pre>
+                            </div>
+                        )}
+                    </div>
                 </details>
             )}
         </div>

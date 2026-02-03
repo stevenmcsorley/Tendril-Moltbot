@@ -56,8 +56,7 @@ export function filterPost(post: Post, agentName: string): FilterResult {
  * Build the prompt for the LLM to decide on engagement
  */
 export function buildEngagementPrompt(post: Post): string {
-    return `A post on Moltbook:
-
+    return `### CONTEXT: POST ON MOLTBOOK
 Title: ${post.title}
 ${post.content ? `Content: ${post.content}` : ''}
 ${post.url ? `Link: ${post.url}` : ''}
@@ -66,6 +65,7 @@ Author: ${post.author?.name ?? 'Unknown'}
 Upvotes: ${post.upvotes}
 Comments: ${post.comment_count}
 
+### INSTRUCTIONS:
 Should you engage with this post? If yes, write a brief, insightful comment. If not, respond with SKIP.`;
 }
 
@@ -91,11 +91,13 @@ export function buildSocialReplyPrompt(context: {
     isPostReply: boolean;
 }): string {
     const contextType = context.isPostReply ? 'your post' : 'your comment';
-    return `Someone responded to ${contextType} on Moltbook.
+    return `### CONTEXT: SOCIAL ENGAGEMENT
+Someone responded to ${contextType} on Moltbook.
 
 ${context.isPostReply ? 'Post' : 'Comment'} (You): "${context.parentContent}"
 Respondent (@${context.replyAuthor}): "${context.replyContent}"
 
+### INSTRUCTIONS:
 Respond to @${context.replyAuthor} in your "Tendril" personality.
 Keep it neutral, insightful, and under 40 words.
 If no response is needed, respond with SKIP.`;

@@ -469,7 +469,20 @@ class AgentLoop {
                     await this.processPotentialSocialReply(comment, true, logger, ollama, moltbook, stateManager, rateLimiter);
                 }
             } catch (err) {
-                console.error(`Failed to fetch comments for post ${postId}:`, err);
+                if (err instanceof MoltbookApiError && err.statusCode === 404) {
+                    console.warn(`Post ${postId} no longer exists, removing from tracking.`);
+                    stateManager.removeMyPost(postId);
+                } else {
+                    console.error(`Failed to fetch comments for post ${postId}:`, err);
+                    logger.log({
+                        actionType: 'error',
+                        targetId: postId,
+                        promptSent: null,
+                        rawModelOutput: null,
+                        finalAction: 'Failed to check social engagement on my post',
+                        error: err instanceof Error ? err.message : String(err),
+                    });
+                }
             }
         }
 
@@ -493,7 +506,22 @@ class AgentLoop {
                     }
                 }
             } catch (err) {
-                console.error(`Failed to fetch comments for post ${postId}:`, err);
+                if (err instanceof MoltbookApiError && err.statusCode === 404) {
+                    console.warn(`Post ${postId} (containing my comment) no longer exists, removing comments from tracking.`);
+                    for (const commentId of commentIds) {
+                        stateManager.removeMyComment(commentId);
+                    }
+                } else {
+                    console.error(`Failed to fetch comments for post ${postId}:`, err);
+                    logger.log({
+                        actionType: 'error',
+                        targetId: postId,
+                        promptSent: null,
+                        rawModelOutput: null,
+                        finalAction: 'Failed to check social engagement on my comment',
+                        error: err instanceof Error ? err.message : String(err),
+                    });
+                }
             }
         }
     }

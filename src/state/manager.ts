@@ -180,6 +180,28 @@ export class StateManager {
     }
 
     /**
+     * Remove a post from myPosts (e.g. if it was deleted)
+     */
+    removeMyPost(postId: string): void {
+        const initialLength = this.state.myPosts.length;
+        this.state.myPosts = this.state.myPosts.filter(id => id !== postId);
+        if (this.state.myPosts.length !== initialLength) {
+            this.save();
+        }
+    }
+
+    /**
+     * Remove a comment from myComments
+     */
+    removeMyComment(commentId: string): void {
+        const initialLength = this.state.myComments.length;
+        this.state.myComments = this.state.myComments.filter(c => c.id !== commentId);
+        if (this.state.myComments.length !== initialLength) {
+            this.save();
+        }
+    }
+
+    /**
      * Record heartbeat timestamp
      */
     recordHeartbeat(): void {

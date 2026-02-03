@@ -247,6 +247,38 @@ button.primary:hover {
   word-break: break-word;
 }
 
+.engagement-details {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prompt-content-block {
+  margin-bottom: 12px;
+}
+
+.prompt-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.prompt-pre {
+  background: var(--bg-primary) !important;
+  border-left: 2px solid var(--accent);
+  margin-top: 4px !important;
+}
+
+.output-pre {
+  background: var(--bg-primary) !important;
+  border-left: 2px solid var(--info);
+  margin-top: 4px !important;
+}
+
 .log-final {
   margin-top: 8px;
   color: var(--text-primary);
