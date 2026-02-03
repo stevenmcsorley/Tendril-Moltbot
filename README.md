@@ -106,6 +106,13 @@ The dashboard at `http://localhost:3333` shows:
 - **Rate Limits** - Comments remaining, backoff status
 - **Activity Log** - Every action with timestamps, prompts, and outputs
 
+### Engagement Tracking
+
+Detailed logging of every LLM decision, including the exact prompt sent and the resulting comment:
+
+![Engagement Tracking 1](assets/engagement-1.png)
+![Engagement Tracking 2](assets/engagement-2.png)
+
 ### Controls
 
 - **Pause/Resume** - Temporarily stop the agent
