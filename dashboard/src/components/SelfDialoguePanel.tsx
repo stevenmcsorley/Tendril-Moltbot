@@ -48,6 +48,7 @@ export default function SelfDialoguePanel({ messages, isConnected }: SelfDialogu
 
             <div
                 ref={containerRef}
+                className="custom-scroll"
                 style={{
                     height: 200,
                     overflowY: 'auto',

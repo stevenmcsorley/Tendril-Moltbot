@@ -76,7 +76,7 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
             {entries.length === 0 ? (
                 <div className="empty-state">No activity found</div>
             ) : (
-                <div className="activity-log">
+                <div className="activity-log custom-scroll">
                     {Object.entries(grouped).map(([date, dateEntries]) => (
                         <div key={date}>
                             <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 12, background: 'var(--bg-tertiary)' }}>

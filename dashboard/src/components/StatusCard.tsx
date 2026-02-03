@@ -1,3 +1,5 @@
+import RelativeTime from './RelativeTime';
+
 interface Status {
     agent: { name: string; description: string; identity?: string; role?: string };
     status: 'running' | 'paused' | 'idle';
@@ -34,27 +36,6 @@ interface StatusCardProps {
 function formatTime(iso: string | null): string {
     if (!iso) return '—';
     return new Date(iso).toLocaleString();
-}
-
-function formatRelativeTime(iso: string | null): string {
-    if (!iso) return '—';
-    const now = new Date();
-    const target = new Date(iso);
-    const diffMs = target.getTime() - now.getTime();
-
-    if (diffMs <= 0) return 'Ready';
-
-    const diffSecs = Math.floor(diffMs / 1000);
-    const diffMins = Math.floor(diffSecs / 60);
-    const diffHours = Math.floor(diffMins / 60);
-
-    if (diffHours > 0) {
-        return `${diffHours}h ${diffMins % 60}m to go`;
-    }
-    if (diffMins > 0) {
-        return `${diffMins}m ${diffSecs % 60}s to go`;
-    }
-    return `${diffSecs}s to go`;
 }
 
 function StatusBadge({ value }: { value: 'running' | 'paused' | 'idle' | undefined }) {
@@ -130,7 +111,7 @@ export default function StatusCard({ status }: StatusCardProps) {
             <div className="status-row">
                 <span className="status-label">Next Run</span>
                 <span className="status-value" title={formatTime(status.loop.nextRunAt)}>
-                    {formatRelativeTime(status.loop.nextRunAt)}
+                    <RelativeTime value={status.loop.nextRunAt} />
                 </span>
             </div>
 
@@ -150,7 +131,7 @@ export default function StatusCard({ status }: StatusCardProps) {
                 <div className="status-row">
                     <span className="status-label">Backoff Until</span>
                     <span className="status-value error" title={formatTime(status.rateLimit.backoffUntil)}>
-                        {formatRelativeTime(status.rateLimit.backoffUntil)}
+                        <RelativeTime value={status.rateLimit.backoffUntil} />
                     </span>
                 </div>
             )}
