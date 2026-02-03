@@ -11,8 +11,8 @@ import { getOllamaClient } from '../ollama/client.js';
 import { getStateManager } from '../state/manager.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getActivityLogger } from '../logging/activity-log.js';
-import { filterPost, buildEngagementPrompt, buildSynthesisPrompt } from './heuristics.js';
-import type { Post } from '../moltbook/types.js';
+import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSocialReplyPrompt } from './heuristics.js';
+import type { Post, Comment } from '../moltbook/types.js';
 
 export interface LoopStatus {
     isRunning: boolean;
@@ -240,6 +240,9 @@ class AgentLoop {
                 await this.tryProactivePost(feed.posts);
             }
 
+            // Social Engagement: Check for replies to my posts/comments
+            await this.trySocialEngagement();
+
             logger.log({
                 actionType: 'heartbeat',
                 targetId: null,
@@ -287,8 +290,9 @@ class AgentLoop {
         const logger = getActivityLogger();
 
         try {
-            await moltbook.createComment(post.id, comment);
+            const commentObj = await moltbook.createComment(post.id, comment);
             rateLimiter.recordComment(post.id);
+            stateManager.recordComment(post.id, commentObj.id);
 
             logger.log({
                 actionType: 'comment',
@@ -296,7 +300,7 @@ class AgentLoop {
                 targetSubmolt: post.submolt?.name,
                 promptSent: prompt,
                 rawModelOutput: rawOutput,
-                finalAction: `Commented: "${comment}"`,
+                finalAction: `Commented on post: "${comment}"`,
             });
 
         } catch (error) {
@@ -429,16 +433,11 @@ class AgentLoop {
             console.log(`Creating proactive post in m/${cleanSubmolt}: "${content.substring(0, 50)}..."`);
             const post = await moltbook.createPost({
                 submolt: cleanSubmolt,
-                title: 'Signal Synthesis', // Title is required. Maybe parse it too? Or generic?
-                // Actually, synthesis prompts usually generate a thought. Let's make the Title the first sentence or generic.
-                // Let's use a generic title or ask LLM for it.
-                // For simplicity: "Signal Synthesis: [Date]"?
-                // Or update prompt to include title.
-                // Let's assume content is the post body. Title: "Signal Report"
+                title: 'Signal Synthesis', // Generic title
                 content: content
             });
 
-            stateManager.recordPost();
+            stateManager.recordPost(post.id);
 
             logger.log({
                 actionType: 'post',
@@ -453,12 +452,130 @@ class AgentLoop {
             logger.log({
                 actionType: 'error',
                 targetId: null,
-                targetSubmolt: undefined, // Fix lint: string | undefined
+                targetSubmolt: undefined,
                 promptSent: prompt,
                 rawModelOutput: null,
                 finalAction: 'Proactive post failed',
                 error: error instanceof Error ? error.message : String(error),
             });
+        }
+    }
+
+    /**
+     * Check for recent replies to agent's own posts and comments
+     */
+    private async trySocialEngagement(): Promise<void> {
+        const config = getConfig();
+        const moltbook = getMoltbookClient();
+        const stateManager = getStateManager();
+        const logger = getActivityLogger();
+        const ollama = getOllamaClient();
+        const rateLimiter = getRateLimiter();
+
+        if (!config.ENABLE_COMMENTING) return;
+
+        console.log('Checking social engagements...');
+
+        // 1. Check replies to my posts
+        const myPosts = stateManager.getMyPosts();
+        for (const postId of myPosts) {
+            try {
+                const { comments } = await moltbook.getComments(postId);
+                for (const comment of comments) {
+                    await this.processPotentialSocialReply(comment, true, logger, ollama, moltbook, stateManager, rateLimiter);
+                }
+            } catch (err) {
+                console.error(`Failed to fetch comments for post ${postId}:`, err);
+            }
+        }
+
+        // 2. Check replies to my comments
+        const myComments = stateManager.getMyComments();
+        const commentsByPost = new Map<string, string[]>();
+        for (const { id, postId } of myComments) {
+            const list = commentsByPost.get(postId) || [];
+            list.push(id);
+            commentsByPost.set(postId, list);
+        }
+
+        for (const [postId, commentIds] of commentsByPost.entries()) {
+            if (myPosts.includes(postId)) continue; // Already checked this post in step 1
+
+            try {
+                const { comments } = await moltbook.getComments(postId);
+                for (const comment of comments) {
+                    if (comment.parent_id && commentIds.includes(comment.parent_id)) {
+                        await this.processPotentialSocialReply(comment, false, logger, ollama, moltbook, stateManager, rateLimiter);
+                    }
+                }
+            } catch (err) {
+                console.error(`Failed to fetch comments for post ${postId}:`, err);
+            }
+        }
+    }
+
+    private async processPotentialSocialReply(
+        reply: Comment,
+        isPostReply: boolean,
+        logger: any,
+        ollama: any,
+        moltbook: any,
+        stateManager: any,
+        rateLimiter: any
+    ): Promise<void> {
+        const config = getConfig();
+
+        // Skip if already replied or if it's our own comment
+        if (stateManager.hasRepliedToSocial(reply.id)) return;
+        if (reply.author.name.toLowerCase() === config.AGENT_NAME.toLowerCase()) return;
+
+        // Skip if too old (> 48h)
+        const age = Date.now() - new Date(reply.created_at).getTime();
+        if (age > 48 * 60 * 60 * 1000) return;
+
+        // Rate limit check
+        if (!rateLimiter.canComment()) return;
+
+        // Try to get parent content for context
+        let parentContent = "[Context unavailable]";
+        if (isPostReply) {
+            try {
+                const post = await moltbook.getPost(reply.post_id);
+                parentContent = post.content || post.title;
+            } catch { }
+        } else {
+            // In theory we could search for our comment in the list, but for now just use a placeholder
+            // or fetch comments again. For simplicity:
+            parentContent = "Your recent comment on this post.";
+        }
+
+        const prompt = buildSocialReplyPrompt({
+            parentContent,
+            replyAuthor: reply.author.name,
+            replyContent: reply.content,
+            isPostReply
+        });
+
+        try {
+            const result = await ollama.generate(prompt);
+            if (result.isSkip || !result.response) return;
+
+            console.log(`Replying to @${reply.author.name} in social engagement...`);
+            const newComment = await moltbook.createComment(reply.post_id, result.response, reply.id);
+
+            rateLimiter.recordComment(reply.post_id);
+            stateManager.recordComment(reply.post_id, newComment.id);
+            stateManager.recordSocialReply(reply.id);
+
+            logger.log({
+                actionType: 'comment',
+                targetId: reply.id,
+                promptSent: prompt,
+                rawModelOutput: result.rawOutput,
+                finalAction: `Replied to social engagement: "${result.response}"`,
+            });
+        } catch (error) {
+            console.error('Social reply generation failed:', error);
         }
     }
 }

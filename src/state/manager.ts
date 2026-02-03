@@ -21,6 +21,9 @@ export interface AgentState {
     lastPostAt: string | null;
     rateLimitBackoffUntil: string | null;
     dailyResetDate: string | null;
+    myPosts: string[]; // IDs of posts created by the agent
+    myComments: { id: string; postId: string }[]; // IDs of comments created by the agent
+    socialRepliedTo: string[]; // IDs of comments/posts the agent has responded to in social engagement
 }
 
 const DEFAULT_STATE: AgentState = {
@@ -32,6 +35,9 @@ const DEFAULT_STATE: AgentState = {
     lastPostAt: null,
     rateLimitBackoffUntil: null,
     dailyResetDate: null,
+    myPosts: [],
+    myComments: [],
+    socialRepliedTo: [],
 };
 
 export class StateManager {
@@ -107,11 +113,17 @@ export class StateManager {
     /**
      * Record that we commented on a post
      */
-    recordComment(postId: string): void {
+    recordComment(postId: string, commentId?: string): void {
         if (!this.state.postsCommented.includes(postId)) {
             this.state.postsCommented.push(postId);
             if (this.state.postsCommented.length > 1000) {
                 this.state.postsCommented = this.state.postsCommented.slice(-1000);
+            }
+        }
+        if (commentId) {
+            this.state.myComments.push({ id: commentId, postId });
+            if (this.state.myComments.length > 500) {
+                this.state.myComments = this.state.myComments.slice(-500);
             }
         }
         this.state.commentsMadeToday++;
@@ -122,9 +134,49 @@ export class StateManager {
     /**
      * Record that we made a post
      */
-    recordPost(): void {
+    recordPost(postId?: string): void {
         this.state.lastPostAt = new Date().toISOString();
+        if (postId) {
+            this.state.myPosts.push(postId);
+            if (this.state.myPosts.length > 100) {
+                this.state.myPosts = this.state.myPosts.slice(-100);
+            }
+        }
         this.save();
+    }
+
+    /**
+     * Record that we replied to a social engagement
+     */
+    recordSocialReply(targetId: string): void {
+        if (!this.state.socialRepliedTo.includes(targetId)) {
+            this.state.socialRepliedTo.push(targetId);
+            if (this.state.socialRepliedTo.length > 1000) {
+                this.state.socialRepliedTo = this.state.socialRepliedTo.slice(-1000);
+            }
+            this.save();
+        }
+    }
+
+    /**
+     * Check if we've already replied to a social target
+     */
+    hasRepliedToSocial(targetId: string): boolean {
+        return this.state.socialRepliedTo.includes(targetId);
+    }
+
+    /**
+     * Get agent's own posts
+     */
+    getMyPosts(): string[] {
+        return this.state.myPosts;
+    }
+
+    /**
+     * Get agent's own comments
+     */
+    getMyComments(): { id: string; postId: string }[] {
+        return this.state.myComments;
     }
 
     /**

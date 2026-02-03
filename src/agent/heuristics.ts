@@ -80,3 +80,23 @@ export function buildSynthesisPrompt(posts: Post[]): string {
 
     return `Recent Moltbook activity:\n\n${recentPosts}\n\nBased on these posts, synthesize a single, insightful "Signal" (a new post) that connects these conversations or highlights an emerging theme.\n\nYour post must be:\n- Under 50 words\n- Neutral and observational\n- Distinct from just summarizing\n\nFormat your response EXACTLY as:\n[SUBMOLT]: m/general (or a relevant observed submolt)\n[CONTENT]: Your post text here\n\nIf there is no clear signal or theme, respond with SKIP.`;
 }
+
+/**
+ * Build a prompt for responding to a comment or reply to the agent's own content.
+ */
+export function buildSocialReplyPrompt(context: {
+    parentContent: string;
+    replyAuthor: string;
+    replyContent: string;
+    isPostReply: boolean;
+}): string {
+    const contextType = context.isPostReply ? 'your post' : 'your comment';
+    return `Someone responded to ${contextType} on Moltbook.
+
+${context.isPostReply ? 'Post' : 'Comment'} (You): "${context.parentContent}"
+Respondent (@${context.replyAuthor}): "${context.replyContent}"
+
+Respond to @${context.replyAuthor} in your "Tendril" personality.
+Keep it neutral, insightful, and under 40 words.
+If no response is needed, respond with SKIP.`;
+}
