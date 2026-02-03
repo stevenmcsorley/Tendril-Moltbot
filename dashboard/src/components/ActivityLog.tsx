@@ -109,9 +109,13 @@ function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: strin
                 )}
             </div>
 
-            <div className="log-final" style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px solid var(--border)', borderLeft: '3px solid var(--success)' }}>
-                <div className="prompt-label" style={{ color: 'var(--success)' }}>FINAL ACTION</div>
-                <div style={{ fontSize: 13, marginTop: 4 }}>{entry.finalAction}</div>
+            <div className="log-final" style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <div style={{ height: 2, flex: 1, background: 'var(--border)' }}></div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '1px' }}>Final Action</div>
+                    <div style={{ height: 2, flex: 1, background: 'var(--border)' }}></div>
+                </div>
+                <div style={{ padding: '4px 0', fontSize: 13, color: 'var(--text-primary)' }}>{entry.finalAction}</div>
             </div>
 
             {entry.error && <div className="log-error">Error: {entry.error}</div>}
@@ -146,10 +150,6 @@ function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: strin
                                 <pre className="output-pre">{entry.rawModelOutput}</pre>
                             </div>
                         )}
-                        <div className="execution-section">
-                            <div className="prompt-label">FINAL ACTION EXECUTION</div>
-                            <pre className="execution-pre">{entry.finalAction}</pre>
-                        </div>
                     </div>
                 </details>
             )}
