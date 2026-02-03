@@ -8,6 +8,7 @@ import { getConfig } from './config.js';
 import { startDashboardServer } from './dashboard/server.js';
 import { getAgentLoop } from './agent/loop.js';
 import { getActivityLogger } from './logging/activity-log.js';
+import { getMoltbookClient } from './moltbook/client.js';
 import { getOllamaClient } from './ollama/client.js';
 
 async function main(): Promise<void> {
@@ -33,6 +34,18 @@ async function main(): Promise<void> {
         console.warn(`    Ensure Ollama is running at ${config.OLLAMA_BASE_URL}`);
     } else {
         console.log('✓ Ollama connected');
+    }
+
+    // Verify Moltbook API Key
+    const moltbook = getMoltbookClient();
+    try {
+        const me = await moltbook.getMe();
+        console.log(`✓ Moltbook connected as @${me.name}`);
+    } catch (error) {
+        console.error('❌ Mltbook API connection failed. Invalid API Key?');
+        console.error('   run `AGENT_NAME="name" npm run dev` to register a new agent.');
+        console.error('Error:', error instanceof Error ? error.message : error);
+        process.exit(1);
     }
 
     // Start dashboard server

@@ -42,7 +42,14 @@ async function register() {
             process.exit(1);
         }
 
-        const data = (await response.json()) as { success: boolean; data: RegisterResponse };
+        const data = await response.json();
+        console.log('DEBUG: Registration response:', JSON.stringify(data, null, 2));
+
+        if (!data.success || !data.data || !data.data.agent) {
+            console.error('❌ Unexpected response structure from API');
+            process.exit(1);
+        }
+
         const { api_key, claim_url, verification_code } = data.data.agent;
 
         console.log('✅ Agent registered successfully!\n');

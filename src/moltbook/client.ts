@@ -96,7 +96,7 @@ export class MoltbookClient {
             );
         }
 
-        const successData = data as ApiResponse<T>;
+        const successData = data as any; // Cast to any to check flexible keys
         if (!successData.success) {
             throw new MoltbookApiError(
                 successData.error || 'Request failed',
@@ -105,11 +105,14 @@ export class MoltbookClient {
             );
         }
 
-        if (successData.data !== undefined) {
-            return successData.data as T;
-        }
+        // Return nested data if found, prioritized by likely keys
+        if (successData.data !== undefined) return successData.data as T;
+        if (successData.agent !== undefined) return successData.agent as T;
+        if (successData.post !== undefined) return successData.post as T;
+        if (successData.comment !== undefined) return successData.comment as T;
+        if (successData.posts !== undefined) return successData as unknown as T; // for FeedResponse
+        if (successData.comments !== undefined) return successData as unknown as T; // for CommentsResponse
 
-        // Fallback: If 'data' is missing, the response root might be the data (e.g. { success: true, posts: [] })
         return successData as unknown as T;
     }
 

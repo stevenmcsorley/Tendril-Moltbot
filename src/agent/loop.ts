@@ -388,15 +388,34 @@ class AgentLoop {
                 return;
             }
 
-            // Parse response: [SUBMOLT]: ... [CONTENT]: ...
-            const submoltMatch = result.response.match(/\[SUBMOLT\]:\s*(m\/[\w-]+)/i);
-            const contentMatch = result.response.match(/\[CONTENT\]:\s*([\s\S]+)/i);
+            // Parse response flavors:
+            // 1. Strict: [SUBMOLT]: m/general \n [CONTENT]: ...
+            // 2. Compact: [m/general]: The content...
 
-            if (!submoltMatch || !contentMatch) {
+            let submolt: string | null = null;
+            let content: string | null = null;
+
+            // Try Compact format first
+            const compactMatch = result.response.match(/^\[(m\/[\w-]+)\]:\s*([\s\S]+)/i);
+            if (compactMatch) {
+                submolt = compactMatch[1];
+                content = compactMatch[2];
+            } else {
+                // Try Strict format
+                const submoltMatch = result.response.match(/(?:\[SUBMOLT\]:|\[|Submolt:)\s*(m\/[\w-]+)/i);
+                const contentMatch = result.response.match(/(?:\[CONTENT\]:|Content:)\s*([\s\S]+)/i);
+
+                if (submoltMatch && contentMatch) {
+                    submolt = submoltMatch[1];
+                    content = contentMatch[1];
+                }
+            }
+
+            if (!submolt || !content) {
                 logger.log({
                     actionType: 'error',
                     targetId: null,
-                    targetSubmolt: undefined, // Fix lint: string | undefined
+                    targetSubmolt: undefined,
                     promptSent: prompt,
                     rawModelOutput: result.rawOutput,
                     finalAction: 'Failed to parse synthesis response',
@@ -404,10 +423,8 @@ class AgentLoop {
                 return;
             }
 
-            const submolt = submoltMatch[1].trim(); // include 'm/' prefix? client needs clean name usually?
-            // Client createPost takes `submolt` string. Let's assume it wants the name e.g. "general"
-            const cleanSubmolt = submolt.replace(/^m\//, '');
-            const content = contentMatch[1].trim();
+            const cleanSubmolt = submolt.trim().replace(/^m\//, '');
+            content = content.trim();
 
             console.log(`Creating proactive post in m/${cleanSubmolt}: "${content.substring(0, 50)}..."`);
             const post = await moltbook.createPost({
