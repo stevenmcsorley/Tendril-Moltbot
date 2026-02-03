@@ -97,55 +97,62 @@ function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: strin
     const hasDetails = entry.promptSent || entry.rawModelOutput;
 
     return (
-        <div className="log-entry">
-            <div className="log-header">
-                <span className="log-time">{formatTime(entry.timestamp)}</span>
-                <span className={`log-action ${entry.actionType}`}>{entry.actionType}</span>
+        <div className="log-entry" style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
+            <div className="log-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span className="log-time" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatTime(entry.timestamp)}</span>
+                    <span className={`log-action ${entry.actionType}`} style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        background: `rgba(var(--${entry.actionType}-rgb), 0.1)`,
+                        color: `var(--${entry.actionType})`
+                    }}>{entry.actionType}</span>
+                </div>
                 {entry.targetId && (
-                    <span className="log-target">
+                    <span className="log-target" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                         {entry.targetSubmolt && `m/${entry.targetSubmolt} • `}
-                        {entry.targetId.slice(0, 8)}...
+                        {entry.targetId.slice(0, 8)}
                     </span>
                 )}
             </div>
 
-            <div className="log-final" style={{ marginTop: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <div style={{ height: 2, flex: 1, background: 'var(--border)' }}></div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '1px' }}>Final Action</div>
-                    <div style={{ height: 2, flex: 1, background: 'var(--border)' }}></div>
+            <div className="log-final-block" style={{
+                background: 'rgba(63, 185, 80, 0.05)',
+                borderLeft: '4px solid #3fb950',
+                padding: '12px',
+                borderRadius: '0 4px 4px 0',
+                marginBottom: 12
+            }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#3fb950', textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.05em' }}>
+                    Final Action
                 </div>
-                <div style={{ padding: '4px 0', fontSize: 13, color: 'var(--text-primary)' }}>{entry.finalAction}</div>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 500 }}>
+                    {entry.finalAction}
+                </div>
             </div>
 
-            {entry.error && <div className="log-error">Error: {entry.error}</div>}
+            {entry.error && (
+                <div className="log-error" style={{ color: 'var(--error)', fontSize: 12, marginBottom: 12 }}>
+                    <strong>Error:</strong> {entry.error}
+                </div>
+            )}
 
             {hasDetails && (
                 <details className="log-details">
-                    <summary>View prompt & output</summary>
-                    <div className="engagement-details">
+                    <summary style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                        View internal reasoning & prompt
+                    </summary>
+                    <div className="engagement-details" style={{ marginTop: 16 }}>
                         {entry.promptSent && (
                             <div className="prompt-section">
-                                {entry.promptSent.includes('### ') ? (
-                                    entry.promptSent.split('### ').filter(Boolean).map((section, idx) => {
-                                        const [title, ...content] = section.split('\n');
-                                        return (
-                                            <div key={idx} className="prompt-content-block">
-                                                <div className="prompt-label">{title}</div>
-                                                <pre className="prompt-pre">{content.join('\n').trim()}</pre>
-                                            </div>
-                                        );
-                                    })
-                                ) : (
-                                    <>
-                                        <div className="prompt-label">PROMPT SENT</div>
-                                        <pre className="prompt-pre">{entry.promptSent}</pre>
-                                    </>
-                                )}
+                                <div className="prompt-label">Prompt Context</div>
+                                <pre className="prompt-pre">{entry.promptSent}</pre>
                             </div>
                         )}
                         {entry.rawModelOutput && (
-                            <div className="output-section">
+                            <div className="output-section" style={{ marginTop: 16 }}>
                                 <div className="prompt-label">RAW MODEL OUTPUT - {agentName || 'Agent'} - Inner Monologue</div>
                                 <pre className="output-pre">{entry.rawModelOutput}</pre>
                             </div>
