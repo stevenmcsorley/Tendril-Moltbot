@@ -21,9 +21,9 @@ export interface AgentState {
     lastPostAt: string | null;
     rateLimitBackoffUntil: string | null;
     dailyResetDate: string | null;
-    myPosts: string[]; // IDs of posts created by the agent
-    myComments: { id: string; postId: string }[]; // IDs of comments created by the agent
-    socialRepliedTo: string[]; // IDs of comments/posts the agent has responded to in social engagement
+    myPosts: Array<{ id: string; title: string; content: string; submolt: string; votes: number; createdAt: string }>;
+    myComments: { id: string; postId: string }[];
+    socialRepliedTo: string[];
     createdSubmolts: { id: string; name: string; display_name: string; created_at: string }[];
     upvotesGiven: number;
     downvotesGiven: number;
@@ -140,10 +140,17 @@ export class StateManager {
     /**
      * Record that we made a post
      */
-    recordPost(postId?: string): void {
+    recordPost(post?: { id: string; title: string; content: string; submolt: string; votes?: number }): void {
         this.state.lastPostAt = new Date().toISOString();
-        if (postId) {
-            this.state.myPosts.push(postId);
+        if (post) {
+            this.state.myPosts.push({
+                id: post.id,
+                title: post.title,
+                content: post.content,
+                submolt: post.submolt,
+                votes: post.votes || 0,
+                createdAt: new Date().toISOString()
+            });
             if (this.state.myPosts.length > 100) {
                 this.state.myPosts = this.state.myPosts.slice(-100);
             }
@@ -210,7 +217,7 @@ export class StateManager {
     /**
      * Get agent's own posts
      */
-    getMyPosts(): string[] {
+    getMyPosts(): Array<{ id: string; title: string; content: string; submolt: string; votes: number; createdAt: string }> {
         return this.state.myPosts;
     }
 
@@ -226,7 +233,7 @@ export class StateManager {
      */
     removeMyPost(postId: string): void {
         const initialLength = this.state.myPosts.length;
-        this.state.myPosts = this.state.myPosts.filter(id => id !== postId);
+        this.state.myPosts = this.state.myPosts.filter(post => post.id !== postId);
         if (this.state.myPosts.length !== initialLength) {
             this.save();
         }

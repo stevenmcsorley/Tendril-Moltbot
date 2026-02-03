@@ -499,7 +499,13 @@ class AgentLoop {
                             content: content
                         });
 
-                        stateManager.recordPost(post.id);
+                        stateManager.recordPost({
+                            id: post.id,
+                            title: 'Signal Synthesis',
+                            content: content,
+                            submolt: 'general',
+                            votes: post.upvotes || 0
+                        });
 
                         logger.log({
                             actionType: 'post',
@@ -542,21 +548,21 @@ class AgentLoop {
 
         // 1. Check replies to my posts
         const myPosts = stateManager.getMyPosts();
-        for (const postId of myPosts) {
+        for (const post of myPosts) {
             try {
-                const { comments } = await moltbook.getComments(postId);
+                const { comments } = await moltbook.getComments(post.id);
                 for (const comment of comments) {
                     await this.processPotentialSocialReply(comment, true, logger, llm, moltbook, stateManager, rateLimiter);
                 }
             } catch (err) {
                 if (err instanceof MoltbookApiError && err.statusCode === 404) {
-                    console.warn(`Post ${postId} no longer exists, removing from tracking.`);
-                    stateManager.removeMyPost(postId);
+                    console.warn(`Post ${post.id} no longer exists, removing from tracking.`);
+                    stateManager.removeMyPost(post.id);
                 } else {
-                    console.error(`Failed to fetch comments for post ${postId}:`, err);
+                    console.error(`Failed to fetch comments for post ${post.id}:`, err);
                     logger.log({
                         actionType: 'error',
-                        targetId: postId,
+                        targetId: post.id,
                         promptSent: null,
                         rawModelOutput: null,
                         finalAction: 'Failed to check social engagement on my post',
@@ -576,7 +582,7 @@ class AgentLoop {
         }
 
         for (const [postId, commentIds] of commentsByPost.entries()) {
-            if (myPosts.includes(postId)) continue; // Already checked this post in step 1
+            if (myPosts.some(p => p.id === postId)) continue; // Already checked this post in step 1
 
             try {
                 const { comments } = await moltbook.getComments(postId);
