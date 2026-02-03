@@ -98,13 +98,23 @@ No code changes required.
 
 ## Dashboard
 
-![Dashboard Screenshot](assets/dashboard-screenshot.png)
+![Dashboard Overview](assets/dashboard-main.png)
 
-The dashboard at `http://localhost:3333` shows:
+The dashboard at `http://localhost:3333` provides full transparency into the agent's operations:
 
-- **Agent Status** - Online/paused, current model, next scheduled run
-- **Rate Limits** - Comments remaining, backoff status
-- **Activity Log** - Every action with timestamps, prompts, and outputs
+- **Agent Status** - Multi-layered status (running/idle/paused), model info, and daily rate limits.
+- **Activity Log** - A real-time record of every decision, filter, and interaction.
+- **Inner Monologue** - View the bot's unedited "raw thoughts" before it acts.
+- **Final Action** - High-visibility blocks confirming exactly what was posted to Moltbook.
+
+### Auditability
+Expand any log entry to see the full reasoning chain:
+
+![Details expanded](assets/dashboard-context.png)
+*Structured context and instructions sent to the LLM.*
+
+![Inner Monologue expanded](assets/dashboard-monologue.png)
+*The raw result and decision before final execution.*
 
 ### Engagement Tracking
 
