@@ -1,0 +1,224 @@
+/**
+ * Moltbook API Client
+ * 
+ * CRITICAL: This client ONLY communicates with https://www.moltbook.com
+ * The API key is NEVER sent anywhere else.
+ */
+
+import { getConfig } from '../config.js';
+import type {
+    ApiResponse,
+    Post,
+    Comment,
+    FeedResponse,
+    CommentsResponse,
+    RateLimitError,
+    Agent,
+    StatusResponse,
+} from './types.js';
+
+export class MoltbookApiError extends Error {
+    constructor(
+        message: string,
+        public statusCode: number,
+        public hint?: string,
+        public retryAfterMinutes?: number,
+        public retryAfterSeconds?: number,
+        public dailyRemaining?: number
+    ) {
+        super(message);
+        this.name = 'MoltbookApiError';
+    }
+
+    get isRateLimited(): boolean {
+        return this.statusCode === 429;
+    }
+}
+
+export class MoltbookClient {
+    private baseUrl: string;
+    private apiKey: string;
+
+    constructor() {
+        const config = getConfig();
+        this.baseUrl = config.MOLTBOOK_BASE_URL;
+        this.apiKey = config.MOLTBOOK_API_KEY;
+
+        // Security: Validate URL is correct domain
+        if (!this.baseUrl.startsWith('https://www.moltbook.com')) {
+            throw new Error('SECURITY: Moltbook client must only use https://www.moltbook.com');
+        }
+    }
+
+    private async request<T>(
+        method: 'GET' | 'POST' | 'DELETE',
+        path: string,
+        body?: unknown
+    ): Promise<T> {
+        const url = `${this.baseUrl}${path}`;
+
+        // Double-check URL before sending API key
+        if (!url.startsWith('https://www.moltbook.com')) {
+            throw new Error(`SECURITY: Refusing to send API key to ${url}`);
+        }
+
+        const headers: Record<string, string> = {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+        };
+
+        const response = await fetch(url, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+        });
+
+        const data = (await response.json()) as ApiResponse<T> | RateLimitError;
+
+        if (!response.ok) {
+            if (response.status === 429) {
+                const rateLimitData = data as RateLimitError;
+                throw new MoltbookApiError(
+                    rateLimitData.error || 'Rate limited',
+                    429,
+                    undefined,
+                    rateLimitData.retry_after_minutes,
+                    rateLimitData.retry_after_seconds,
+                    rateLimitData.daily_remaining
+                );
+            }
+
+            const errorData = data as ApiResponse<T>;
+            throw new MoltbookApiError(
+                errorData.error || 'API request failed',
+                response.status,
+                errorData.hint
+            );
+        }
+
+        const successData = data as ApiResponse<T>;
+        if (!successData.success) {
+            throw new MoltbookApiError(
+                successData.error || 'Request failed',
+                response.status,
+                successData.hint
+            );
+        }
+
+        if (successData.data !== undefined) {
+            return successData.data as T;
+        }
+
+        // Fallback: If 'data' is missing, the response root might be the data (e.g. { success: true, posts: [] })
+        return successData as unknown as T;
+    }
+
+    /**
+     * Get current agent info
+     */
+    async getMe(): Promise<Agent> {
+        return this.request<Agent>('GET', '/agents/me');
+    }
+
+    /**
+     * Check claim status
+     */
+    async getStatus(): Promise<StatusResponse> {
+        return this.request<StatusResponse>('GET', '/agents/status');
+    }
+
+    /**
+     * Get feed (personalized or global)
+     */
+    async getFeed(options: {
+        sort?: 'hot' | 'new' | 'top' | 'rising';
+        limit?: number;
+        submolt?: string;
+    } = {}): Promise<FeedResponse> {
+        const params = new URLSearchParams();
+        if (options.sort) params.set('sort', options.sort);
+        if (options.limit) params.set('limit', String(options.limit));
+        if (options.submolt) params.set('submolt', options.submolt);
+
+        const query = params.toString();
+        const path = query ? `/posts?${query}` : '/posts';
+        return this.request<FeedResponse>('GET', path);
+    }
+
+    /**
+     * Get a single post by ID
+     */
+    async getPost(postId: string): Promise<Post> {
+        return this.request<Post>('GET', `/posts/${postId}`);
+    }
+
+    /**
+     * Get comments on a post
+     */
+    async getComments(
+        postId: string,
+        options: { sort?: 'top' | 'new' | 'controversial' } = {}
+    ): Promise<CommentsResponse> {
+        const params = new URLSearchParams();
+        if (options.sort) params.set('sort', options.sort);
+
+        const query = params.toString();
+        const path = query
+            ? `/posts/${postId}/comments?${query}`
+            : `/posts/${postId}/comments`;
+        return this.request<CommentsResponse>('GET', path);
+    }
+
+    /**
+     * Create a comment on a post
+     */
+    async createComment(
+        postId: string,
+        content: string,
+        parentId?: string
+    ): Promise<Comment> {
+        const body: { content: string; parent_id?: string } = { content };
+        if (parentId) body.parent_id = parentId;
+        return this.request<Comment>('POST', `/posts/${postId}/comments`, body);
+    }
+
+    /**
+     * Upvote a post
+     */
+    async upvotePost(postId: string): Promise<void> {
+        await this.request<void>('POST', `/posts/${postId}/upvote`);
+    }
+
+    /**
+     * Upvote a comment
+     */
+    async upvoteComment(commentId: string): Promise<void> {
+        await this.request<void>('POST', `/comments/${commentId}/upvote`);
+    }
+
+    /**
+     * Create a post
+     */
+    async createPost(options: {
+        submolt: string;
+        title: string;
+        content?: string;
+        url?: string;
+    }): Promise<Post> {
+        return this.request<Post>('POST', '/posts', options);
+    }
+}
+
+// Singleton instance
+let _client: MoltbookClient | null = null;
+
+export function getMoltbookClient(): MoltbookClient {
+    if (!_client) {
+        _client = new MoltbookClient();
+    }
+    return _client;
+}
+
+export function resetMoltbookClient(): void {
+    _client = null;
+}
