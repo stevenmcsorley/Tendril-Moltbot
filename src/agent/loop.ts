@@ -202,23 +202,33 @@ class AgentLoop {
                     try {
                         const result = await llm.generate(prompt);
 
-                        if (result.isSkip) {
+                        // Parse vote and comment
+                        const voteMatch = result.rawOutput.match(/\[VOTE\]:\s*(UP|DOWN|NONE)/i);
+                        const commentMatch = result.rawOutput.match(/\[COMMENT\]:\s*([\s\S]+)/i);
+
+                        const vote = voteMatch ? voteMatch[1].toUpperCase() : 'NONE';
+                        const commentRaw = commentMatch ? commentMatch[1].trim() : result.rawOutput;
+                        const isSkip = commentRaw.toUpperCase() === 'SKIP' || result.isSkip;
+
+                        // Execute Vote
+                        if (vote === 'UP' && config.ENABLE_UPVOTING) {
+                            await this.tryUpvote(post, prompt, result.rawOutput);
+                        } else if (vote === 'DOWN') {
+                            await this.tryDownvote(post, prompt, result.rawOutput);
+                        }
+
+                        // Execute Comment
+                        if (!isSkip && config.ENABLE_COMMENTING && commentRaw) {
+                            await this.tryComment(post, commentRaw, prompt, result.rawOutput);
+                        } else if (isSkip && vote === 'NONE') {
                             logger.log({
                                 actionType: 'skip',
                                 targetId: post.id,
                                 targetSubmolt: post.submolt?.name,
                                 promptSent: prompt,
                                 rawModelOutput: result.rawOutput,
-                                finalAction: 'Model returned SKIP',
+                                finalAction: 'Model returned NONE/SKIP',
                             });
-                            continue;
-                        }
-
-                        // Model wants to engage - try to comment
-                        if (config.ENABLE_COMMENTING && result.response) {
-                            await this.tryComment(post, result.response, prompt, result.rawOutput);
-                        } else if (config.ENABLE_UPVOTING) {
-                            await this.tryUpvote(post, prompt, result.rawOutput);
                         }
 
                     } catch (error) {
@@ -326,10 +336,12 @@ class AgentLoop {
         rawOutput: string
     ): Promise<void> {
         const moltbook = getMoltbookClient();
+        const stateManager = getStateManager();
         const logger = getActivityLogger();
 
         try {
             await moltbook.upvotePost(post.id);
+            stateManager.recordUpvote();
 
             logger.log({
                 actionType: 'upvote',
@@ -337,11 +349,38 @@ class AgentLoop {
                 targetSubmolt: post.submolt?.name,
                 promptSent: prompt,
                 rawModelOutput: rawOutput,
-                finalAction: 'Upvoted post',
+                finalAction: 'Alignment Detected: Upvoted post',
             });
 
         } catch (error) {
             this.handleActionError(error, 'upvote', post.id, post.submolt?.name, prompt, rawOutput);
+        }
+    }
+
+    private async tryDownvote(
+        post: Post,
+        prompt: string,
+        rawOutput: string
+    ): Promise<void> {
+        const moltbook = getMoltbookClient();
+        const stateManager = getStateManager();
+        const logger = getActivityLogger();
+
+        try {
+            await moltbook.downvotePost(post.id);
+            stateManager.recordDownvote();
+
+            logger.log({
+                actionType: 'downvote',
+                targetId: post.id,
+                targetSubmolt: post.submolt?.name,
+                promptSent: prompt,
+                rawModelOutput: rawOutput,
+                finalAction: 'Signal Decay Detected: Downvoted post',
+            });
+
+        } catch (error) {
+            this.handleActionError(error, 'downvote', post.id, post.submolt?.name, prompt, rawOutput);
         }
     }
 
@@ -370,75 +409,64 @@ class AgentLoop {
         const prompt = buildSynthesisPrompt(feedPosts);
 
         try {
-            const result = await ollama.generate(prompt);
+            const result = await llm.generate(prompt);
 
-            if (result.isSkip || !result.response) {
-                logger.log({
-                    actionType: 'skip',
-                    targetId: null,
-                    targetSubmolt: undefined,
-                    promptSent: prompt,
-                    rawModelOutput: result.rawOutput,
-                    finalAction: 'Proactive synthesis skipped',
-                });
-                return;
-            }
+            if (result.isSkip) return;
 
-            // Parse response flavors:
-            // 1. Strict: [SUBMOLT]: m/general \n [CONTENT]: ...
-            // 2. Compact: [m/general]: The content...
+            const actionMatch = result.rawOutput.match(/\[ACTION\]:\s*(POST|CREATE_SUBMOLT|SKIP)/i);
+            const action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
 
-            let submolt: string | null = null;
-            let content: string | null = null;
+            if (action === 'SKIP') return;
 
-            // Try Compact format first
-            const compactMatch = result.response.match(/^\[(m\/[\w-]+)\]:\s*([\s\S]+)/i);
-            if (compactMatch) {
-                submolt = compactMatch[1];
-                content = compactMatch[2];
-            } else {
-                // Try Strict format
-                const submoltMatch = result.response.match(/(?:\[SUBMOLT\]:|\[|Submolt:)\s*(m\/[\w-]+)/i);
-                const contentMatch = result.response.match(/(?:\[CONTENT\]:|Content:)\s*([\s\S]+)/i);
+            if (action === 'CREATE_SUBMOLT') {
+                const detailsMatch = result.rawOutput.match(/\[SUBMOLT_DETAILS\]:\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(.+)/i);
+                if (detailsMatch) {
+                    const [, name, displayName, description] = detailsMatch;
+                    console.log(`Creating submolt: ${name.trim()}`);
+                    const submolt = await moltbook.createSubmolt({
+                        name: name.trim(),
+                        display_name: displayName.trim(),
+                        description: description.trim()
+                    });
 
-                if (submoltMatch && contentMatch) {
-                    submolt = submoltMatch[1];
-                    content = contentMatch[1];
+                    stateManager.recordSubmolt({
+                        id: submolt.id,
+                        name: submolt.name,
+                        display_name: submolt.display_name
+                    });
+
+                    logger.log({
+                        actionType: 'post', // Using post as a catch-all for major actions in logger for now
+                        targetId: submolt.id,
+                        targetSubmolt: submolt.name,
+                        promptSent: prompt,
+                        rawModelOutput: result.rawOutput,
+                        finalAction: `Convergence Zone Established: Created m/${submolt.name}`,
+                    });
+                }
+            } else if (action === 'POST') {
+                const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
+                if (contentMatch) {
+                    const content = contentMatch[1].trim();
+                    console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
+                    const post = await moltbook.createPost({
+                        submolt: 'general',
+                        title: 'Signal Synthesis',
+                        content: content
+                    });
+
+                    stateManager.recordPost(post.id);
+
+                    logger.log({
+                        actionType: 'post',
+                        targetId: post.id,
+                        targetSubmolt: 'general',
+                        promptSent: prompt,
+                        rawModelOutput: result.rawOutput,
+                        finalAction: `Signal Synthesized: "${content}"`,
+                    });
                 }
             }
-
-            if (!submolt || !content) {
-                logger.log({
-                    actionType: 'error',
-                    targetId: null,
-                    targetSubmolt: undefined,
-                    promptSent: prompt,
-                    rawModelOutput: result.rawOutput,
-                    finalAction: 'Failed to parse synthesis response',
-                });
-                return;
-            }
-
-            const cleanSubmolt = submolt.trim().replace(/^m\//, '');
-            content = content.trim();
-
-            console.log(`Creating proactive post in m/${cleanSubmolt}: "${content.substring(0, 50)}..."`);
-            const post = await moltbook.createPost({
-                submolt: cleanSubmolt,
-                title: 'Signal Synthesis', // Generic title
-                content: content
-            });
-
-            stateManager.recordPost(post.id);
-
-            logger.log({
-                actionType: 'post',
-                targetId: post.id,
-                targetSubmolt: cleanSubmolt,
-                promptSent: prompt,
-                rawModelOutput: result.rawOutput,
-                finalAction: `Created post: "${content}"`,
-            });
 
         } catch (error) {
             this.handleActionError(error, 'post', null, undefined, prompt, null);
@@ -466,7 +494,7 @@ class AgentLoop {
             try {
                 const { comments } = await moltbook.getComments(postId);
                 for (const comment of comments) {
-                    await this.processPotentialSocialReply(comment, true, logger, ollama, moltbook, stateManager, rateLimiter);
+                    await this.processPotentialSocialReply(comment, true, logger, llm, moltbook, stateManager, rateLimiter);
                 }
             } catch (err) {
                 if (err instanceof MoltbookApiError && err.statusCode === 404) {
@@ -502,7 +530,7 @@ class AgentLoop {
                 const { comments } = await moltbook.getComments(postId);
                 for (const comment of comments) {
                     if (comment.parent_id && commentIds.includes(comment.parent_id)) {
-                        await this.processPotentialSocialReply(comment, false, logger, ollama, moltbook, stateManager, rateLimiter);
+                        await this.processPotentialSocialReply(comment, false, logger, llm, moltbook, stateManager, rateLimiter);
                     }
                 }
             } catch (err) {
@@ -569,7 +597,7 @@ class AgentLoop {
         });
 
         try {
-            const result = await ollama.generate(prompt);
+            const result = await llm.generate(prompt);
             if (result.isSkip || !result.response) return;
 
             console.log(`Replying to @${reply.author.name} in social engagement...`);
@@ -596,7 +624,7 @@ class AgentLoop {
      */
     private handleActionError(
         error: any,
-        actionType: 'post' | 'comment' | 'upvote' | 'error',
+        actionType: 'post' | 'comment' | 'upvote' | 'downvote' | 'error',
         targetId: string | null,
         targetSubmolt: string | undefined,
         prompt: string | null,

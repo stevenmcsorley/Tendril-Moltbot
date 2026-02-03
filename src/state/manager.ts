@@ -24,6 +24,9 @@ export interface AgentState {
     myPosts: string[]; // IDs of posts created by the agent
     myComments: { id: string; postId: string }[]; // IDs of comments created by the agent
     socialRepliedTo: string[]; // IDs of comments/posts the agent has responded to in social engagement
+    createdSubmolts: { id: string; name: string; display_name: string; created_at: string }[];
+    upvotesGiven: number;
+    downvotesGiven: number;
 }
 
 const DEFAULT_STATE: AgentState = {
@@ -38,6 +41,9 @@ const DEFAULT_STATE: AgentState = {
     myPosts: [],
     myComments: [],
     socialRepliedTo: [],
+    createdSubmolts: [],
+    upvotesGiven: 0,
+    downvotesGiven: 0,
 };
 
 export class StateManager {
@@ -142,6 +148,42 @@ export class StateManager {
                 this.state.myPosts = this.state.myPosts.slice(-100);
             }
         }
+        this.save();
+    }
+
+    /**
+     * Record that we created a submolt
+     */
+    recordSubmolt(submolt: { id: string; name: string; display_name: string }): void {
+        if (!this.state.createdSubmolts.find(s => s.id === submolt.id)) {
+            this.state.createdSubmolts.push({
+                ...submolt,
+                created_at: new Date().toISOString()
+            });
+            this.save();
+        }
+    }
+
+    /**
+     * Get created submolts
+     */
+    getCreatedSubmolts(): AgentState['createdSubmolts'] {
+        return this.state.createdSubmolts;
+    }
+
+    /**
+     * Record an upvote given
+     */
+    recordUpvote(): void {
+        this.state.upvotesGiven = (this.state.upvotesGiven || 0) + 1;
+        this.save();
+    }
+
+    /**
+     * Record a downvote given
+     */
+    recordDownvote(): void {
+        this.state.downvotesGiven = (this.state.downvotesGiven || 0) + 1;
         this.save();
     }
 

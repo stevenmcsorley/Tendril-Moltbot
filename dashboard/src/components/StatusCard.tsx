@@ -1,6 +1,7 @@
 interface Status {
-    agent: { name: string; description: string };
+    agent: { name: string; description: string; identity?: string; role?: string };
     status: 'running' | 'paused' | 'idle';
+    metrics: { upvotesGiven: number; downvotesGiven: number; submoltsCreated: number };
     llm: { provider: string; model: string; healthy: boolean };
     loop: {
         lastRunAt: string | null;
@@ -35,6 +36,27 @@ function formatTime(iso: string | null): string {
     return new Date(iso).toLocaleString();
 }
 
+function formatRelativeTime(iso: string | null): string {
+    if (!iso) return '—';
+    const now = new Date();
+    const target = new Date(iso);
+    const diffMs = target.getTime() - now.getTime();
+
+    if (diffMs <= 0) return 'Ready';
+
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffHours > 0) {
+        return `${diffHours}h ${diffMins % 60}m to go`;
+    }
+    if (diffMins > 0) {
+        return `${diffMins}m ${diffSecs % 60}s to go`;
+    }
+    return `${diffSecs}s to go`;
+}
+
 function StatusBadge({ value }: { value: 'running' | 'paused' | 'idle' | undefined }) {
     const className = value === 'paused' ? 'paused' : value === 'running' ? 'online' : '';
     const label = value === 'running' ? '● Running' : value === 'paused' ? '⏸ Paused' : '○ Idle';
@@ -59,10 +81,24 @@ export default function StatusCard({ status }: StatusCardProps) {
                 <span className="status-label">Agent</span>
                 <span className="status-value">
                     <a href={`https://www.moltbook.com/u/${status.agent.name}`} target="_blank" rel="noopener noreferrer" className="status-link">
-                        {status.agent.name}
+                        @{status.agent.name}
                     </a>
                 </span>
             </div>
+
+            {status.agent.identity && (
+                <div className="status-row">
+                    <span className="status-label">Identity</span>
+                    <span className="status-value" style={{ color: 'var(--accent)', fontWeight: 'bold' }}>{status.agent.identity}</span>
+                </div>
+            )}
+
+            {status.agent.role && (
+                <div className="status-row">
+                    <span className="status-label">Role</span>
+                    <span className="status-value" style={{ color: 'var(--info)', fontSize: '12px' }}>{status.agent.role}</span>
+                </div>
+            )}
 
             <div className="status-row">
                 <span className="status-label">Status</span>
@@ -93,7 +129,9 @@ export default function StatusCard({ status }: StatusCardProps) {
 
             <div className="status-row">
                 <span className="status-label">Next Run</span>
-                <span className="status-value">{formatTime(status.loop.nextRunAt)}</span>
+                <span className="status-value" title={formatTime(status.loop.nextRunAt)}>
+                    {formatRelativeTime(status.loop.nextRunAt)}
+                </span>
             </div>
 
             <div className="status-row">
@@ -111,7 +149,9 @@ export default function StatusCard({ status }: StatusCardProps) {
             {status.rateLimit.inBackoff && (
                 <div className="status-row">
                     <span className="status-label">Backoff Until</span>
-                    <span className="status-value error">{formatTime(status.rateLimit.backoffUntil)}</span>
+                    <span className="status-value error" title={formatTime(status.rateLimit.backoffUntil)}>
+                        {formatRelativeTime(status.rateLimit.backoffUntil)}
+                    </span>
                 </div>
             )}
 
@@ -126,6 +166,22 @@ export default function StatusCard({ status }: StatusCardProps) {
                         .filter(Boolean)
                         .join(', ') || 'None'}
                 </span>
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+                <h2>Operational Metrics</h2>
+                <div className="status-row">
+                    <span className="status-label">Upvotes Given</span>
+                    <span className="status-value" style={{ color: 'var(--success)' }}>{status.metrics.upvotesGiven}</span>
+                </div>
+                <div className="status-row">
+                    <span className="status-label">Downvotes Given</span>
+                    <span className="status-value" style={{ color: 'var(--error)' }}>{status.metrics.downvotesGiven}</span>
+                </div>
+                <div className="status-row">
+                    <span className="status-label">Submolts Established</span>
+                    <span className="status-value" style={{ color: 'var(--accent)' }}>{status.metrics.submoltsCreated}</span>
+                </div>
             </div>
         </div>
     );

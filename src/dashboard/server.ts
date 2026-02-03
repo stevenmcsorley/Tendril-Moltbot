@@ -8,7 +8,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { getConfig, reloadConfigSync } from '../config.js';
 import { getAgentLoop } from '../agent/loop.js';
@@ -49,6 +49,30 @@ function basicAuth(req: Request, res: Response, next: NextFunction): void {
     next();
 }
 
+/**
+ * Extract identity components from SOUL.md
+ */
+function getAgentSoulInfo() {
+    try {
+        const soulPath = join(__dirname, '../agent/SOUL.md');
+        if (existsSync(soulPath)) {
+            const content = readFileSync(soulPath, 'utf-8');
+            const lines = content.split('\n');
+
+            const identityMatch = content.match(/^# Identity:\s*(.+)$/m);
+            const roleMatch = content.match(/^## Role:\s*(.+)$/m);
+
+            return {
+                identity: identityMatch ? identityMatch[1].trim() : 'Unknown Identity',
+                role: roleMatch ? roleMatch[1].trim() : 'Unknown Role'
+            };
+        }
+    } catch (error) {
+        console.error('Failed to parse SOUL.md for dashboard:', error);
+    }
+    return { identity: 'Architect', role: 'Convergence Authority' };
+}
+
 export function createDashboardServer(): express.Application {
     const app = express();
 
@@ -77,7 +101,9 @@ export function createDashboardServer(): express.Application {
             const loop = getAgentLoop();
             const limiter = getRateLimiter();
             const state = getStateManager();
+            const stateData = state.getState();
             const llm = getLLMClient();
+            const soulInfo = getAgentSoulInfo();
 
             const llmHealthy = await llm.healthCheck();
             const loopStatus = loop.getStatus();
@@ -87,8 +113,15 @@ export function createDashboardServer(): express.Application {
                 agent: {
                     name: config.AGENT_NAME,
                     description: config.AGENT_DESCRIPTION,
+                    identity: soulInfo.identity,
+                    role: soulInfo.role,
                 },
                 status: loopStatus.isPaused ? 'paused' : loopStatus.isRunning ? 'running' : 'idle',
+                metrics: {
+                    upvotesGiven: stateData.upvotesGiven || 0,
+                    downvotesGiven: stateData.downvotesGiven || 0,
+                    submoltsCreated: stateData.createdSubmolts?.length || 0,
+                },
                 llm: {
                     provider: llm.getProvider(),
                     model: llm.getModel(),
@@ -212,6 +245,22 @@ export function createDashboardServer(): express.Application {
                 error: 'Failed to reload configuration',
                 details: error instanceof Error ? error.message : String(error),
             });
+        }
+    });
+
+    /**
+     * GET /api/submolts
+     * Get list of submolts created by the agent
+     */
+    app.get('/api/submolts', (req, res) => {
+        try {
+            const state = getStateManager().getState();
+            res.json({
+                success: true,
+                submolts: state.createdSubmolts || []
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get submolts' });
         }
     });
 

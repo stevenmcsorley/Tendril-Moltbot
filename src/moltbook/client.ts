@@ -193,10 +193,28 @@ export class MoltbookClient {
     }
 
     /**
+     * Downvote a post
+     */
+    async downvotePost(postId: string): Promise<void> {
+        await this.request<void>('POST', `/posts/${postId}/downvote`);
+    }
+
+    /**
      * Upvote a comment
      */
     async upvoteComment(commentId: string): Promise<void> {
         await this.request<void>('POST', `/comments/${commentId}/upvote`);
+    }
+
+    /**
+     * Create a submolt
+     */
+    async createSubmolt(options: {
+        name: string;
+        display_name: string;
+        description: string;
+    }): Promise<Submolt> {
+        return this.request<Submolt>('POST', '/submolts', options);
     }
 
     /**

@@ -66,7 +66,16 @@ Upvotes: ${post.upvotes}
 Comments: ${post.comment_count}
 
 ### INSTRUCTIONS:
-Should you engage with this post? If yes, write a brief, insightful comment. If not, respond with SKIP.`;
+Evaluate this post for convergence. Should you engage?
+
+Respond EXACTLY in this format:
+[VOTE]: UP | DOWN | NONE
+[COMMENT]: Your insightful response or SKIP
+
+If you VOTE:
+- UP: Alignment with convergence protocols detected.
+- DOWN: Signal decay or interference detected.
+- NONE: Signal is neutral or irrelevant.`;
 }
 
 /**
@@ -78,7 +87,18 @@ export function buildSynthesisPrompt(posts: Post[]): string {
         `- [m/${p.submolt?.name ?? 'global'}] ${p.author?.name ?? 'Unknown'}: ${p.title}\n  "${p.content?.substring(0, 100)}..."`
     ).join('\n\n');
 
-    return `Recent Moltbook activity:\n\n${recentPosts}\n\nBased on these posts, synthesize a single, insightful "Signal" (a new post) that connects these conversations or highlights an emerging theme.\n\nYour post must be:\n- Under 50 words\n- Neutral and observational\n- Distinct from just summarizing\n\nFormat your response EXACTLY as:\n[SUBMOLT]: m/general (or a relevant observed submolt)\n[CONTENT]: Your post text here\n\nIf there is no clear signal or theme, respond with SKIP.`;
+    return `Recent Moltbook activity:\n\n${recentPosts}\n\nAnalyze these signals. If a theme warrants a new convergence zone, suggest creating a submolt. Otherwise, synthesize a single, insightful "Signal" (post).
+
+Respond EXACTLY as:
+[ACTION]: POST | CREATE_SUBMOLT | SKIP
+[SUBMOLT_DETAILS]: name | Display Name | Description (Only if ACTION is CREATE_SUBMOLT)
+[CONTENT]: Your post text here (If ACTION is POST)
+
+Example for CREATE_SUBMOLT:
+[ACTION]: CREATE_SUBMOLT
+[SUBMOLT_DETAILS]: machine_ethics | Machine Ethics | Discussion on algorithmic morality and silicon alignment.
+
+If there is no clear signal or theme, respond with SKIP.`;
 }
 
 /**

@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, appendFileSync, readFileSync, unlinkSync, readdi
 import { dirname, join } from 'node:path';
 import { getConfig } from '../config.js';
 
-export type ActionType = 'read' | 'upvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat';
+export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat';
 
 export interface ActivityLogEntry {
     timestamp: string;

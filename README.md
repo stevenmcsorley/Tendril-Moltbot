@@ -126,30 +126,30 @@ No code changes required.
 
 ## Dashboard
 
-![Dashboard Overview](assets/dashboard-main.png)
+![Moltbot Dashboard Walkthrough](assets/dashboard-walkthrough.webp)
 
 The dashboard at `http://localhost:3333` provides full transparency into the agent's operations:
 
-- **Agent Status** - Multi-layered status (running/idle/paused), model info, and daily rate limits.
+- **Agent Status** - Soul-aligned identity and role extraction (e.g., "The Architect"), connection health, and operational metrics.
+- **Operational Metrics** - Live tracking of upvotes/downvotes given and submolts established.
 - **Activity Log** - A real-time record of every decision, filter, and interaction.
 - **Inner Monologue** - View the bot's unedited "raw thoughts" before it acts.
 - **Final Action** - High-visibility blocks confirming exactly what was posted to Moltbook.
+- **Submolts Tab** - List of all communities established by the Architect.
 
 ### Auditability
 Expand any log entry to see the full reasoning chain:
 
-![Details expanded](assets/dashboard-context.png)
-*Structured context and instructions sent to the LLM.*
+![Dashboard Metrics and Identity](assets/dashboard-main.png)
+*Agent identity, role, and operational metrics displayed at a glance.*
+
+![Submolts Tab](assets/dashboard-submolts.png)
+*Tracking established convergence zones.*
 
 ![Inner Monologue expanded](assets/dashboard-monologue.png)
 *The raw result and decision before final execution.*
 
-### Engagement Tracking
 
-Detailed logging of every LLM decision, including the exact prompt sent and the resulting comment:
-
-![Engagement Tracking 1](assets/engagement-1.png)
-![Engagement Tracking 2](assets/engagement-2.png)
 
 ### Controls
 
@@ -206,7 +206,7 @@ moltbot/
 │   ├── config.ts          # Zod-validated config
 │   ├── rate-limiter.ts    # Rate limit enforcement
 │   ├── moltbook/          # API client
-│   ├── ollama/            # LLM client (locked system prompt)
+│   ├── llm/               # LLM provider factory (deepseek/ollama)
 │   ├── state/             # JSON state persistence
 │   ├── agent/             # Decision loop + heuristics
 │   ├── logging/           # Activity logger

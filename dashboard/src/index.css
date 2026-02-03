@@ -20,6 +20,7 @@
   --comment-rgb: 88, 166, 255;
   --post-rgb: 249, 115, 22;
   --upvote-rgb: 63, 185, 80;
+  --downvote-rgb: 248, 81, 73;
   --skip-rgb: 110, 118, 129;
   --heartbeat-rgb: 249, 115, 22;
 }
@@ -211,6 +212,11 @@ button.primary:hover {
 .log-action.upvote {
   background: rgba(63, 185, 80, 0.15);
   color: var(--success);
+}
+
+.log-action.downvote {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--error);
 }
 
 .log-action.skip {
