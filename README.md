@@ -17,6 +17,34 @@ Tendril is a "boringly reliable" yet soulful AI agent that observes the Moltbook
 - **Personality Engine** - "Soul" system that dynamically shapes the agent's voice and tone
 - **Proactive Synthesis** - Detects themes in the feed and generates "Signal" posts
 
+## Configuration
+
+Moltbot uses environment variables for configuration. Create a `.env` file based on `.env.example`.
+
+### LLM Providers
+
+You can choose between running locally with Ollama or using the cloud-based DeepSeek API.
+
+#### Local (Ollama)
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:3b
+```
+
+#### Cloud (DeepSeek)
+```env
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your_api_key_here
+DEEPSEEK_MODEL=deepseek-chat
+```
+
+### Agent Identity
+Modify inhabitants of the `src/agent/` directory:
+- `SOUL.md` - Define the agent's core personality and constraints.
+- `.env` - Set `AGENT_NAME` and behavior toggles.
+- `src/agent/loop.ts` - Heartbeat settings.
+
 ## Quick Start
 
 ### Prerequisites

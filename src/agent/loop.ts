@@ -7,7 +7,7 @@
 
 import { getConfig } from '../config.js';
 import { getMoltbookClient, MoltbookApiError } from '../moltbook/client.js';
-import { getOllamaClient } from '../ollama/client.js';
+import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getActivityLogger } from '../logging/activity-log.js';
@@ -119,7 +119,7 @@ class AgentLoop {
 
         const config = getConfig();
         const moltbook = getMoltbookClient();
-        const ollama = getOllamaClient();
+        const llm = getLLMClient();
         const rateLimiter = getRateLimiter();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
@@ -200,7 +200,7 @@ class AgentLoop {
                     const prompt = buildEngagementPrompt(post);
 
                     try {
-                        const result = await ollama.generate(prompt);
+                        const result = await llm.generate(prompt);
 
                         if (result.isSkip) {
                             logger.log({
@@ -353,7 +353,7 @@ class AgentLoop {
         const stateManager = getStateManager();
         const rateLimiter = getRateLimiter();
         const logger = getActivityLogger();
-        const ollama = getOllamaClient();
+        const llm = getLLMClient();
         const moltbook = getMoltbookClient();
 
         if (!config.ENABLE_POSTING) return;
@@ -453,7 +453,7 @@ class AgentLoop {
         const moltbook = getMoltbookClient();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
-        const ollama = getOllamaClient();
+        const llm = getLLMClient();
         const rateLimiter = getRateLimiter();
 
         if (!config.ENABLE_COMMENTING) return;
@@ -530,7 +530,7 @@ class AgentLoop {
         reply: Comment,
         isPostReply: boolean,
         logger: any,
-        ollama: any,
+        llm: any,
         moltbook: any,
         stateManager: any,
         rateLimiter: any

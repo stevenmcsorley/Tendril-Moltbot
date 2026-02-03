@@ -9,11 +9,19 @@ const configSchema = z.object({
     MOLTBOOK_API_KEY: z.string().min(1, 'MOLTBOOK_API_KEY is required'),
     MOLTBOOK_BASE_URL: z.string().url().default('https://www.moltbook.com/api/v1'),
 
+    // LLM Provider
+    LLM_PROVIDER: z.enum(['ollama', 'deepseek']).default('ollama'),
+
     // Ollama
     OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
     OLLAMA_MODEL: z.string().default('qwen2.5:3b'),
     OLLAMA_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
     OLLAMA_MAX_TOKENS: z.coerce.number().positive().default(120),
+
+    // DeepSeek
+    DEEPSEEK_API_KEY: z.string().optional(),
+    DEEPSEEK_BASE_URL: z.string().url().default('https://api.deepseek.com'),
+    DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
 
     // Agent behavior
     AGENT_NAME: z.string().min(1, 'AGENT_NAME is required'),
@@ -55,6 +63,11 @@ export function loadConfig(): Config {
         throw new Error(
             'MOLTBOOK_BASE_URL must start with https://www.moltbook.com - API key must never be sent elsewhere'
         );
+    }
+
+    // Provider check: DeepSeek requires an API key
+    if (config.LLM_PROVIDER === 'deepseek' && !config.DEEPSEEK_API_KEY) {
+        throw new Error('DEEPSEEK_API_KEY is required when LLM_PROVIDER is set to "deepseek"');
     }
 
     return config;

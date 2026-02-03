@@ -15,9 +15,8 @@ import { getAgentLoop } from '../agent/loop.js';
 import { getActivityLogger, type ActivityLogEntry } from '../logging/activity-log.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getStateManager } from '../state/manager.js';
-import { getOllamaClient } from '../ollama/client.js';
 import { resetMoltbookClient } from '../moltbook/client.js';
-import { resetOllamaClient } from '../ollama/client.js';
+import { getLLMClient, resetLLMClient } from '../llm/factory.js';
 import { resetRateLimiter } from '../rate-limiter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -78,9 +77,9 @@ export function createDashboardServer(): express.Application {
             const loop = getAgentLoop();
             const limiter = getRateLimiter();
             const state = getStateManager();
-            const ollama = getOllamaClient();
+            const llm = getLLMClient();
 
-            const ollamaHealthy = await ollama.healthCheck();
+            const llmHealthy = await llm.healthCheck();
             const loopStatus = loop.getStatus();
             const rateStatus = limiter.getStatus();
 
@@ -90,10 +89,10 @@ export function createDashboardServer(): express.Application {
                     description: config.AGENT_DESCRIPTION,
                 },
                 status: loopStatus.isPaused ? 'paused' : loopStatus.isRunning ? 'running' : 'idle',
-                ollama: {
-                    model: ollama.getModel(),
-                    healthy: ollamaHealthy,
-                    baseUrl: config.OLLAMA_BASE_URL,
+                llm: {
+                    provider: llm.getProvider(),
+                    model: llm.getModel(),
+                    healthy: llmHealthy,
                 },
                 loop: {
                     lastRunAt: loopStatus.lastRunAt?.toISOString() ?? null,
@@ -201,7 +200,7 @@ export function createDashboardServer(): express.Application {
         try {
             // Reset all singletons to pick up new config
             resetMoltbookClient();
-            resetOllamaClient();
+            resetLLMClient();
             resetRateLimiter();
 
             // Reload config

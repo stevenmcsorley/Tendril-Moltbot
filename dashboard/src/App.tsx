@@ -6,7 +6,7 @@ import Controls from './components/Controls';
 interface Status {
     agent: { name: string; description: string };
     status: 'running' | 'paused' | 'idle';
-    ollama: { model: string; healthy: boolean; baseUrl: string };
+    llm: { provider: string; model: string; healthy: boolean };
     loop: {
         lastRunAt: string | null;
         nextRunAt: string | null;

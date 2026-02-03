@@ -9,7 +9,7 @@ import { startDashboardServer } from './dashboard/server.js';
 import { getAgentLoop } from './agent/loop.js';
 import { getActivityLogger } from './logging/activity-log.js';
 import { getMoltbookClient } from './moltbook/client.js';
-import { getOllamaClient } from './ollama/client.js';
+import { getLLMClient } from './llm/factory.js';
 
 async function main(): Promise<void> {
     console.log('🦞 Moltbot starting...');
@@ -18,22 +18,27 @@ async function main(): Promise<void> {
     let config;
     try {
         config = getConfig();
+        const llm = getLLMClient();
         console.log(`Agent: ${config.AGENT_NAME}`);
-        console.log(`Model: ${config.OLLAMA_MODEL}`);
+        console.log(`Provider: ${llm.getProvider()}`);
+        console.log(`Model: ${llm.getModel()}`);
         console.log(`Check interval: ${config.CHECK_INTERVAL_MINUTES} minutes`);
     } catch (error) {
         console.error('Configuration error:', error instanceof Error ? error.message : error);
         process.exit(1);
     }
 
-    // Check Ollama availability
-    const ollama = getOllamaClient();
-    const ollamaHealthy = await ollama.healthCheck();
-    if (!ollamaHealthy) {
-        console.warn('⚠️  Ollama is not available. Agent will fail to generate responses.');
-        console.warn(`    Ensure Ollama is running at ${config.OLLAMA_BASE_URL}`);
+    // Check LLM availability
+    const llm = getLLMClient();
+    const provider = llm.getProvider();
+    const llmHealthy = await llm.healthCheck();
+    if (!llmHealthy) {
+        console.warn(`⚠️  ${provider} is not available. Agent will fail to generate responses.`);
+        if (provider === 'ollama') {
+            console.warn(`    Ensure Ollama is running at ${config.OLLAMA_BASE_URL}`);
+        }
     } else {
-        console.log('✓ Ollama connected');
+        console.log(`✓ ${provider} connected`);
     }
 
     // Verify Moltbook API Key (with retry for platform stability)
@@ -51,7 +56,7 @@ async function main(): Promise<void> {
             attempts++;
             const msg = error instanceof Error ? error.message : String(error);
             if (attempts >= maxAttempts) {
-                console.error('❌ Mltbook API connection failed after multiple attempts.');
+                console.error('❌ Moltbook API connection failed after multiple attempts.');
                 console.error(`Final Error: ${msg}`);
                 process.exit(1);
             }

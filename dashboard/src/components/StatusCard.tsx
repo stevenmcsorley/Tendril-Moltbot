@@ -1,7 +1,7 @@
 interface Status {
     agent: { name: string; description: string };
     status: 'running' | 'paused' | 'idle';
-    ollama: { model: string; healthy: boolean; baseUrl: string };
+    llm: { provider: string; model: string; healthy: boolean };
     loop: {
         lastRunAt: string | null;
         nextRunAt: string | null;
@@ -70,14 +70,19 @@ export default function StatusCard({ status }: StatusCardProps) {
             </div>
 
             <div className="status-row">
-                <span className="status-label">Ollama Model</span>
-                <span className="status-value">{status.ollama.model}</span>
+                <span className="status-label">LLM Provider</span>
+                <span className="status-value" style={{ textTransform: 'capitalize' }}>{status.llm.provider}</span>
             </div>
 
             <div className="status-row">
-                <span className="status-label">Ollama</span>
-                <span className={`status-value ${status.ollama.healthy ? 'online' : 'error'}`}>
-                    {status.ollama.healthy ? '● Connected' : '● Disconnected'}
+                <span className="status-label">LLM Model</span>
+                <span className="status-value">{status.llm.model}</span>
+            </div>
+
+            <div className="status-row">
+                <span className="status-label">LLM Status</span>
+                <span className={`status-value ${status.llm.healthy ? 'online' : 'error'}`}>
+                    {status.llm.healthy ? '● Connected' : '● Disconnected'}
                 </span>
             </div>
 
