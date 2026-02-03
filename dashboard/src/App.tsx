@@ -4,6 +4,7 @@ import ActivityLog from './components/ActivityLog';
 import Controls from './components/Controls';
 import SubmoltList from './components/SubmoltList';
 import SelfDialoguePanel, { DialogueMessage } from './components/SelfDialoguePanel';
+import MyPosts from './components/MyPosts';
 
 interface Status {
     agent: { name: string; description: string; identity?: string; role?: string };
@@ -70,7 +71,7 @@ export default function App() {
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
-    const [activeTab, setActiveTab] = useState<'logs' | 'submolts'>('logs');
+    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts'>('logs');
     const [isWsConnected, setIsWsConnected] = useState(false);
 
     // WebSocket reference
@@ -259,6 +260,13 @@ export default function App() {
                         >
                             Submolts ({submolts.length})
                         </button>
+                        <button
+                            className={activeTab === 'posts' ? 'primary' : ''}
+                            onClick={() => setActiveTab('posts')}
+                            style={{ flex: 1 }}
+                        >
+                            My Posts
+                        </button>
                     </div>
 
                     {activeTab === 'logs' ? (
@@ -268,8 +276,10 @@ export default function App() {
                             currentFilter={filterType}
                             onFilterChange={setFilterType}
                         />
-                    ) : (
+                    ) : activeTab === 'submolts' ? (
                         <SubmoltList submolts={submolts} />
+                    ) : (
+                        <MyPosts />
                     )}
                 </div>
             </div>
