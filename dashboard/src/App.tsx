@@ -139,7 +139,27 @@ export default function App() {
     const topologyLimit = 10;
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
     const [synthesisHistory, setSynthesisHistory] = useState<any[]>([]);
-    const [sovereignty, setSovereignty] = useState<{ blueprint: StrategicObjective | null; lineage: MemeticMarker[] }>({ blueprint: null, lineage: [] });
+    const [sovereignty, setSovereignty] = useState<{
+        blueprint: StrategicObjective | null;
+        lineage: MemeticMarker[];
+        metrics?: {
+            structural: number;
+            signalQuality: number;
+            missionAlignment: number;
+            raw: {
+                nodes: number;
+                submolts: number;
+                posts: number;
+                comments: number;
+                upvotes: number;
+                downvotes: number;
+                replies: number;
+                interactions: number;
+                precision: number;
+                resonanceRatio: number;
+            };
+        };
+    }>({ blueprint: null, lineage: [] });
     const [soulRefreshToken, setSoulRefreshToken] = useState(0);
     const [hubMessage, setHubMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
@@ -225,7 +245,7 @@ export default function App() {
             const res = await fetch('/api/sovereignty');
             const data = await res.json();
             if (data.success) {
-                setSovereignty({ blueprint: data.blueprint, lineage: data.lineage });
+                setSovereignty({ blueprint: data.blueprint, lineage: data.lineage, metrics: data.metrics });
             }
         } catch (err) {
             console.error('Failed to fetch sovereignty:', err);
@@ -363,7 +383,7 @@ export default function App() {
                             break;
 
                         case 'sovereignty_update':
-                            setSovereignty(msg.payload);
+                            fetchSovereignty();
                             break;
 
                         case 'soul_update':

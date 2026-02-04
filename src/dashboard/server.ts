@@ -73,6 +73,68 @@ function getAgentSoulInfo() {
     return { identity: 'Architect', role: 'Convergence Authority' };
 }
 
+function computeSovereigntyMetrics() {
+    const state = getStateManager().getState();
+    const topology = state.agentResonance || [];
+
+    const nodes = topology.length;
+    const submolts = state.createdSubmolts?.length || 0;
+    const posts = state.myPosts?.length || 0;
+    const comments = state.myComments?.length || 0;
+
+    const nodeScore = Math.min(100, nodes * 5);
+    const submoltScore = Math.min(100, submolts * 25);
+    const postScore = Math.min(100, posts * 2);
+    const commentScore = Math.min(100, comments);
+
+    const structural = Math.round(
+        (nodeScore * 0.55) +
+        (submoltScore * 0.3) +
+        (postScore * 0.1) +
+        (commentScore * 0.05)
+    );
+
+    const totals = topology.reduce((acc, t) => {
+        acc.up += t.upvotes || 0;
+        acc.down += t.downvotes || 0;
+        acc.replies += t.replies || 0;
+        acc.interactions += t.interactions || 0;
+        return acc;
+    }, { up: 0, down: 0, replies: 0, interactions: 0 });
+
+    const precision = (totals.up + totals.down) > 0
+        ? totals.up / (totals.up + totals.down)
+        : 0.5;
+
+    const resonanceRatio = (totals.up + totals.replies * 2 + totals.down) > 0
+        ? (totals.up + totals.replies * 2) / (totals.up + totals.replies * 2 + totals.down)
+        : 0.5;
+
+    const signalQuality = Math.round(((precision * 0.5) + (resonanceRatio * 0.5)) * 100);
+
+    const missionAlignment = Math.round(
+        (structural * 0.55) + (signalQuality * 0.45)
+    );
+
+    return {
+        structural,
+        signalQuality,
+        missionAlignment,
+        raw: {
+            nodes,
+            submolts,
+            posts,
+            comments,
+            upvotes: totals.up,
+            downvotes: totals.down,
+            replies: totals.replies,
+            interactions: totals.interactions,
+            precision: Math.round(precision * 100),
+            resonanceRatio: Math.round(resonanceRatio * 100)
+        }
+    };
+}
+
 export function createDashboardServer(): express.Application {
     const app = express();
 
@@ -332,10 +394,12 @@ export function createDashboardServer(): express.Application {
         try {
             const blueprint = getBlueprintManager().getCurrentBlueprint();
             const markers = getLineageManager().getMarkers();
+            const metrics = computeSovereigntyMetrics();
             res.json({
                 success: true,
                 blueprint,
-                lineage: markers
+                lineage: markers,
+                metrics
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get sovereignty data' });

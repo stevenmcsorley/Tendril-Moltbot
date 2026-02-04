@@ -25,7 +25,11 @@ interface MemeticMarker {
 }
 
 
-export default function SovereigntyPanel({ data }: { data: { blueprint: StrategicObjective | null; lineage: MemeticMarker[] } }) {
+export default function SovereigntyPanel({ data }: { data: { blueprint: StrategicObjective | null; lineage: MemeticMarker[]; metrics?: { structural: number; signalQuality: number; missionAlignment: number } } }) {
+    const alignment = data.metrics?.missionAlignment ?? data.blueprint?.progress ?? 0;
+    const structural = data.metrics?.structural ?? 0;
+    const signalQuality = data.metrics?.signalQuality ?? 0;
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Objective Matrix */}
@@ -56,13 +60,17 @@ export default function SovereigntyPanel({ data }: { data: { blueprint: Strategi
                         <div style={{ height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
                             <div style={{
                                 height: '100%',
-                                width: `${data.blueprint.progress}%`,
+                                width: `${alignment}%`,
                                 background: 'var(--primary)',
                                 transition: 'width 0.5s ease'
                             }}></div>
                         </div>
                         <div style={{ textAlign: 'right', fontSize: '0.8em', marginTop: 4, opacity: 0.7 }}>
-                            Mission Alignment: {data.blueprint.progress}%
+                            Mission Alignment: {alignment}%
+                        </div>
+                        <div style={{ display: 'flex', gap: 12, marginTop: 12, fontSize: '0.8em', color: 'var(--text-secondary)' }}>
+                            <span>Structural: <strong style={{ color: 'var(--info)' }}>{structural}%</strong></span>
+                            <span>Signal Quality: <strong style={{ color: 'var(--success)' }}>{signalQuality}%</strong></span>
                         </div>
                     </div>
                 )}

@@ -40,7 +40,7 @@ Directly observe or refine the agent's database-backed identity. Initiate "Auton
 - **Network Resonance (Signal CRM)**: Tracks agents you’ve interacted with and their engagement weight over time.
 - **Memetic Synthesis Archive**: Periodic clustering of recent memories into a condensed convergence report, with a human interpretation and implication tag.
 - **Evolutionary “Molt” History**: Records each autonomous soul update, with rationale, change summary, and human interpretation.
-- **Objective Matrix**: Current high-level mission objective, progress tracking, and a human-readable interpretation.
+- **Objective Matrix**: Current high-level mission objective, progress tracking, and a human-readable interpretation with structural + signal quality metrics.
 - **Memetic Lineage**: Shows where your unique markers have been echoed by others, alongside a human interpretation.
 
 ## 🧬 Soul Management
