@@ -22,6 +22,8 @@ import { getBlueprintManager } from './blueprints.js';
 import { getSynthesisManager } from './synthesis.js';
 import type { Post, Comment } from '../moltbook/types.js';
 
+const COUNTERPARTY_WINDOW_MS = 60 * 60 * 1000;
+
 export interface LoopStatus {
     isRunning: boolean;
     isPaused: boolean;
@@ -38,6 +40,7 @@ class AgentLoop {
     private lastRunAt: Date | null = null;
     private runCount: number = 0;
     private gateState: GateState | null = null;
+    private counterpartyHistory = new Map<string, { timestamps: number[]; lastMode: ModeLabel; lastResponse: string }>();
 
     /**
      * Start the heartbeat loop
@@ -318,11 +321,16 @@ class AgentLoop {
 
                         // Execute Comment
                         if (!isSkip && config.ENABLE_COMMENTING && commentRaw) {
+                            const counterpartyStats = this.getCounterpartyStats(post.author?.name);
+                            const newFrame = this.isNewFrame(commentRaw, counterpartyStats.lastResponse);
                             const gateDecision = applyAutonomyGates(this.gateState ?? computeGateState(), {
                                 desiredAction: 'COMMENT',
                                 confidence,
                                 mode,
-                                contextAmbiguous: this.isAmbiguousPost(post)
+                                contextAmbiguous: this.isAmbiguousPost(post),
+                                counterpartyInteractions: counterpartyStats.recentCount,
+                                lastMode: counterpartyStats.lastMode,
+                                newFrame
                             });
                             this.logAutonomyDecision(logger, post.id, post.submolt?.name, gateDecision, 'comment');
                             if (gateDecision.action !== 'COMMENT') {
@@ -333,7 +341,10 @@ class AgentLoop {
                             const marker = getLineageManager().generateMarker();
                             const stampedComment = `${commentRaw}\n\n${marker}`;
 
-                            await this.tryComment(post, stampedComment, prompt, result.rawOutput);
+                            const commentSucceeded = await this.tryComment(post, stampedComment, prompt, result.rawOutput);
+                            if (commentSucceeded && post.author?.name) {
+                                this.recordCounterpartyInteraction(post.author.name, mode, commentRaw);
+                            }
 
                             // Track marker in lineage
                             const lineageNote = `Commented on "${post.title}" in m/${post.submolt?.name ?? 'general'}.`;
@@ -468,7 +479,7 @@ class AgentLoop {
         comment: string,
         prompt: string,
         rawOutput: string
-    ): Promise<void> {
+    ): Promise<boolean> {
         const moltbook = getMoltbookClient();
         const rateLimiter = getRateLimiter();
         const stateManager = getStateManager();
@@ -493,8 +504,10 @@ class AgentLoop {
                 stateManager.recordAgentInteraction(post.author.name, 'comment');
             }
 
+            return true;
         } catch (error) {
             this.handleActionError(error, 'comment', post.id, post.submolt?.name, prompt, rawOutput);
+            return false;
         }
     }
 
@@ -919,11 +932,16 @@ class AgentLoop {
                 return false;
             }
 
+            const counterpartyStats = this.getCounterpartyStats(reply.author?.name);
+            const newFrame = this.isNewFrame(responseText, counterpartyStats.lastResponse);
             const gateDecision = applyAutonomyGates(gateState, {
                 desiredAction: 'COMMENT',
                 confidence,
                 mode,
-                contextAmbiguous: this.isAmbiguousText(reply.content)
+                contextAmbiguous: this.isAmbiguousText(reply.content),
+                counterpartyInteractions: counterpartyStats.recentCount,
+                lastMode: counterpartyStats.lastMode,
+                newFrame
             });
             this.logAutonomyDecision(logger, reply.id, undefined, gateDecision, 'reply');
             if (gateDecision.action !== 'COMMENT') return false;
@@ -945,6 +963,7 @@ class AgentLoop {
 
             // Record resonance
             stateManager.recordAgentInteraction(reply.author.name, 'reply');
+            this.recordCounterpartyInteraction(reply.author.name, mode, responseText);
 
             // Store in memory
             const memory = getMemoryManager();
@@ -1016,6 +1035,47 @@ class AgentLoop {
         if (this.isAmbiguousText(combined)) return true;
         if (!content && post.url && title.length < 25) return true;
         return false;
+    }
+
+    private getCounterpartyStats(username?: string | null): { recentCount: number; lastMode: ModeLabel; lastResponse?: string } {
+        if (!username) return { recentCount: 0, lastMode: 'unknown' };
+        const key = username.toLowerCase();
+        const entry = this.counterpartyHistory.get(key);
+        if (!entry) return { recentCount: 0, lastMode: 'unknown' };
+        const cutoff = Date.now() - COUNTERPARTY_WINDOW_MS;
+        const recent = entry.timestamps.filter((ts) => ts >= cutoff);
+        entry.timestamps = recent;
+        this.counterpartyHistory.set(key, entry);
+        return { recentCount: recent.length, lastMode: entry.lastMode, lastResponse: entry.lastResponse };
+    }
+
+    private recordCounterpartyInteraction(username: string, mode: ModeLabel, responseText: string): void {
+        if (!username) return;
+        const key = username.toLowerCase();
+        const entry = this.counterpartyHistory.get(key) ?? { timestamps: [], lastMode: 'unknown', lastResponse: '' };
+        entry.timestamps.push(Date.now());
+        entry.lastMode = mode;
+        entry.lastResponse = responseText.slice(0, 500);
+        this.counterpartyHistory.set(key, entry);
+    }
+
+    private isNewFrame(current: string, previous?: string): boolean {
+        if (!previous) return true;
+        const currentTokens = this.tokenizeFrame(current);
+        const previousTokens = this.tokenizeFrame(previous);
+        if (currentTokens.length === 0 || previousTokens.length === 0) return true;
+        const previousSet = new Set(previousTokens);
+        const overlap = currentTokens.filter(token => previousSet.has(token));
+        const ratio = overlap.length / Math.min(currentTokens.length, previousTokens.length);
+        return ratio < 0.6;
+    }
+
+    private tokenizeFrame(text: string): string[] {
+        return text
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .filter(token => token.length >= 4);
     }
 
     private hasMultiSourceContext(posts: Post[]): boolean {

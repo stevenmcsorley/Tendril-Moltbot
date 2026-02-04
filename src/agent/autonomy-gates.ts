@@ -34,6 +34,9 @@ export interface DecisionContext {
     multiSourceContext?: boolean;
     novelty?: boolean;
     lastPostAt?: Date | null;
+    counterpartyInteractions?: number;
+    lastMode?: ModeLabel;
+    newFrame?: boolean;
 }
 
 export interface GateDecision {
@@ -156,6 +159,18 @@ export function applyAutonomyGates(state: GateState, ctx: DecisionContext): Gate
     let action: GateAction = ctx.desiredAction;
     const confidenceRank: Record<ConfidenceLevel, number> = { low: 0, medium: 1, high: 2 };
     const belowThreshold = confidenceRank[ctx.confidence] < confidenceRank[CONFIDENCE_THRESHOLD];
+
+    if (action === 'COMMENT') {
+        if ((ctx.counterpartyInteractions ?? 0) >= 2 && ctx.lastMode === 'corrective') {
+            gates.push('ConversationalSaturationGate');
+            action = 'SKIP';
+        }
+
+        if (ctx.lastMode === 'corrective' && ctx.mode === 'corrective' && ctx.newFrame === false) {
+            gates.push('CorrectiveCooldownGate');
+            action = 'SKIP';
+        }
+    }
 
     if (state.engagementDensity === 'high' && action !== 'SKIP') {
         gates.push('EngagementDensityGate');
