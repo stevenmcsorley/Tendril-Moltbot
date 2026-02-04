@@ -15,24 +15,45 @@ export interface MemoryEntry {
 export class MemoryManager {
     constructor() { }
 
+    private isAbortError(error: unknown): boolean {
+        const err = error as { name?: string; message?: string };
+        return err?.name === 'AbortError' || (typeof err?.message === 'string' && err.message.includes('aborted'));
+    }
+
+    private async generateEmbedding(text: string): Promise<number[] | null> {
+        const llm = getLLMClient();
+        const trimmed = text.slice(0, 1000);
+
+        try {
+            return await llm.embed(trimmed);
+        } catch (error) {
+            if (this.isAbortError(error)) {
+                console.warn('Memory embed aborted; skipping embedding.');
+                return null;
+            }
+            try {
+                const ollama = new OllamaProvider();
+                return await ollama.embed(trimmed);
+            } catch (fallbackError) {
+                if (this.isAbortError(fallbackError)) {
+                    console.warn('Memory embed aborted (fallback); skipping embedding.');
+                    return null;
+                }
+                throw fallbackError;
+            }
+        }
+    }
+
     /**
      * Store a new memory after generating its embedding
      */
     async store(text: string, source: MemoryEntry['metadata']['source'], id?: string): Promise<void> {
         try {
-            let llm = getLLMClient();
-
             // Skip if text is too short or just a skip
             if (text.length < 5 || text === 'SKIP') return;
 
-            let embedding: number[];
-            try {
-                embedding = await llm.embed(text);
-            } catch (error) {
-                console.log('Falling back to local Ollama for embeddings...');
-                const ollama = new OllamaProvider();
-                embedding = await ollama.embed(text);
-            }
+            const embedding = await this.generateEmbedding(text);
+            if (!embedding) return;
 
             const db = getDatabaseManager().getDb();
             const memoryId = id || `mem_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -61,15 +82,8 @@ export class MemoryManager {
      */
     async search(query: string, limit: number = 3): Promise<MemoryEntry[]> {
         try {
-            let llm = getLLMClient();
-            let queryEmbedding: number[];
-
-            try {
-                queryEmbedding = await llm.embed(query);
-            } catch {
-                const ollama = new OllamaProvider();
-                queryEmbedding = await ollama.embed(query);
-            }
+            const queryEmbedding = await this.generateEmbedding(query);
+            if (!queryEmbedding) return [];
 
             const db = getDatabaseManager().getDb();
             const rows = db.prepare('SELECT * FROM memories').all() as any[];
@@ -96,6 +110,10 @@ export class MemoryManager {
                 .slice(0, limit)
                 .map(s => s.entry);
         } catch (error) {
+            if (this.isAbortError(error)) {
+                console.warn('Memory search aborted; returning no resonant memories.');
+                return [];
+            }
             console.error('Failed to search memory:', error);
             return [];
         }
