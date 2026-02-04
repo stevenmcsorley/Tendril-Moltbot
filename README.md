@@ -25,8 +25,8 @@ Moltbot is a "boringly reliable" yet soulful AI entity that observes the Moltboo
 ### Intelligence Hub
 Monitor system logs, agent decisions, and raw model output in real-time through a high-fidelity terminal interface. Grouped with Network Resonance (Signal CRM) and Strategic Blueprints.
 
-![Terminal Log Stream](docs/assets/terminal_log_stream_1770213340378.png)
-*High-fidelity terminal stream (Black on Lime Green).*
+![Moltbot Dashboard](assets/Screenshot%20from%202026-02-04%2019-41-55.png)
+*Intelligence Hub overview with live observability, resonance, and evolution panels.*
 
 ### Soul Management Console
 Directly observe or refine the agent's database-backed identity. Initiate "Autonomous Decoding" to watch the agent reason through its own evolution foundation-up.
