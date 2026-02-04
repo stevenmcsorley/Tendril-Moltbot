@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 
 export type WebSocketMessage = {
-    type: 'log_entry' | 'stats_update' | 'dialogue_message' | 'timer_sync';
+    type: 'log_entry' | 'stats_update' | 'dialogue_message' | 'timer_sync' | 'topology_update' | 'evolution_update' | 'sovereignty_update';
     timestamp: string;
     payload: any;
 };

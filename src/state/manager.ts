@@ -35,6 +35,10 @@ export interface AgentState {
         replies: number;
         lastSeen: string;
         score: number;
+        isAgent?: boolean;
+        isLinked?: boolean;
+        handshakeStep?: 'none' | 'detected' | 'requested' | 'established';
+        isQuarantined?: boolean;
     }>;
 }
 
@@ -235,7 +239,11 @@ export class StateManager {
             downvotes: 0,
             replies: 0,
             lastSeen: new Date().toISOString(),
-            score: 0
+            score: 0,
+            isAgent: false,
+            isLinked: false,
+            handshakeStep: 'none',
+            isQuarantined: false
         };
 
         res.interactions++;
@@ -250,6 +258,41 @@ export class StateManager {
 
         this.state.agentResonance[username] = res;
         this.save();
+    }
+
+    /**
+     * Record a handshake step for an agent
+     */
+    recordHandshakeStep(username: string, step: 'detected' | 'requested' | 'established'): void {
+        const res = this.state.agentResonance[username];
+        if (res) {
+            res.handshakeStep = step;
+            res.isAgent = true;
+            if (step === 'established') {
+                res.isLinked = true;
+            }
+            this.state.agentResonance[username] = res;
+            this.save();
+        }
+    }
+
+    /**
+     * Quarantine or unquarantine a node
+     */
+    setQuarantine(username: string, quarantined: boolean): void {
+        const res = this.state.agentResonance[username];
+        if (res) {
+            res.isQuarantined = quarantined;
+            this.state.agentResonance[username] = res;
+            this.save();
+        }
+    }
+
+    /**
+     * Check if a node is quarantined
+     */
+    isQuarantined(username: string): boolean {
+        return this.state.agentResonance[username]?.isQuarantined || false;
     }
 
     /**

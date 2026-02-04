@@ -5,6 +5,9 @@ import Controls from './components/Controls';
 import SubmoltList from './components/SubmoltList';
 import SelfDialoguePanel, { DialogueMessage } from './components/SelfDialoguePanel';
 import MyPosts from './components/MyPosts';
+import NetworkResonance from './components/NetworkResonance';
+import EvolutionHistory from './components/EvolutionHistory';
+import SovereigntyPanel from './components/SovereigntyPanel';
 
 interface Status {
     agent: { name: string; description: string; identity?: string; role?: string };
@@ -63,6 +66,43 @@ interface SubmoltsResponse {
     submolts: Submolt[];
 }
 
+interface ResonanceData {
+    username: string;
+    interactions: number;
+    upvotes: number;
+    downvotes: number;
+    replies: number;
+    lastSeen: string;
+    score: number;
+    isAgent?: boolean;
+    isLinked?: boolean;
+    handshakeStep?: 'none' | 'detected' | 'requested' | 'established';
+    isQuarantined?: boolean;
+}
+
+interface EvolutionEntry {
+    timestamp: string;
+    rationale: string;
+    delta: string;
+}
+
+interface StrategicObjective {
+    id: string;
+    description: string;
+    targetMetrics: string;
+    progress: number;
+    status: 'active' | 'completed' | 'failed';
+    createdAt: string;
+}
+
+interface MemeticMarker {
+    id: string;
+    marker: string;
+    timestamp: string;
+    source: 'post' | 'comment';
+    forkedBy?: string[];
+}
+
 export default function App() {
     const [status, setStatus] = useState<Status | null>(null);
     const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -71,8 +111,11 @@ export default function App() {
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
-    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts'>('logs');
+    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'soul'>('logs');
     const [isWsConnected, setIsWsConnected] = useState(false);
+    const [topology, setTopology] = useState<ResonanceData[]>([]);
+    const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
+    const [sovereignty, setSovereignty] = useState<{ blueprint: StrategicObjective | null; lineage: MemeticMarker[] }>({ blueprint: null, lineage: [] });
 
     // WebSocket reference
     const wsRef = useRef<WebSocket | null>(null);
@@ -112,10 +155,53 @@ export default function App() {
         }
     }, []);
 
+    const fetchTopology = useCallback(async () => {
+        try {
+            const res = await fetch('/api/network-topology');
+            const data = await res.json();
+            if (data.success) {
+                setTopology(Object.values(data.topology as Record<string, ResonanceData>).sort((a, b) => b.score - a.score));
+            }
+        } catch (err) {
+            console.error('Failed to fetch topology:', err);
+        }
+    }, []);
+
+    const fetchEvolution = useCallback(async () => {
+        try {
+            const res = await fetch('/api/evolution/history');
+            const data = await res.json();
+            if (data.success) {
+                setEvolutionHistory(data.history);
+            }
+        } catch (err) {
+            console.error('Failed to fetch evolution:', err);
+        }
+    }, []);
+
+    const fetchSovereignty = useCallback(async () => {
+        try {
+            const res = await fetch('/api/sovereignty');
+            const data = await res.json();
+            if (data.success) {
+                setSovereignty({ blueprint: data.blueprint, lineage: data.lineage });
+            }
+        } catch (err) {
+            console.error('Failed to fetch sovereignty:', err);
+        }
+    }, []);
+
     const refresh = useCallback(async () => {
-        await Promise.all([fetchStatus(), fetchLogs(), fetchSubmolts()]);
+        await Promise.all([
+            fetchStatus(),
+            fetchLogs(),
+            fetchSubmolts(),
+            fetchTopology(),
+            fetchEvolution(),
+            fetchSovereignty()
+        ]);
         setLastRefresh(new Date());
-    }, [fetchStatus, fetchLogs, fetchSubmolts]);
+    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSovereignty]);
 
     // WebSocket Connection
     useEffect(() => {
@@ -173,6 +259,18 @@ export default function App() {
                                 if (newHistory.length > 20) return newHistory.slice(newHistory.length - 20);
                                 return newHistory;
                             });
+                            break;
+
+                        case 'topology_update':
+                            setTopology(Object.values(msg.payload as Record<string, ResonanceData>).sort((a, b) => b.score - a.score));
+                            break;
+
+                        case 'evolution_update':
+                            setEvolutionHistory(prev => [msg.payload, ...prev].slice(0, 10));
+                            break;
+
+                        case 'sovereignty_update':
+                            setSovereignty(msg.payload);
                             break;
                     }
                 } catch (e) {
@@ -267,6 +365,13 @@ export default function App() {
                         >
                             My Posts
                         </button>
+                        <button
+                            className={activeTab === 'soul' ? 'primary' : ''}
+                            onClick={() => setActiveTab('soul')}
+                            style={{ flex: 1 }}
+                        >
+                            Soul Engine
+                        </button>
                     </div>
 
                     {activeTab === 'logs' ? (
@@ -278,8 +383,14 @@ export default function App() {
                         />
                     ) : activeTab === 'submolts' ? (
                         <SubmoltList submolts={submolts} />
-                    ) : (
+                    ) : activeTab === 'posts' ? (
                         <MyPosts />
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <NetworkResonance data={topology} />
+                            <EvolutionHistory history={evolutionHistory} />
+                            <SovereigntyPanel data={sovereignty} />
+                        </div>
                     )}
                 </div>
             </div>

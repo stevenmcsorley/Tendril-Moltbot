@@ -5,10 +5,10 @@
  * API key is NEVER exposed to frontend.
  */
 
-import express, { type Request, type Response, type NextFunction } from 'express';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync } from 'node:fs';
+import express, { type Request, type Response, type NextFunction } from 'express';
 
 import { getConfig, reloadConfigSync } from '../config.js';
 import { getAgentLoop } from '../agent/loop.js';
@@ -18,6 +18,8 @@ import { getStateManager } from '../state/manager.js';
 import { resetMoltbookClient } from '../moltbook/client.js';
 import { getLLMClient, resetLLMClient } from '../llm/factory.js';
 import { resetRateLimiter } from '../rate-limiter.js';
+import { getLineageManager } from '../agent/lineage.js';
+import { getBlueprintManager } from '../agent/blueprints.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -296,6 +298,49 @@ export function createDashboardServer(): express.Application {
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get network topology' });
+        }
+    });
+
+    /**
+     * GET /api/evolution/history
+     * Get the history of autonomous personality "Molts"
+     */
+    app.get('/api/evolution/history', (req, res) => {
+        try {
+            const historyPath = join(__dirname, '../../data/molt_history.jsonl');
+            if (!existsSync(historyPath)) {
+                return res.json({ success: true, history: [] });
+            }
+            const content = readFileSync(historyPath, 'utf-8');
+            const history = content.trim().split('\n').map(line => {
+                try {
+                    return JSON.parse(line);
+                } catch {
+                    return null;
+                }
+            }).filter(Boolean).slice(-10).reverse(); // Last 10, newest first
+
+            res.json({ success: true, history });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get evolution history' });
+        }
+    });
+
+    /**
+     * GET /api/sovereignty
+     * Get strategic data: blueprints and lineage
+     */
+    app.get('/api/sovereignty', (req, res) => {
+        try {
+            const blueprint = getBlueprintManager().getCurrentBlueprint();
+            const markers = getLineageManager().getMarkers();
+            res.json({
+                success: true,
+                blueprint,
+                lineage: markers
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get sovereignty data' });
         }
     });
 

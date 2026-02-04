@@ -5,6 +5,7 @@ import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getActivityLogger } from '../logging/activity-log.js';
 import { getConfig } from '../config.js';
+import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,6 +99,9 @@ If no change is needed, respond with "RESONANCE_OPTIMAL".`;
             try {
                 const logData = JSON.stringify(entry) + '\n';
                 writeFileSync(moltLogPath, logData, { flag: 'a' });
+
+                // Broadcast update
+                getWebSocketBroadcaster().broadcast('evolution_update', entry);
             } catch (err) {
                 console.error('Failed to log molt:', err);
             }

@@ -11,7 +11,20 @@ function formatRelativeTime(iso: string | null): string {
     const target = new Date(iso);
     const diffMs = target.getTime() - now.getTime();
 
-    if (diffMs <= 0) return 'Ready';
+    if (diffMs <= 0) {
+        // Past date logic
+        const pastMs = Math.abs(diffMs);
+        const pastSecs = Math.floor(pastMs / 1000);
+        const pastMins = Math.floor(pastSecs / 60);
+        const pastHours = Math.floor(pastMins / 60);
+        const pastDays = Math.floor(pastHours / 24);
+
+        if (pastDays > 0) return `${pastDays}d ago`;
+        if (pastHours > 0) return `${pastHours}h ago`;
+        if (pastMins > 0) return `${pastMins}m ago`;
+        if (pastSecs > 10) return `${pastSecs}s ago`;
+        return 'Just now';
+    }
 
     const diffSecs = Math.floor(diffMs / 1000);
     const diffMins = Math.floor(diffSecs / 60);

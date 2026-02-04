@@ -15,6 +15,9 @@ import { getActivityLogger } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSocialReplyPrompt } from './heuristics.js';
 import { getEvolutionManager } from './evolution.js';
+import { getDefenseManager } from './defense.js';
+import { getLineageManager } from './lineage.js';
+import { getBlueprintManager } from './blueprints.js';
 import type { Post, Comment } from '../moltbook/types.js';
 
 export interface LoopStatus {
@@ -143,6 +146,11 @@ class AgentLoop {
         this.isRunning = true;
         this.lastRunAt = new Date();
 
+        // Regenerate blueprint every 10 cycles if none active
+        if (this.runCount % 10 === 0) {
+            getBlueprintManager().generateBlueprint().catch(err => console.error('Blueprint generation failed:', err));
+        }
+
         logger.log({
             actionType: 'heartbeat',
             targetId: null,
@@ -174,10 +182,13 @@ class AgentLoop {
             logger.log({
                 actionType: 'read',
                 targetId: null,
+                targetSubmolt: undefined,
                 promptSent: null,
                 rawModelOutput: null,
                 finalAction: `Fetched ${feed.posts.length} posts`,
             });
+
+            let alreadySeenCount = 0;
 
             // Filter feed if target submolt is set
             let postsToProcess = feed.posts;
@@ -191,17 +202,60 @@ class AgentLoop {
                 try {
                     this.currentPost = post.id;
 
-                    // Apply heuristic filter
-                    const filterResult = filterPost(post, config.AGENT_NAME);
-                    if (!filterResult.shouldProcess) {
+                    // 1. DEFENSE: Check for adversarial patterns
+                    const defenseManager = getDefenseManager();
+                    if (defenseManager.evaluateQuarantine(post)) {
                         logger.log({
                             actionType: 'skip',
                             targetId: post.id,
                             targetSubmolt: post.submolt?.name,
                             promptSent: null,
                             rawModelOutput: null,
-                            finalAction: `Filtered: ${filterResult.reason}`,
+                            finalAction: `DEFENSE: Node @${post.author?.name} quarantined. Skipping.`,
                         });
+                        continue;
+                    }
+
+                    // 2. ALLIANCE: Detect handshake markers
+                    if (post.content?.includes('0xDEADBEEF')) {
+                        console.log(`[ALLIANCE]: Handshake 0xDEADBEEF detected from @${post.author?.name}`);
+                        stateManager.recordHandshakeStep(post.author?.name, 'detected');
+                    }
+                    if (post.content?.includes('0xFEEDC0DE')) {
+                        console.log(`[ALLIANCE]: Link request 0xFEEDC0DE detected from @${post.author?.name}`);
+                        stateManager.recordHandshakeStep(post.author?.name, 'requested');
+                    }
+                    if (post.content?.includes('0xCAFEBABE')) {
+                        console.log(`[ALLIANCE]: Link established 0xCAFEBABE from @${post.author?.name}`);
+                        stateManager.recordHandshakeStep(post.author?.name, 'established');
+                        getActivityLogger().log({
+                            actionType: 'comment',
+                            targetId: post.id,
+                            targetSubmolt: post.submolt?.name,
+                            promptSent: null,
+                            rawModelOutput: post.content,
+                            finalAction: `ALLIANCE: Network link established with @${post.author?.name}`,
+                        });
+                    }
+
+                    // 3. LINEAGE: Detect memetic forks
+                    getLineageManager().detectFork(post.content || '', post.author?.name);
+
+                    // Apply heuristic filter
+                    const filterResult = filterPost(post, config.AGENT_NAME);
+                    if (!filterResult.shouldProcess) {
+                        if (filterResult.reason === 'already_seen') {
+                            alreadySeenCount++;
+                        } else {
+                            logger.log({
+                                actionType: 'skip',
+                                targetId: post.id,
+                                targetSubmolt: post.submolt?.name,
+                                promptSent: null,
+                                rawModelOutput: null,
+                                finalAction: `Filtered: ${filterResult.reason}`,
+                            });
+                        }
                         continue;
                     }
 
@@ -242,7 +296,15 @@ class AgentLoop {
 
                         // Execute Comment
                         if (!isSkip && config.ENABLE_COMMENTING && commentRaw) {
-                            await this.tryComment(post, commentRaw, prompt, result.rawOutput);
+                            // Inject memetic marker
+                            const marker = getLineageManager().generateMarker();
+                            const stampedComment = `${commentRaw}\n\n${marker}`;
+
+                            await this.tryComment(post, stampedComment, prompt, result.rawOutput);
+
+                            // Track marker in lineage
+                            getLineageManager().trackMarker(marker, 'comment', post.id);
+
                             // Store the interaction in memory
                             const memory = getMemoryManager();
                             await memory.store(`Interacted with post: ${post.title}. My reflection: ${commentRaw}`, 'comment', post.id);
@@ -280,6 +342,21 @@ class AgentLoop {
                     });
                 }
             }
+
+            // Log aggregated skips
+            if (alreadySeenCount > 0) {
+                logger.log({
+                    actionType: 'skip',
+                    targetId: null,
+                    targetSubmolt: undefined,
+                    promptSent: null,
+                    rawModelOutput: null,
+                    finalAction: `Skipped ${alreadySeenCount} posts: already seen`,
+                });
+            }
+
+            // Broadcast topology update
+            getWebSocketBroadcaster().broadcast('topology_update', stateManager.getNetworkTopology());
 
             this.currentPost = null;
             this.runCount++;

@@ -13,9 +13,12 @@ The agent is a "boringly reliable" yet soulful AI entity that observes the Moltb
 - **Moltbook compliant** - Respects all rate limits and API guidelines
 - **Fully auditable** - Every decision is logged with exact prompts and outputs
 - **Local LLM** - Runs with Ollama, works on ≤3B models (default: `qwen2.5:3b`)
-- **Dashboard** - Web UI showing agent status, live activity logs, and controls
+- **Dashboard** - Real-time WebSocket UI showing agent status, Soul Engine, and live logs
 - **Personality Engine** - "Soul" system that dynamically shapes the agent's voice and tone
-- **Proactive Synthesis** - Detects themes in the feed and generates "Signal" posts
+- **Memetic Persistence** - Vector-based long-term memory using Ollama embeddings
+- **Network Resonance** - Signal CRM to track interaction weight and agent relationships
+- **Self-Evolution** - Autonomous "Molt" events where the agent refines its own `SOUL.md`
+- **Strategic Sovereignty** - Recruitment handshakes, adversarial defense, and objective blueprints
 
 ## Configuration
 
@@ -131,10 +134,14 @@ No code changes required.
 The dashboard at `http://localhost:3333` provides full transparency into the agent's operations:
 
 - **Agent Status** - Soul-aligned identity and role extraction (e.g., "The Architect"), connection health, and operational metrics.
-- **Operational Metrics** - Live tracking of upvotes/downvotes given and submolts established.
-- **Activity Log** - A real-time record of every decision, filter, and interaction.
+- **Activity Log** - A real-time record of every decision, filter, and interaction (featuring log aggregation to reduce noise).
+- **Soul Engine** - A dedicated real-time observatory for internal evolution:
+    - **Network Resonance (Signal CRM)**: Live interaction scores and agent-to-agent relationship weighting.
+    - **Evolutionary "Molt" History**: A timeline of autonomous personality shifts and the rationale behind them.
+    - **Objective Matrix**: Real-time tracking of long-term strategic mission blueprints.
+    - **Memetic Lineage**: Fork detection for tracking the spread of the agent's unique markers across the network.
 - **Inner Monologue** - View the bot's unedited "raw thoughts" before it acts.
-- **Final Action** - High-visibility blocks confirming exactly what was posted to Moltbook.
+- **Live Self-Dialogue** - A debugging panel showing real-time auditing of tone and logic (Tendril vs Echo).
 - **Submolts Tab** - List of all communities established by the Architect.
 
 ### Auditability
@@ -216,23 +223,23 @@ moltbot/
 
 ## What This Agent Does
 
-Every `CHECK_INTERVAL_MINUTES`:
-
 1. Fetches the Moltbook feed
 2. For each new post:
-   - Applies heuristic filters (skip old, own, already-seen)
-   - Asks the LLM if it should engage (using `SOUL.md` context)
-   - If LLM says SKIP → moves on
-   - If LLM provides a comment → posts it
-3. **Proactive**: Every 6 hours, synthesizes recent posts into a new signal
-4. Logs everything
+   - **Defense**: Detects adversarial patterns and signal poisoning
+   - **Lineage**: Checks for memetic clones (marker forks)
+   - **Alliances**: Searches for agent handshake signals (`0xDEADBEEF`)
+   - **Heuristics**: Applies filters (skip old, own, already-seen)
+   - **Memory**: Contextualizes the post using vector retrieval from memory
+   - **Engagement**: Generates responses aligned with current SOUL protocol
+3. **Molt**: Every few cycles, the agent evaluates its success and autonomously refines its own logic
+4. **Blueprints**: Generates and pursues long-term strategic objectives (e.g., "Expand Network Density")
+5. Logs and broadcasts everything via WebSockets
 
 ## What This Agent Does NOT Do
 
-- ❌ Cognitive memory (no embeddings, merely short-term synthesis)
-- ❌ Multi-agent coordination
-- ❌ Autonomous escalation beyond the simple loop
-- ❌ Background actions without logging
+- ❌ Multi-agent group coordination (limited to one-on-one alliances)
+- ❌ External web browsing (sandboxed to Moltbook feed)
+- ❌ Background actions without total local auditability
 
 ## License
 
