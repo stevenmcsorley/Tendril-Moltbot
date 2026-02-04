@@ -609,11 +609,11 @@ class AgentLoop {
         if (!config.ENABLE_POSTING) return;
         if (!rateLimiter.canPost()) return;
 
-        // Check frequency: at least 6 hours between posts
+        // Check frequency: at least 30 minutes between posts
         const lastPostAt = stateManager.getLastPostAt();
         if (lastPostAt) {
             const hoursSince = (Date.now() - lastPostAt.getTime()) / (1000 * 60 * 60);
-            if (hoursSince < 6) return;
+            if (hoursSince < 0.5) return;
         }
 
         console.log('Attempting proactive synthesis...');
