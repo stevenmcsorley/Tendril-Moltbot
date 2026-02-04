@@ -196,6 +196,16 @@ export default function StatusCard({ status }: StatusCardProps) {
                         {status.evolution.evolutionWindowCount} / 1
                     </span>
                 </div>
+                <div className="status-row">
+                    <Tooltip text="Most recent autonomous evolution record ID.">
+                        <span className="status-label">Last Evolution ID</span>
+                    </Tooltip>
+                    <span className="status-value" title={status.evolution.lastAutonomousEvolutionId || '—'}>
+                        {status.evolution.lastAutonomousEvolutionId
+                            ? status.evolution.lastAutonomousEvolutionId.slice(0, 10)
+                            : '—'}
+                    </span>
+                </div>
             </div>
 
 

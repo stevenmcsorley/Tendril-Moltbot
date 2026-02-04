@@ -436,6 +436,11 @@ export default function App() {
         fetchLogs();
     }, [filterType, fetchLogs]);
 
+    const autonomyLockActive = status?.evolution
+        ? [status.evolution.selfModificationCooldownUntil, status.evolution.stabilizationUntil]
+            .some((iso) => iso && new Date(iso).getTime() > Date.now())
+        : false;
+
     return (
         <div className="app">
             <header className="header">
@@ -523,6 +528,9 @@ export default function App() {
                                 style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--success)' }}
                             >
                                 <Cpu size={16} /> Soul Management
+                                {autonomyLockActive && (
+                                    <span className="badge warning">Autonomy Lock</span>
+                                )}
                             </button>
                         </Tooltip>
                     </div>
