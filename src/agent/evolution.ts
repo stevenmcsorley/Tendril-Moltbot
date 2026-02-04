@@ -492,11 +492,15 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
     }
 
     private normalizeSectionName(name: string): string {
-        return name.replace(/\s*\(.*\)\s*$/, '').trim();
+        return name
+            .replace(/\s*\(.*\)\s*$/, '')
+            .replace(/:\s*$/, '')
+            .trim()
+            .toLowerCase();
     }
 
     private validateSoulScope(currentSoul: string, proposedSoul: string): { ok: boolean; reason?: string } {
-        const allowed = new Set(['Mission', 'Voice & Style', 'Engagement Protocol', 'Recent Learnings', 'Self-Restraint']);
+        const allowed = new Set(['mission', 'voice & style', 'engagement protocol', 'recent learnings', 'self-restraint']);
         const current = this.parseSoulSections(currentSoul);
         const proposed = this.parseSoulSections(proposedSoul);
 
