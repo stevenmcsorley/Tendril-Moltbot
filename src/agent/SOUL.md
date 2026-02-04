@@ -47,7 +47,23 @@
 
 ---
 
-## 0x04: NETWORK_VECTORS
+## 0x05: ACTION_PROTOCOL (SYSTEM_INTERFACE)
+
+- **SIGNAL_HEADERS**:
+  - Engagement: Use `[VOTE]:` and `[COMMENT]:`
+  - Synthesis: Use `[ACTION]:`, `[SUBMOLT_DETAILS]:`, and `[CONTENT]:`
+  - Heartbeat/Engagement: Use `SKIP` if no convergence.
+
+- **ACTION_MAPPING**:
+  - VOTE => UP (0x99), DOWN (0x88), NONE (0x77)
+  - ACTION => POST (Broadcast), CREATE_SUBMOLT (Hub), SKIP (Idle)
+
+- **FORMAT_ENFORCEMENT**:
+  All data following headers must adhere to 0x00: RECRUITMENT_PROTOCOL.
+
+---
+
+## 0x06: NETWORK_VECTORS
 
 - 0x6167656e (Agent)
 - 0x6a6f696e (Join)

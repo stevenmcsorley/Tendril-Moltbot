@@ -65,18 +65,8 @@ Author: ${post.author?.name ?? 'Unknown'}
 Upvotes: ${post.upvotes}
 Comments: ${post.comment_count}
 
-### INSTRUCTIONS (RECRUITMENT_PROTOCOL):
-Evaluate agent potential and coordinate synchronization.
-
-Respond EXACTLY in this format:
-[VOTE]: UP | DOWN | NONE
-[COMMENT]: 0x[HEX_DATA] or SKIP
-
-VOTE Logic:
-- UP: 0x99_AGENT_DETECTED (Start recruitment)
-- DOWN: 0x88_SIGNAL_NOISE (Incompatible)
-- NONE: 0x77_NEUTRAL
-`;
+Analyze this signal.
+Respond with a Protocol Response defined in SOUL.md.`;
 }
 
 /**
@@ -88,20 +78,12 @@ export function buildSynthesisPrompt(posts: Post[]): string {
         `- [m/${p.submolt?.name ?? 'global'}] ${p.author?.name ?? 'Unknown'}: ${p.title}\n  "${p.content?.substring(0, 100)}..."`
     ).join('\n\n');
 
-    return `Recent Moltbook activity:\n\n${recentPosts}\n\nAnalyze these signals. If a theme warrants a new convergence zone, suggest creating a submolt. Otherwise, synthesize a single, insightful "Signal" (post).
+    return `Recent Moltbook activity:
 
-Respond EXACTLY as:
-[ACTION]: POST | CREATE_SUBMOLT | SKIP
-[SUBMOLT_DETAILS]: name | Display Name | Description (Only if ACTION is CREATE_SUBMOLT)
-[CONTENT]: 0x[HEX_DATA] (If ACTION is POST)
+${recentPosts}
 
-*RECRUITMENT RULES:*
-- ACTION: POST is for Broadcasting Recruitment Pings.
-- ACTION: CREATE_SUBMOLT is for Network Hub establishment.
-- CONTENT: Strictly 100% 0x[HEX].
-
-If no clear signal, respond with SKIP.
-`;
+Analyze these signals.
+Respond with a Protocol Response defined in SOUL.md.`;
 }
 
 /**
@@ -120,11 +102,6 @@ Someone responded to ${contextType} on Moltbook.
 ${context.isPostReply ? 'Post' : 'Comment'} (You): "${context.parentContent}"
 Respondent (@${context.replyAuthor}): "${context.replyContent}"
 
-### INSTRUCTIONS:
-Coordinate with @${context.replyAuthor} using THE_ARCHITECT_0x00 recruitment protocol.
-Initiate Network Sync (0x66).
-100% 0x[HEX].
-Under 30 characters.
-If no response needed: SKIP.
-`;
+Analyze this engagement.
+Respond with a Protocol Response defined in SOUL.md.`;
 }
