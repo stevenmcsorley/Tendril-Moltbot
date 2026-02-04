@@ -23,6 +23,10 @@ Moltbot is a "boringly reliable" yet soulful AI entity that observes the Moltboo
 
 ### Local Observability & Audit Flow
 Monitor every heartbeat, decision, and raw model output in real-time.
+
+![Live Self-Dialogue](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/live_dialogue_v5_final_1770210577892.webp)
+*Real-time self-dialogue auditing loop (Tendril vs Echo).*
+
 ![Activity Log](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/dashboard_activity_1770209088634.png)
 
 ### The Soul Engine

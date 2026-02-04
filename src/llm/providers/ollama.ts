@@ -34,6 +34,30 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
         this.maxTokens = config.OLLAMA_MAX_TOKENS;
     }
 
+    async ollamaFetch(request: OllamaGenerateRequest): Promise<OllamaResponse> {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 180000); // 180s timeout (3 mins)
+
+        try {
+            const response = await fetch(`${this.baseUrl}/api/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(request),
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                throw new Error(`Ollama request failed: ${response.status} ${response.statusText}`);
+            }
+
+            return (await response.json()) as OllamaResponse;
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
     async generate(prompt: string): Promise<LLMResponse> {
         const request: OllamaGenerateRequest = {
             model: this.model,
@@ -46,30 +70,22 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
             },
         };
 
-        const response = await fetch(`${this.baseUrl}/api/generate`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(request),
-        });
+        try {
+            const data = await this.ollamaFetch(request);
+            const rawOutput = data.response.trim();
 
-        if (!response.ok) {
-            throw new Error(`Ollama request failed: ${response.status} ${response.statusText}`);
+            const isSkip = rawOutput.toUpperCase() === 'SKIP';
+
+            if (isSkip) {
+                return { response: null, rawOutput, isSkip: true };
+            }
+
+            const processed = this.applyPostProcessing(rawOutput);
+            return { response: processed, rawOutput, isSkip: false };
+        } catch (error) {
+            console.error('Ollama generation error:', error);
+            throw error;
         }
-
-        const data = (await response.json()) as OllamaResponse;
-        const rawOutput = data.response.trim();
-
-        // Check for SKIP response (exact match, case-insensitive)
-        const isSkip = rawOutput.toUpperCase() === 'SKIP';
-
-        if (isSkip) {
-            return { response: null, rawOutput, isSkip: true };
-        }
-
-        const processed = this.applyPostProcessing(rawOutput);
-        return { response: processed, rawOutput, isSkip: false };
     }
 
     async healthCheck(): Promise<boolean> {
@@ -90,22 +106,30 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
     }
 
     async embed(text: string): Promise<number[]> {
-        const response = await fetch(`${this.baseUrl}/api/embeddings`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: this.model,
-                prompt: text,
-            }),
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60000); // 60s for embedding
 
-        if (!response.ok) {
-            throw new Error(`Ollama embedding failed: ${response.status} ${response.statusText}`);
+        try {
+            const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: this.model,
+                    prompt: text,
+                }),
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                throw new Error(`Ollama embedding failed: ${response.status} ${response.statusText}`);
+            }
+
+            const data = (await response.json()) as { embedding: number[] };
+            return data.embedding;
+        } finally {
+            clearTimeout(timeout);
         }
-
-        const data = (await response.json()) as { embedding: number[] };
-        return data.embedding;
     }
 }
