@@ -60,6 +60,18 @@ interface AutonomousEvolutionRecord {
     };
 }
 
+export interface EvolutionReadiness {
+    activityWeight: number;
+    nudgeThreshold: number;
+    fullThreshold: number;
+    dueForNudge: boolean;
+    hoursSinceLast: number | null;
+    windowRemaining: number;
+    selfModificationCooldownActive: boolean;
+    stabilizationActive: boolean;
+    eligible: boolean;
+}
+
 export class EvolutionManager {
     private isEvolving = false;
 
@@ -282,6 +294,44 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         } finally {
             this.isEvolving = false;
         }
+    }
+
+    getReadinessSnapshot(): EvolutionReadiness {
+        const state = getStateManager();
+        const activity = getActivityLogger().getEntries(80);
+        const successes = activity.filter(a => ['comment', 'post', 'upvote', 'downvote'].includes(a.actionType));
+        const activityWeight = successes.length;
+
+        const lastEvolutionAt = this.getLastEvolutionAt();
+        const hoursSinceLast = lastEvolutionAt
+            ? (Date.now() - lastEvolutionAt.getTime()) / (1000 * 60 * 60)
+            : null;
+        const dueForNudge = hoursSinceLast === null ? true : hoursSinceLast >= NUDGE_AFTER_HOURS;
+
+        const windowState = this.getEvolutionWindowState();
+        const windowRemaining = Math.max(0, MAX_EVOLUTIONS_PER_WINDOW - windowState.count);
+        const selfModificationCooldownActive = this.isSelfModificationCooldownActive();
+        const stabilizationActive = this.isStabilizationActive();
+
+        const activityThresholdMet = activityWeight >= MIN_ACTIVITY_FOR_NUDGE || dueForNudge;
+        const timingOk = hoursSinceLast === null ? true : hoursSinceLast >= MIN_HOURS_BETWEEN_EVOLUTIONS;
+        const eligible = !selfModificationCooldownActive
+            && !stabilizationActive
+            && windowRemaining > 0
+            && activityThresholdMet
+            && timingOk;
+
+        return {
+            activityWeight,
+            nudgeThreshold: MIN_ACTIVITY_FOR_NUDGE,
+            fullThreshold: MIN_SUCCESS_FOR_FULL,
+            dueForNudge,
+            hoursSinceLast,
+            windowRemaining,
+            selfModificationCooldownActive,
+            stabilizationActive,
+            eligible
+        };
     }
 
     private async applyAutonomousEvolution(payload: { soul: string; rationale: string; interpretation: string; delta: string; metadata: EvolutionMetadata }): Promise<void> {

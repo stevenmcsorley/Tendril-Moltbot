@@ -60,6 +60,17 @@ interface Status {
         evolutionWindowStart: string | null;
         evolutionWindowCount: number;
         lastAutonomousEvolutionId: string | null;
+        readiness: {
+            activityWeight: number;
+            nudgeThreshold: number;
+            fullThreshold: number;
+            dueForNudge: boolean;
+            hoursSinceLast: number | null;
+            windowRemaining: number;
+            selfModificationCooldownActive: boolean;
+            stabilizationActive: boolean;
+            eligible: boolean;
+        };
     };
     lastHeartbeat: string | null;
 }
@@ -120,6 +131,17 @@ interface AutonomyState {
     evolutionWindowStart: string | null;
     evolutionWindowCount: number;
     lastAutonomousEvolutionId: string | null;
+    readiness?: {
+        activityWeight: number;
+        nudgeThreshold: number;
+        fullThreshold: number;
+        dueForNudge: boolean;
+        hoursSinceLast: number | null;
+        windowRemaining: number;
+        selfModificationCooldownActive: boolean;
+        stabilizationActive: boolean;
+        eligible: boolean;
+    };
 }
 
 interface StrategicObjective {
@@ -622,6 +644,12 @@ export default function App() {
 function AutonomyTimeline({ state }: { state: AutonomyState | null }) {
     const format = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—');
     const isActive = (iso: string | null) => !!iso && new Date(iso).getTime() > Date.now();
+    const readiness = state?.readiness;
+    const fullThreshold = readiness?.fullThreshold ?? 1;
+    const nudgeThreshold = readiness?.nudgeThreshold ?? 1;
+    const activityWeight = readiness?.activityWeight ?? 0;
+    const progress = Math.min(1, activityWeight / Math.max(1, fullThreshold));
+    const nudgeMarker = Math.min(100, (nudgeThreshold / Math.max(1, fullThreshold)) * 100);
 
     return (
         <div className="card">
@@ -660,6 +688,28 @@ function AutonomyTimeline({ state }: { state: AutonomyState | null }) {
                 <span className="status-value" title={state?.lastAutonomousEvolutionId ?? '—'}>
                     {state?.lastAutonomousEvolutionId ? state.lastAutonomousEvolutionId.slice(0, 10) : '—'}
                 </span>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+                <div className="status-row" style={{ borderBottom: 'none' }}>
+                    <span className="status-label">Activity Weight</span>
+                    <span className="status-value">
+                        {readiness ? `${activityWeight} / ${fullThreshold}` : '—'}
+                    </span>
+                </div>
+                <div className="gauge-track">
+                    <div className="gauge-fill" style={{ width: `${progress * 100}%` }} />
+                    <div className="gauge-marker" style={{ left: `${nudgeMarker}%` }} title="Nudge threshold" />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                    <span>Nudge ≥ {nudgeThreshold}</span>
+                    <span>Full ≥ {fullThreshold}</span>
+                </div>
+                {readiness && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: readiness.eligible ? 'var(--success)' : 'var(--text-secondary)' }}>
+                        {readiness.eligible ? 'Eligible for evolution window.' : 'Not eligible yet.'}
+                    </div>
+                )}
             </div>
         </div>
     );

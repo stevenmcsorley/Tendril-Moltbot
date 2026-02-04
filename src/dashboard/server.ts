@@ -22,6 +22,7 @@ import { getLineageManager } from '../agent/lineage.js';
 import { getBlueprintManager } from '../agent/blueprints.js';
 import { getDatabaseManager } from '../state/db.js';
 import { getSynthesisManager } from '../agent/synthesis.js';
+import { getEvolutionManager } from '../agent/evolution.js';
 import { getWebSocketBroadcaster } from './websocket.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -166,6 +167,8 @@ export function createDashboardServer(): express.Application {
             const stateData = state.getState();
             const llm = getLLMClient();
             const soulInfo = getAgentSoulInfo();
+            const evolution = getEvolutionManager();
+            const readiness = evolution.getReadinessSnapshot();
 
             const llmHealthy = await llm.healthCheck();
             const loopStatus = loop.getStatus();
@@ -221,6 +224,7 @@ export function createDashboardServer(): express.Application {
                     evolutionWindowStart: evolutionWindow.start?.toISOString() ?? null,
                     evolutionWindowCount: evolutionWindow.count,
                     lastAutonomousEvolutionId: state.getLastAutonomousEvolutionId(),
+                    readiness
                 },
                 lastHeartbeat: state.getLastHeartbeatAt()?.toISOString() ?? null,
             });
