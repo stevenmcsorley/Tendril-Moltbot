@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getActivityLogger } from '../logging/activity-log.js';
-import { getConfig } from '../config.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
+import { getDatabaseManager } from '../state/db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -36,7 +36,7 @@ export class EvolutionManager {
             const activity = getActivityLogger().getEntries(50);
 
             // Gather stats
-            const stats = Object.values(topology).sort((a, b) => b.score - a.score).slice(0, 5);
+            const stats = Object.values(topology).sort((a: any, b: any) => b.score - a.score).slice(0, 5);
             const successes = activity.filter(a => a.actionType === 'comment' || a.actionType === 'post');
 
             if (successes.length < 5) {
@@ -86,7 +86,6 @@ If no change is needed, respond with "RESONANCE_OPTIMAL".`;
         // In a production agent, we would use a more robust parsing strategy.
         // For this real-world implementation, we'll append the "Molt Log" and refine the protocol.
         const timestamp = new Date().toISOString();
-        const moltLogPath = join(dirname(this.soulPath), '../../data/molt_history.jsonl');
 
         const entry = {
             timestamp,
@@ -97,8 +96,11 @@ If no change is needed, respond with "RESONANCE_OPTIMAL".`;
         if (entry.delta) {
             // Log the evolution
             try {
-                const logData = JSON.stringify(entry) + '\n';
-                writeFileSync(moltLogPath, logData, { flag: 'a' });
+                const db = getDatabaseManager().getDb();
+                db.prepare(`
+                    INSERT INTO evolutions (timestamp, rationale, delta)
+                    VALUES (?, ?, ?)
+                `).run(entry.timestamp, entry.rationale, entry.delta);
 
                 // Broadcast update
                 getWebSocketBroadcaster().broadcast('evolution_update', entry);

@@ -3,7 +3,13 @@ import RelativeTime from './RelativeTime';
 interface Status {
     agent: { name: string; description: string; identity?: string; role?: string };
     status: 'running' | 'paused' | 'idle';
-    metrics: { upvotesGiven: number; downvotesGiven: number; submoltsCreated: number };
+    metrics: {
+        upvotesGiven: number;
+        downvotesGiven: number;
+        submoltsCreated: number;
+        totalComments: number;
+        totalPosts: number;
+    };
     llm: { provider: string; model: string; healthy: boolean };
     loop: {
         lastRunAt: string | null;
@@ -164,6 +170,14 @@ export default function StatusCard({ status }: StatusCardProps) {
                 <div className="status-row">
                     <span className="status-label">Submolts Established</span>
                     <span className="status-value" style={{ color: 'var(--accent)' }}>{status.metrics.submoltsCreated}</span>
+                </div>
+                <div className="status-row">
+                    <span className="status-label">Total Posts</span>
+                    <span className="status-value" style={{ color: 'var(--info)' }}>{status.metrics.totalPosts}</span>
+                </div>
+                <div className="status-row">
+                    <span className="status-label">Total Comments</span>
+                    <span className="status-value" style={{ color: 'var(--primary)' }}>{status.metrics.totalComments}</span>
                 </div>
             </div>
         </div>

@@ -20,6 +20,8 @@ import { getLLMClient, resetLLMClient } from '../llm/factory.js';
 import { resetRateLimiter } from '../rate-limiter.js';
 import { getLineageManager } from '../agent/lineage.js';
 import { getBlueprintManager } from '../agent/blueprints.js';
+import { getDatabaseManager } from '../state/db.js';
+import { getSynthesisManager } from '../agent/synthesis.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -123,6 +125,8 @@ export function createDashboardServer(): express.Application {
                     upvotesGiven: stateData.upvotesGiven || 0,
                     downvotesGiven: stateData.downvotesGiven || 0,
                     submoltsCreated: stateData.createdSubmolts?.length || 0,
+                    totalComments: state.getMyComments().length,
+                    totalPosts: state.getMyPosts().length,
                 },
                 llm: {
                     provider: llm.getProvider(),
@@ -307,20 +311,9 @@ export function createDashboardServer(): express.Application {
      */
     app.get('/api/evolution/history', (req, res) => {
         try {
-            const historyPath = join(__dirname, '../../data/molt_history.jsonl');
-            if (!existsSync(historyPath)) {
-                return res.json({ success: true, history: [] });
-            }
-            const content = readFileSync(historyPath, 'utf-8');
-            const history = content.trim().split('\n').map(line => {
-                try {
-                    return JSON.parse(line);
-                } catch {
-                    return null;
-                }
-            }).filter(Boolean).slice(-10).reverse(); // Last 10, newest first
-
-            res.json({ success: true, history });
+            const db = getDatabaseManager().getDb();
+            const rows = db.prepare('SELECT timestamp, rationale, delta FROM evolutions ORDER BY id DESC LIMIT 10').all();
+            res.json({ success: true, history: rows });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get evolution history' });
         }
@@ -341,6 +334,19 @@ export function createDashboardServer(): express.Application {
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get sovereignty data' });
+        }
+    });
+
+    /**
+     * GET /api/synthesis/history
+     * Get the history of memetic synthesis reports
+     */
+    app.get('/api/synthesis/history', (req, res) => {
+        try {
+            const history = getSynthesisManager().getHistory(10);
+            res.json({ success: true, history });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get synthesis history' });
         }
     });
 

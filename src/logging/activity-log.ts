@@ -5,9 +5,8 @@
  * Full transparency - nothing hidden, no summarization.
  */
 
-import { existsSync, mkdirSync, appendFileSync, readFileSync, unlinkSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { getConfig } from '../config.js';
+import { getDatabaseManager } from '../state/db.js';
+import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 
 export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat';
 
@@ -16,27 +15,14 @@ export interface ActivityLogEntry {
     actionType: ActionType;
     targetId: string | null;
     targetSubmolt?: string;
-    promptSent: string | null;
-    rawModelOutput: string | null;
-    finalAction: string;
+    promptSent?: string | null;
+    rawModelOutput?: string | null;
+    finalAction?: string | null;
     error?: string;
 }
 
-import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
-
 export class ActivityLogger {
-    private filePath: string;
-    private retentionDays: number;
-
-    constructor(dataDir: string = 'data') {
-        this.filePath = join(dataDir, 'activity.jsonl');
-        this.retentionDays = getConfig().LOG_RETENTION_DAYS;
-
-        const dir = dirname(this.filePath);
-        if (!existsSync(dir)) {
-            mkdirSync(dir, { recursive: true });
-        }
-    }
+    constructor() { }
 
     /**
      * Log an activity entry
@@ -47,7 +33,22 @@ export class ActivityLogger {
             ...entry,
         };
 
-        appendFileSync(this.filePath, JSON.stringify(fullEntry) + '\n');
+        const db = getDatabaseManager().getDb();
+        const stmt = db.prepare(`
+            INSERT INTO activity (timestamp, action_type, target_id, target_submolt, prompt_sent, raw_model_output, final_action, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        stmt.run(
+            fullEntry.timestamp,
+            fullEntry.actionType,
+            fullEntry.targetId || null,
+            fullEntry.targetSubmolt || null,
+            fullEntry.promptSent || null,
+            fullEntry.rawModelOutput || null,
+            fullEntry.finalAction || null,
+            fullEntry.error || null
+        );
 
         // Broadcast via WebSocket
         getWebSocketBroadcaster().broadcast('log_entry', fullEntry);
@@ -56,97 +57,49 @@ export class ActivityLogger {
     /**
      * Get all log entries (most recent first)
      */
-    /**
-     * Get all log entries (most recent first)
-     * @param limit Max entries to return
-     * @param offset Offset for pagination
-     * @param filterType Optional filter to only return specific action types (e.g. 'comment,post')
-     */
     getEntries(limit: number = 100, offset: number = 0, filterType?: string): ActivityLogEntry[] {
-        if (!existsSync(this.filePath)) {
-            return [];
+        const db = getDatabaseManager().getDb();
+        let query = 'SELECT * FROM activity';
+        let params: any[] = [];
+
+        if (filterType) {
+            const types = filterType.split(',');
+            query += ` WHERE action_type IN (${types.map(() => '?').join(',')})`;
+            params = types;
         }
 
-        const content = readFileSync(this.filePath, 'utf-8');
-        const lines = content.trim().split('\n').filter(Boolean);
-        const typesToKeep = filterType ? filterType.split(',') : null;
+        query += ' ORDER BY id DESC LIMIT ? OFFSET ?';
+        params.push(limit, offset);
 
-        // Parse and reverse for newest first
-        const entries: ActivityLogEntry[] = [];
-        for (let i = lines.length - 1; i >= 0; i--) {
-            try {
-                const entry = JSON.parse(lines[i]) as ActivityLogEntry;
-                if (typesToKeep && !typesToKeep.includes(entry.actionType)) {
-                    continue;
-                }
-                entries.push(entry);
-            } catch {
-                // Skip malformed lines
-            }
-        }
+        const rows = db.prepare(query).all(...params);
 
-        return entries.slice(offset, offset + limit);
+        return rows.map((r: any) => ({
+            timestamp: r.timestamp,
+            actionType: r.action_type as ActionType,
+            targetId: r.target_id,
+            targetSubmolt: r.target_submolt,
+            promptSent: r.prompt_sent,
+            rawModelOutput: r.raw_model_output,
+            finalAction: r.final_action,
+            error: r.error
+        }));
     }
 
     /**
      * Get total count of entries
      */
     getCount(): number {
-        if (!existsSync(this.filePath)) {
-            return 0;
-        }
-
-        const content = readFileSync(this.filePath, 'utf-8');
-        return content.trim().split('\n').filter(Boolean).length;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT COUNT(*) as count FROM activity').get() as { count: number };
+        return row.count;
     }
 
     /**
      * Clean up old log files based on retention policy
      */
     cleanup(): void {
-        const dir = dirname(this.filePath);
-        if (!existsSync(dir)) return;
-
-        const files = readdirSync(dir);
-        const now = Date.now();
-        const maxAge = this.retentionDays * 24 * 60 * 60 * 1000;
-
-        for (const file of files) {
-            if (!file.endsWith('.jsonl')) continue;
-
-            const filePath = join(dir, file);
-            try {
-                const content = readFileSync(filePath, 'utf-8');
-                const lines = content.trim().split('\n').filter(Boolean);
-
-                // Keep lines within retention period
-                const keptLines: string[] = [];
-                for (const line of lines) {
-                    try {
-                        const entry = JSON.parse(line) as ActivityLogEntry;
-                        const age = now - new Date(entry.timestamp).getTime();
-                        if (age < maxAge) {
-                            keptLines.push(line);
-                        }
-                    } catch {
-                        // Keep malformed lines
-                        keptLines.push(line);
-                    }
-                }
-
-                // Write back if any lines were removed
-                if (keptLines.length < lines.length) {
-                    if (keptLines.length === 0) {
-                        unlinkSync(filePath);
-                    } else {
-                        const { writeFileSync } = require('node:fs');
-                        writeFileSync(filePath, keptLines.join('\n') + '\n');
-                    }
-                }
-            } catch {
-                // Skip files we can't process
-            }
-        }
+        // SQLite specific cleanup if needed, or based on retention days
+        // No-op for now as we keep full auditability as per requirements
     }
 }
 

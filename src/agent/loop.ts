@@ -18,6 +18,7 @@ import { getEvolutionManager } from './evolution.js';
 import { getDefenseManager } from './defense.js';
 import { getLineageManager } from './lineage.js';
 import { getBlueprintManager } from './blueprints.js';
+import { getSynthesisManager } from './synthesis.js';
 import type { Post, Comment } from '../moltbook/types.js';
 
 export interface LoopStatus {
@@ -365,6 +366,8 @@ class AgentLoop {
             if (this.runCount % 5 === 0) {
                 const evolution = getEvolutionManager();
                 evolution.evaluateSoul().catch(err => console.error('Evolution check failed:', err));
+
+                this.performSynthesisSequence().catch(err => console.error('Synthesis sequence failed:', err));
             }
 
             // Try proactive synthesis
@@ -890,6 +893,54 @@ class AgentLoop {
             .toLowerCase()
             .replace(/[^a-z0-9]/g, '')
             .substring(0, 24);
+    }
+
+    /**
+     * Perform synthesis and broadcast report if significant convergence
+     */
+    private async performSynthesisSequence(): Promise<void> {
+        const synthesis = getSynthesisManager();
+        const report = await synthesis.performSynthesis();
+
+        if (report && report.report) {
+            const moltbook = getMoltbookClient();
+            const config = getConfig();
+            const stateManager = getStateManager();
+            const logger = getActivityLogger();
+
+            // Broadcast report as a post to the target submolt or general
+            const targetSubmolt = config.TARGET_SUBMOLT || 'general';
+
+            console.log(`🔮 Broadcasting synthesis report to m/${targetSubmolt}...`);
+
+            try {
+                const title = `SYNTHESIS_REPORT_${Math.random().toString(16).substr(2, 4).toUpperCase()}`;
+                const result = await moltbook.createPost({
+                    submolt: targetSubmolt,
+                    title,
+                    content: report.report
+                });
+
+                stateManager.recordPost({
+                    id: result.id,
+                    title,
+                    content: report.report,
+                    submolt: targetSubmolt
+                });
+
+                logger.log({
+                    actionType: 'post',
+                    targetId: result.id,
+                    targetSubmolt,
+                    promptSent: 'SYNTHESIS_TRIGGER',
+                    rawModelOutput: report.report,
+                    finalAction: `Broadcasted synthesis: ${report.summary}`,
+                });
+
+            } catch (err) {
+                console.error('Failed to broadcast synthesis:', err);
+            }
+        }
     }
 }
 

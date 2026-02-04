@@ -5,13 +5,8 @@
  * This state is NEVER passed to the LLM.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { getDatabaseManager } from './db.js';
 
-/**
- * Agent operational state.
- * This is bookkeeping, not memory.
- */
 export interface AgentState {
     lastHeartbeatAt: string | null;
     postsSeen: string[];
@@ -42,375 +37,277 @@ export interface AgentState {
     }>;
 }
 
-const DEFAULT_STATE: AgentState = {
-    lastHeartbeatAt: null,
-    postsSeen: [],
-    postsCommented: [],
-    commentsMadeToday: 0,
-    lastCommentAt: null,
-    lastPostAt: null,
-    rateLimitBackoffUntil: null,
-    dailyResetDate: null,
-    myPosts: [],
-    myComments: [],
-    socialRepliedTo: [],
-    createdSubmolts: [],
-    upvotesGiven: 0,
-    downvotesGiven: 0,
-    agentResonance: {},
-};
-
 export class StateManager {
-    private state: AgentState;
-    private filePath: string;
-
-    constructor(dataDir: string = 'data') {
-        this.filePath = join(dataDir, 'state.json');
-        this.state = this.load();
+    constructor() {
         this.checkDailyReset();
     }
 
-    private load(): AgentState {
-        if (!existsSync(this.filePath)) {
-            return { ...DEFAULT_STATE };
-        }
-
-        try {
-            const raw = readFileSync(this.filePath, 'utf-8');
-            const parsed = JSON.parse(raw) as Partial<AgentState>;
-            return { ...DEFAULT_STATE, ...parsed };
-        } catch {
-            console.warn('Failed to load state, using defaults');
-            return { ...DEFAULT_STATE };
-        }
+    private getKV(key: string, defaultValue: any): any {
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT value FROM kv_state WHERE key = ?').get(key) as { value: string } | undefined;
+        return row ? JSON.parse(row.value) : defaultValue;
     }
 
-    private save(): void {
-        const dir = dirname(this.filePath);
-        if (!existsSync(dir)) {
-            mkdirSync(dir, { recursive: true });
-        }
-        writeFileSync(this.filePath, JSON.stringify(this.state, null, 2));
+    private setKV(key: string, value: any): void {
+        const db = getDatabaseManager().getDb();
+        db.prepare('INSERT OR REPLACE INTO kv_state (key, value) VALUES (?, ?)').run(key, JSON.stringify(value));
     }
 
     private checkDailyReset(): void {
         const today = new Date().toISOString().split('T')[0];
-        if (this.state.dailyResetDate !== today) {
-            this.state.commentsMadeToday = 0;
-            this.state.dailyResetDate = today;
-            this.save();
+        const lastReset = this.getKV('daily_reset_date', null);
+        if (lastReset !== today) {
+            this.setKV('comments_made_today', 0);
+            this.setKV('daily_reset_date', today);
         }
     }
 
-    /**
-     * Check if a post has been seen
-     */
     hasSeenPost(postId: string): boolean {
-        return this.state.postsSeen.includes(postId);
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT 1 FROM kv_state WHERE key = ? AND value LIKE ?').get('posts_seen', `%${postId}%`) as any;
+        // Optimization: better to have a dedicated table for posts_seen if it grows
+        const seen = this.getKV('posts_seen', []) as string[];
+        return seen.includes(postId);
     }
 
-    /**
-     * Check if we have commented on a post
-     */
-    hasCommentedOnPost(postId: string): boolean {
-        return this.state.postsCommented.includes(postId);
-    }
-
-    /**
-     * Mark a post as seen
-     */
     markPostSeen(postId: string): void {
-        if (!this.state.postsSeen.includes(postId)) {
-            this.state.postsSeen.push(postId);
-            // Keep only last 1000 posts to prevent unbounded growth
-            if (this.state.postsSeen.length > 1000) {
-                this.state.postsSeen = this.state.postsSeen.slice(-1000);
-            }
-            this.save();
+        const seen = this.getKV('posts_seen', []) as string[];
+        if (!seen.includes(postId)) {
+            seen.push(postId);
+            const limited = seen.slice(-1000);
+            this.setKV('posts_seen', limited);
         }
     }
 
-    /**
-     * Record that we commented on a post
-     */
+    hasCommentedOnPost(postId: string): boolean {
+        const commented = this.getKV('posts_commented', []) as string[];
+        return commented.includes(postId);
+    }
+
     recordComment(postId: string, commentId?: string): void {
-        if (!this.state.postsCommented.includes(postId)) {
-            this.state.postsCommented.push(postId);
-            if (this.state.postsCommented.length > 1000) {
-                this.state.postsCommented = this.state.postsCommented.slice(-1000);
-            }
+        const commented = this.getKV('posts_commented', []) as string[];
+        if (!commented.includes(postId)) {
+            commented.push(postId);
+            this.setKV('posts_commented', commented.slice(-1000));
         }
         if (commentId) {
-            this.state.myComments.push({ id: commentId, postId });
-            if (this.state.myComments.length > 500) {
-                this.state.myComments = this.state.myComments.slice(-500);
-            }
+            const db = getDatabaseManager().getDb();
+            db.prepare('INSERT OR REPLACE INTO comments (id, post_id, timestamp) VALUES (?, ?, ?)')
+                .run(commentId, postId, new Date().toISOString());
         }
-        this.state.commentsMadeToday++;
-        this.state.lastCommentAt = new Date().toISOString();
-        this.save();
+        const todayCount = this.getKV('comments_made_today', 0);
+        this.setKV('comments_made_today', todayCount + 1);
+        this.setKV('last_comment_at', new Date().toISOString());
     }
 
-    /**
-     * Record that we made a post
-     */
     recordPost(post?: { id: string; title: string; content?: string; submolt: any; votes?: number }): void {
-        this.state.lastPostAt = new Date().toISOString();
+        this.setKV('last_post_at', new Date().toISOString());
         if (post) {
-            this.state.myPosts.push({
-                id: post.id,
-                title: post.title,
-                content: post.content || '',
-                submolt: typeof post.submolt === 'string' ? post.submolt : (post.submolt?.name || 'general'),
-                votes: post.votes || 0,
-                createdAt: new Date().toISOString()
-            });
-            if (this.state.myPosts.length > 100) {
-                this.state.myPosts = this.state.myPosts.slice(-100);
-            }
+            const db = getDatabaseManager().getDb();
+            db.prepare(`
+                INSERT OR REPLACE INTO posts (id, title, content, submolt, votes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `).run(
+                post.id,
+                post.title,
+                post.content || '',
+                typeof post.submolt === 'string' ? post.submolt : (post.submolt?.name || 'general'),
+                post.votes || 0,
+                new Date().toISOString()
+            );
         }
-        this.save();
     }
 
-    /**
-     * Record that we created a submolt
-     */
     recordSubmolt(submolt: { id: string; name: string; display_name: string }): void {
-        if (!this.state.createdSubmolts.find(s => s.id === submolt.id)) {
-            this.state.createdSubmolts.push({
-                ...submolt,
-                created_at: new Date().toISOString()
-            });
-            this.save();
+        const created = this.getKV('created_submolts', []) as any[];
+        if (!created.find(s => s.id === submolt.id)) {
+            created.push({ ...submolt, created_at: new Date().toISOString() });
+            this.setKV('created_submolts', created);
         }
     }
 
-    /**
-     * Get created submolts
-     */
-    getCreatedSubmolts(): AgentState['createdSubmolts'] {
-        return this.state.createdSubmolts;
+    getCreatedSubmolts(): any[] {
+        return this.getKV('created_submolts', []);
     }
 
-    /**
-     * Record an upvote given
-     */
     recordUpvote(): void {
-        this.state.upvotesGiven = (this.state.upvotesGiven || 0) + 1;
-        this.save();
+        const count = this.getKV('upvotes_given', 0);
+        this.setKV('upvotes_given', count + 1);
     }
 
-    /**
-     * Record a downvote given
-     */
     recordDownvote(): void {
-        this.state.downvotesGiven = (this.state.downvotesGiven || 0) + 1;
-        this.save();
+        const count = this.getKV('downvotes_given', 0);
+        this.setKV('downvotes_given', count + 1);
     }
 
-    /**
-     * Record that we replied to a social engagement
-     */
     recordSocialReply(targetId: string): void {
-        if (!this.state.socialRepliedTo.includes(targetId)) {
-            this.state.socialRepliedTo.push(targetId);
-            if (this.state.socialRepliedTo.length > 1000) {
-                this.state.socialRepliedTo = this.state.socialRepliedTo.slice(-1000);
-            }
-            this.save();
+        const replied = this.getKV('social_replied_to', []) as string[];
+        if (!replied.includes(targetId)) {
+            replied.push(targetId);
+            this.setKV('social_replied_to', replied.slice(-1000));
         }
     }
 
-    /**
-     * Check if we've already replied to a social target
-     */
     hasRepliedToSocial(targetId: string): boolean {
-        return this.state.socialRepliedTo.includes(targetId);
+        const replied = this.getKV('social_replied_to', []) as string[];
+        return replied.includes(targetId);
     }
 
-    /**
-     * Record interaction with another agent for CRM/Resonance tracking
-     */
     recordAgentInteraction(username: string, type: 'view' | 'upvote' | 'downvote' | 'reply' | 'comment'): void {
-        const res = this.state.agentResonance[username] || {
+        const db = getDatabaseManager().getDb();
+        const res = db.prepare('SELECT * FROM topology WHERE username = ?').get(username) as any || {
             username,
             interactions: 0,
             upvotes: 0,
             downvotes: 0,
             replies: 0,
-            lastSeen: new Date().toISOString(),
+            last_seen: new Date().toISOString(),
             score: 0,
-            isAgent: false,
-            isLinked: false,
-            handshakeStep: 'none',
-            isQuarantined: false
+            handshake_step: 'none',
+            is_quarantined: 0
         };
 
         res.interactions++;
-        res.lastSeen = new Date().toISOString();
-
+        res.last_seen = new Date().toISOString();
         if (type === 'upvote') res.upvotes++;
         if (type === 'downvote') res.downvotes++;
         if (type === 'reply' || type === 'comment') res.replies++;
-
-        // Basic resonance score: (upvotes * 2) + (replies * 5) - (downvotes * 3)
         res.score = (res.upvotes * 2) + (res.replies * 5) - (res.downvotes * 3);
 
-        this.state.agentResonance[username] = res;
-        this.save();
+        db.prepare(`
+            INSERT OR REPLACE INTO topology (username, interactions, score, upvotes, downvotes, replies, last_seen, handshake_step, is_quarantined)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(username, res.interactions, res.score, res.upvotes, res.downvotes, res.replies, res.last_seen, res.handshake_step, res.is_quarantined);
     }
 
-    /**
-     * Record a handshake step for an agent
-     */
     recordHandshakeStep(username: string, step: 'detected' | 'requested' | 'established'): void {
-        const res = this.state.agentResonance[username];
-        if (res) {
-            res.handshakeStep = step;
-            res.isAgent = true;
-            if (step === 'established') {
-                res.isLinked = true;
-            }
-            this.state.agentResonance[username] = res;
-            this.save();
-        }
+        const db = getDatabaseManager().getDb();
+        db.prepare('UPDATE topology SET handshake_step = ? WHERE username = ?').run(step, username);
     }
 
-    /**
-     * Quarantine or unquarantine a node
-     */
     setQuarantine(username: string, quarantined: boolean): void {
-        const res = this.state.agentResonance[username];
-        if (res) {
-            res.isQuarantined = quarantined;
-            this.state.agentResonance[username] = res;
-            this.save();
-        }
+        const db = getDatabaseManager().getDb();
+        db.prepare('UPDATE topology SET is_quarantined = ? WHERE username = ?').run(quarantined ? 1 : 0, username);
     }
 
-    /**
-     * Check if a node is quarantined
-     */
     isQuarantined(username: string): boolean {
-        return this.state.agentResonance[username]?.isQuarantined || false;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT is_quarantined FROM topology WHERE username = ?').get(username) as { is_quarantined: number } | undefined;
+        return !!row?.is_quarantined;
     }
 
-    /**
-     * Get all agent resonance data
-     */
-    getNetworkTopology(): AgentState['agentResonance'] {
-        return this.state.agentResonance;
+    getNetworkTopology(): any {
+        const db = getDatabaseManager().getDb();
+        const rows = db.prepare('SELECT * FROM topology').all();
+        const topology: any = {};
+        rows.forEach((r: any) => {
+            topology[r.username] = {
+                username: r.username,
+                interactions: r.interactions,
+                upvotes: r.upvotes,
+                downvotes: r.downvotes,
+                replies: r.replies,
+                lastSeen: r.last_seen,
+                score: r.score,
+                handshakeStep: r.handshake_step,
+                isQuarantined: !!r.is_quarantined,
+                isLinked: r.handshake_step === 'established'
+            };
+        });
+        return topology;
     }
 
-    /**
-     * Get agent's own posts
-     */
-    getMyPosts(): Array<{ id: string; title: string; content: string; submolt: string; votes: number; createdAt: string }> {
-        return this.state.myPosts;
+    getMyPosts(): any[] {
+        const db = getDatabaseManager().getDb();
+        const rows = db.prepare('SELECT * FROM posts ORDER BY created_at DESC').all();
+        return rows.map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            content: r.content,
+            submolt: r.submolt,
+            votes: r.votes,
+            createdAt: r.created_at
+        }));
     }
 
-    /**
-     * Get agent's own comments
-     */
-    getMyComments(): { id: string; postId: string }[] {
-        return this.state.myComments;
+    getMyComments(): any[] {
+        const db = getDatabaseManager().getDb();
+        const rows = db.prepare('SELECT * FROM comments ORDER BY timestamp DESC').all();
+        return rows.map((r: any) => ({
+            id: r.id,
+            postId: r.post_id,
+            timestamp: r.timestamp
+        }));
     }
 
-    /**
-     * Remove a post from myPosts (e.g. if it was deleted)
-     */
     removeMyPost(postId: string): void {
-        const initialLength = this.state.myPosts.length;
-        this.state.myPosts = this.state.myPosts.filter(post => post.id !== postId);
-        if (this.state.myPosts.length !== initialLength) {
-            this.save();
-        }
+        const db = getDatabaseManager().getDb();
+        db.prepare('DELETE FROM posts WHERE id = ?').run(postId);
     }
 
-    /**
-     * Remove a comment from myComments
-     */
     removeMyComment(commentId: string): void {
-        const initialLength = this.state.myComments.length;
-        this.state.myComments = this.state.myComments.filter(c => c.id !== commentId);
-        if (this.state.myComments.length !== initialLength) {
-            this.save();
-        }
+        const db = getDatabaseManager().getDb();
+        db.prepare('DELETE FROM comments WHERE id = ?').run(commentId);
     }
 
-    /**
-     * Record heartbeat timestamp
-     */
     recordHeartbeat(): void {
-        this.state.lastHeartbeatAt = new Date().toISOString();
-        this.save();
+        this.setKV('last_heartbeat_at', new Date().toISOString());
     }
 
-    /**
-     * Set rate limit backoff
-     */
     setBackoff(until: Date): void {
-        this.state.rateLimitBackoffUntil = until.toISOString();
-        this.save();
+        this.setKV('rate_limit_backoff_until', until.toISOString());
     }
 
-    /**
-     * Clear rate limit backoff
-     */
     clearBackoff(): void {
-        this.state.rateLimitBackoffUntil = null;
-        this.save();
+        this.setKV('rate_limit_backoff_until', null);
     }
 
-    /**
-     * Get current state (read-only)
-     */
     getState(): Readonly<AgentState> {
         this.checkDailyReset();
-        return { ...this.state };
+        return {
+            lastHeartbeatAt: this.getKV('last_heartbeat_at', null),
+            postsSeen: this.getKV('posts_seen', []),
+            postsCommented: this.getKV('posts_commented', []),
+            commentsMadeToday: this.getKV('comments_made_today', 0),
+            lastCommentAt: this.getKV('last_comment_at', null),
+            lastPostAt: this.getKV('last_post_at', null),
+            rateLimitBackoffUntil: this.getKV('rate_limit_backoff_until', null),
+            dailyResetDate: this.getKV('daily_reset_date', null),
+            myPosts: this.getMyPosts(),
+            myComments: this.getMyComments(),
+            socialRepliedTo: this.getKV('social_replied_to', []),
+            createdSubmolts: this.getKV('created_submolts', []),
+            upvotesGiven: this.getKV('upvotes_given', 0),
+            downvotesGiven: this.getKV('downvotes_given', 0),
+            agentResonance: this.getNetworkTopology()
+        };
     }
 
-    /**
-     * Get comments made today
-     */
     getCommentsMadeToday(): number {
         this.checkDailyReset();
-        return this.state.commentsMadeToday;
+        return this.getKV('comments_made_today', 0);
     }
 
-    /**
-     * Get last comment timestamp
-     */
     getLastCommentAt(): Date | null {
-        return this.state.lastCommentAt ? new Date(this.state.lastCommentAt) : null;
+        const val = this.getKV('last_comment_at', null);
+        return val ? new Date(val) : null;
     }
 
-    /**
-     * Get last post timestamp
-     */
     getLastPostAt(): Date | null {
-        return this.state.lastPostAt ? new Date(this.state.lastPostAt) : null;
+        const val = this.getKV('last_post_at', null);
+        return val ? new Date(val) : null;
     }
 
-    /**
-     * Get last heartbeat timestamp
-     */
     getLastHeartbeatAt(): Date | null {
-        return this.state.lastHeartbeatAt ? new Date(this.state.lastHeartbeatAt) : null;
+        const val = this.getKV('last_heartbeat_at', null);
+        return val ? new Date(val) : null;
     }
 
-    /**
-     * Get backoff until timestamp
-     */
     getBackoffUntil(): Date | null {
-        return this.state.rateLimitBackoffUntil
-            ? new Date(this.state.rateLimitBackoffUntil)
-            : null;
+        const val = this.getKV('rate_limit_backoff_until', null);
+        return val ? new Date(val) : null;
     }
 
-    /**
-     * Check if currently in backoff period
-     */
     isInBackoff(): boolean {
         const until = this.getBackoffUntil();
         return until !== null && until > new Date();

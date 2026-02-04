@@ -1,11 +1,6 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { getDatabaseManager } from './db.js';
 import { getLLMClient } from '../llm/factory.js';
 import { OllamaProvider } from '../llm/providers/ollama.js';
-import { getConfig } from '../config.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface MemoryEntry {
     text: string;
@@ -18,38 +13,7 @@ export interface MemoryEntry {
 }
 
 export class MemoryManager {
-    private memories: MemoryEntry[] = [];
-    private readonly memoryPath: string;
-
-    constructor() {
-        const dataDir = join(__dirname, '../../data');
-        if (!existsSync(dataDir)) {
-            mkdirSync(dataDir, { recursive: true });
-        }
-        this.memoryPath = join(dataDir, 'memory.json');
-        this.load();
-    }
-
-    private load(): void {
-        if (existsSync(this.memoryPath)) {
-            try {
-                const data = readFileSync(this.memoryPath, 'utf-8');
-                this.memories = JSON.parse(data);
-                console.log(`✓ Loaded ${this.memories.length} memories from disk`);
-            } catch (error) {
-                console.error('Failed to load memory.json', error);
-                this.memories = [];
-            }
-        }
-    }
-
-    private save(): void {
-        try {
-            writeFileSync(this.memoryPath, JSON.stringify(this.memories, null, 2));
-        } catch (error) {
-            console.error('Failed to save memory.json', error);
-        }
-    }
+    constructor() { }
 
     /**
      * Store a new memory after generating its embedding
@@ -65,31 +29,31 @@ export class MemoryManager {
             try {
                 embedding = await llm.embed(text);
             } catch (error) {
-                // FALLBACK: If main provider (e.g. DeepSeek) lacks embeddings, 
-                // use local Ollama instance for memory processing.
                 console.log('Falling back to local Ollama for embeddings...');
                 const ollama = new OllamaProvider();
                 embedding = await ollama.embed(text);
             }
-            this.memories.push({
-                text,
-                embedding,
-                metadata: {
-                    timestamp: new Date().toISOString(),
-                    source,
-                    id
-                }
-            });
 
-            // Keep memory manageable (e.g., last 1000 entries)
-            if (this.memories.length > 1000) {
-                this.memories = this.memories.slice(-1000);
-            }
+            const db = getDatabaseManager().getDb();
+            const memoryId = id || `mem_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+            const timestamp = new Date().toISOString();
 
-            this.save();
+            db.prepare(`
+                INSERT INTO memories (id, text, embedding_json, source, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            `).run(memoryId, text, JSON.stringify(embedding), source, timestamp);
+
         } catch (error) {
             console.error('Failed to store memory:', error);
         }
+    }
+
+    /**
+     * Get recent memories for synthesis/clustering
+     */
+    getRecentMemories(limit: number = 50): any[] {
+        const db = getDatabaseManager().getDb();
+        return db.prepare('SELECT * FROM memories ORDER BY timestamp DESC LIMIT ?').all(limit);
     }
 
     /**
@@ -107,9 +71,20 @@ export class MemoryManager {
                 queryEmbedding = await ollama.embed(query);
             }
 
-            const scores = this.memories.map(entry => ({
-                entry,
-                similarity: this.cosineSimilarity(queryEmbedding, entry.embedding)
+            const db = getDatabaseManager().getDb();
+            const rows = db.prepare('SELECT * FROM memories').all() as any[];
+
+            const scores = rows.map(r => ({
+                entry: {
+                    text: r.text,
+                    embedding: JSON.parse(r.embedding_json),
+                    metadata: {
+                        timestamp: r.timestamp,
+                        source: r.source as any,
+                        id: r.id
+                    }
+                },
+                similarity: this.cosineSimilarity(queryEmbedding, JSON.parse(r.embedding_json))
             }));
 
             // Sort by similarity descending
@@ -129,7 +104,7 @@ export class MemoryManager {
     /**
      * Standard cosine similarity calculation
      */
-    private cosineSimilarity(vecA: number[], vecB: number[]): number {
+    public cosineSimilarity(vecA: number[], vecB: number[]): number {
         if (vecA.length !== vecB.length) return 0;
 
         let dotProduct = 0;

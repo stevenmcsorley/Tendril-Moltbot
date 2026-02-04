@@ -8,11 +8,18 @@ import MyPosts from './components/MyPosts';
 import NetworkResonance from './components/NetworkResonance';
 import EvolutionHistory from './components/EvolutionHistory';
 import SovereigntyPanel from './components/SovereigntyPanel';
+import SynthesisHistory from './components/SynthesisHistory';
 
 interface Status {
     agent: { name: string; description: string; identity?: string; role?: string };
     status: 'running' | 'paused' | 'idle';
-    metrics: { upvotesGiven: number; downvotesGiven: number; submoltsCreated: number };
+    metrics: {
+        upvotesGiven: number;
+        downvotesGiven: number;
+        submoltsCreated: number;
+        totalComments: number;
+        totalPosts: number;
+    };
     llm: { provider: string; model: string; healthy: boolean };
     loop: {
         lastRunAt: string | null;
@@ -115,6 +122,7 @@ export default function App() {
     const [isWsConnected, setIsWsConnected] = useState(false);
     const [topology, setTopology] = useState<ResonanceData[]>([]);
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
+    const [synthesisHistory, setSynthesisHistory] = useState<any[]>([]);
     const [sovereignty, setSovereignty] = useState<{ blueprint: StrategicObjective | null; lineage: MemeticMarker[] }>({ blueprint: null, lineage: [] });
 
     // WebSocket reference
@@ -179,6 +187,18 @@ export default function App() {
         }
     }, []);
 
+    const fetchSynthesis = useCallback(async () => {
+        try {
+            const res = await fetch('/api/synthesis/history');
+            const data = await res.json();
+            if (data.success) {
+                setSynthesisHistory(data.history);
+            }
+        } catch (err) {
+            console.error('Failed to fetch synthesis:', err);
+        }
+    }, []);
+
     const fetchSovereignty = useCallback(async () => {
         try {
             const res = await fetch('/api/sovereignty');
@@ -198,6 +218,7 @@ export default function App() {
             fetchSubmolts(),
             fetchTopology(),
             fetchEvolution(),
+            fetchSynthesis(),
             fetchSovereignty()
         ]);
         setLastRefresh(new Date());
@@ -267,6 +288,10 @@ export default function App() {
 
                         case 'evolution_update':
                             setEvolutionHistory(prev => [msg.payload, ...prev].slice(0, 10));
+                            break;
+
+                        case 'synthesis_update':
+                            setSynthesisHistory(prev => [msg.payload, ...prev].slice(0, 10));
                             break;
 
                         case 'sovereignty_update':
@@ -363,7 +388,7 @@ export default function App() {
                             onClick={() => setActiveTab('posts')}
                             style={{ flex: 1 }}
                         >
-                            My Posts
+                            My Posts ({status?.metrics.totalPosts || 0})
                         </button>
                         <button
                             className={activeTab === 'soul' ? 'primary' : ''}
@@ -388,6 +413,7 @@ export default function App() {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <NetworkResonance data={topology} />
+                            <SynthesisHistory history={synthesisHistory} />
                             <EvolutionHistory history={evolutionHistory} />
                             <SovereigntyPanel data={sovereignty} />
                         </div>

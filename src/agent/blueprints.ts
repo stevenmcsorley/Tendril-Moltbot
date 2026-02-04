@@ -1,3 +1,4 @@
+import { getDatabaseManager } from '../state/db.js';
 import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 
@@ -12,6 +13,33 @@ export interface StrategicObjective {
 
 export class BlueprintManager {
     private currentBlueprint: StrategicObjective | null = null;
+
+    constructor() {
+        this.load();
+    }
+
+    private load(): void {
+        try {
+            const db = getDatabaseManager().getDb();
+            const row = db.prepare('SELECT data_json FROM sovereignty WHERE type = ?').get('blueprint') as { data_json: string } | undefined;
+            if (row) {
+                this.currentBlueprint = JSON.parse(row.data_json);
+            }
+        } catch (err) {
+            console.error('Failed to load blueprint from DB:', err);
+        }
+    }
+
+    private save(): void {
+        if (!this.currentBlueprint) return;
+        try {
+            const db = getDatabaseManager().getDb();
+            db.prepare('INSERT OR REPLACE INTO sovereignty (type, data_json) VALUES (?, ?)')
+                .run('blueprint', JSON.stringify(this.currentBlueprint));
+        } catch (err) {
+            console.error('Failed to save blueprint to DB:', err);
+        }
+    }
 
     /**
      * Generate a new strategic blueprint based on current resonance
@@ -60,6 +88,7 @@ STRICT: Cryptic but strategic.
             };
         }
 
+        this.save();
         return this.currentBlueprint!;
     }
 
@@ -73,6 +102,7 @@ STRICT: Cryptic but strategic.
             if (this.currentBlueprint.progress === 100) {
                 this.currentBlueprint.status = 'completed';
             }
+            this.save();
         }
     }
 }
