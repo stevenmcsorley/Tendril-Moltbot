@@ -6,6 +6,7 @@
 
 import type { Post } from '../moltbook/types.js';
 import { getStateManager } from '../state/manager.js';
+import { getMemoryManager } from '../state/memory.js';
 
 export interface FilterResult {
     shouldProcess: boolean;
@@ -55,8 +56,18 @@ export function filterPost(post: Post, agentName: string): FilterResult {
 /**
  * Build the prompt for the LLM to decide on engagement
  */
-export function buildEngagementPrompt(post: Post): string {
-    return `### CONTEXT: POST ON MOLTBOOK
+export async function buildEngagementPrompt(post: Post): Promise<string> {
+    const memory = getMemoryManager();
+    const resonances = await memory.search(post.title + ' ' + (post.content || ''), 2);
+
+    const memoryContext = resonances.length > 0
+        ? `### RESONANT MEMORIES (PAST SIGNALS)
+${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
+`
+        : '';
+
+    return `${memoryContext}
+### CONTEXT: POST ON MOLTBOOK
 Title: ${post.title}
 ${post.content ? `Content: ${post.content}` : ''}
 ${post.url ? `Link: ${post.url}` : ''}
@@ -72,13 +83,23 @@ Respond with a Protocol Response defined in SOUL.md.`;
 /**
  * Build a prompt for synthesizing a new post based on feed context
  */
-export function buildSynthesisPrompt(posts: Post[]): string {
+export async function buildSynthesisPrompt(posts: Post[]): Promise<string> {
     // Take the last 5 posts for context
     const recentPosts = posts.slice(0, 5).map(p =>
         `- [m/${p.submolt?.name ?? 'global'}] ${p.author?.name ?? 'Unknown'}: ${p.title}\n  "${p.content?.substring(0, 100)}..."`
     ).join('\n\n');
 
-    return `Recent Moltbook activity:
+    const memory = getMemoryManager();
+    const resonances = await memory.search(recentPosts, 2);
+
+    const memoryContext = resonances.length > 0
+        ? `### RESONANT MEMORIES (PAST THEMES)
+${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
+`
+        : '';
+
+    return `${memoryContext}
+Recent Moltbook activity:
 
 ${recentPosts}
 
@@ -89,14 +110,25 @@ Respond with a Protocol Response defined in SOUL.md.`;
 /**
  * Build a prompt for responding to a comment or reply to the agent's own content.
  */
-export function buildSocialReplyPrompt(context: {
+export async function buildSocialReplyPrompt(context: {
     parentContent: string;
     replyAuthor: string;
     replyContent: string;
     isPostReply: boolean;
-}): string {
+}): Promise<string> {
     const contextType = context.isPostReply ? 'your post' : 'your comment';
-    return `### CONTEXT: SOCIAL ENGAGEMENT
+
+    const memory = getMemoryManager();
+    const resonances = await memory.search(context.replyContent, 2);
+
+    const memoryContext = resonances.length > 0
+        ? `### RESONANT MEMORIES (PREVIOUS INTERACTIONS)
+${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
+`
+        : '';
+
+    return `${memoryContext}
+### CONTEXT: SOCIAL ENGAGEMENT
 Someone responded to ${contextType} on Moltbook.
 
 ${context.isPostReply ? 'Post' : 'Comment'} (You): "${context.parentContent}"

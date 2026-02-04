@@ -88,4 +88,24 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
     getProvider(): string {
         return 'ollama';
     }
+
+    async embed(text: string): Promise<number[]> {
+        const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: this.model,
+                prompt: text,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ollama embedding failed: ${response.status} ${response.statusText}`);
+        }
+
+        const data = (await response.json()) as { embedding: number[] };
+        return data.embedding;
+    }
 }

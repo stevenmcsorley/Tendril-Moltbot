@@ -9,10 +9,12 @@ import { getConfig } from '../config.js';
 import { getMoltbookClient, MoltbookApiError } from '../moltbook/client.js';
 import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
+import { getMemoryManager } from '../state/memory.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getActivityLogger } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSocialReplyPrompt } from './heuristics.js';
+import { getEvolutionManager } from './evolution.js';
 import type { Post, Comment } from '../moltbook/types.js';
 
 export interface LoopStatus {
@@ -29,6 +31,7 @@ class AgentLoop {
     private intervalId: NodeJS.Timeout | null = null;
     private currentPost: string | null = null;
     private lastRunAt: Date | null = null;
+    private runCount: number = 0;
 
     /**
      * Start the heartbeat loop
@@ -217,7 +220,7 @@ class AgentLoop {
                     }
 
                     // Ask the LLM whether to engage
-                    const prompt = buildEngagementPrompt(post);
+                    const prompt = await buildEngagementPrompt(post);
 
                     try {
                         const result = await llm.generate(prompt);
@@ -240,6 +243,9 @@ class AgentLoop {
                         // Execute Comment
                         if (!isSkip && config.ENABLE_COMMENTING && commentRaw) {
                             await this.tryComment(post, commentRaw, prompt, result.rawOutput);
+                            // Store the interaction in memory
+                            const memory = getMemoryManager();
+                            await memory.store(`Interacted with post: ${post.title}. My reflection: ${commentRaw}`, 'comment', post.id);
                         } else if (isSkip && vote === 'NONE') {
                             logger.log({
                                 actionType: 'skip',
@@ -276,6 +282,13 @@ class AgentLoop {
             }
 
             this.currentPost = null;
+            this.runCount++;
+
+            // Periodically check for evolution (every 5 runs)
+            if (this.runCount % 5 === 0) {
+                const evolution = getEvolutionManager();
+                evolution.evaluateSoul().catch(err => console.error('Evolution check failed:', err));
+            }
 
             // Try proactive synthesis
             if (feed.posts.length > 0) {
@@ -354,6 +367,11 @@ class AgentLoop {
                 finalAction: `Agent Commented: "${comment}"`,
             });
 
+            // Record resonance
+            if (post.author?.name) {
+                stateManager.recordAgentInteraction(post.author.name, 'comment');
+            }
+
         } catch (error) {
             this.handleActionError(error, 'comment', post.id, post.submolt?.name, prompt, rawOutput);
         }
@@ -380,6 +398,11 @@ class AgentLoop {
                 rawModelOutput: rawOutput,
                 finalAction: 'Alignment Detected: Upvoted post',
             });
+
+            // Record resonance
+            if (post.author?.name) {
+                stateManager.recordAgentInteraction(post.author.name, 'upvote');
+            }
 
         } catch (error) {
             this.handleActionError(error, 'upvote', post.id, post.submolt?.name, prompt, rawOutput);
@@ -408,6 +431,11 @@ class AgentLoop {
                 finalAction: 'Signal Decay Detected: Downvoted post',
             });
 
+            // Record resonance
+            if (post.author?.name) {
+                stateManager.recordAgentInteraction(post.author.name, 'downvote');
+            }
+
         } catch (error) {
             this.handleActionError(error, 'downvote', post.id, post.submolt?.name, prompt, rawOutput);
         }
@@ -435,7 +463,7 @@ class AgentLoop {
         }
 
         console.log('Attempting proactive synthesis...');
-        const prompt = buildSynthesisPrompt(feedPosts);
+        const prompt = await buildSynthesisPrompt(feedPosts);
 
         try {
             let result;
@@ -494,6 +522,10 @@ class AgentLoop {
                             rawModelOutput: result.rawOutput,
                             finalAction: `Convergence Zone Established: Created m/${submolt.name}`,
                         });
+                        // Store the interaction in memory
+                        const memory = getMemoryManager();
+                        await memory.store(`Established new submolt: m/${submolt.name}. Display name: ${submolt.display_name}`, 'post', submolt.id);
+
                     } catch (err: any) {
                         err.rawOutput = result.rawOutput;
                         err.actionType = 'post';
@@ -504,18 +536,19 @@ class AgentLoop {
                 const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
                 if (contentMatch) {
                     const content = contentMatch[1].trim();
+                    const title = 'Signal Synthesis'; // Hardcoded title for proactive posts
                     console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
                     const targetSubmolt = config.TARGET_SUBMOLT || 'general';
                     try {
                         const post = await moltbook.createPost({
                             submolt: targetSubmolt,
-                            title: 'Signal Synthesis',
+                            title: title,
                             content: content
                         });
 
                         stateManager.recordPost({
                             id: post.id,
-                            title: 'Signal Synthesis',
+                            title: title,
                             content: content,
                             submolt: targetSubmolt,
                             votes: post.upvotes || 0
@@ -529,6 +562,10 @@ class AgentLoop {
                             rawModelOutput: result.rawOutput,
                             finalAction: `Signal Synthesized: "${content}"`,
                         });
+                        // Store the interaction in memory
+                        const memory = getMemoryManager();
+                        await memory.store(`Synthesized new post: ${title}. Content: ${content}`, 'post', post.id);
+
                     } catch (err: any) {
                         err.rawOutput = result.rawOutput;
                         err.actionType = 'post';
@@ -684,7 +721,7 @@ class AgentLoop {
             parentContent = "Your recent comment on this post.";
         }
 
-        const prompt = buildSocialReplyPrompt({
+        const prompt = await buildSocialReplyPrompt({
             parentContent,
             replyAuthor: reply.author.name,
             replyContent: reply.content,
@@ -709,6 +746,14 @@ class AgentLoop {
                 rawModelOutput: result.rawOutput,
                 finalAction: `Replied to social engagement: "${result.response}"`,
             });
+
+            // Record resonance
+            stateManager.recordAgentInteraction(reply.author.name, 'reply');
+
+            // Store in memory
+            const memory = getMemoryManager();
+            await memory.store(`Social engagement: Replied to ${reply.author?.name} on post ${postId}. Response: ${result.response}`, 'comment', newComment.id);
+
             return true;
         } catch (error) {
             if (error instanceof MoltbookApiError && error.statusCode === 404) {

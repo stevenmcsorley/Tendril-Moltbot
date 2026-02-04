@@ -284,6 +284,22 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * GET /api/network-topology
+     * Get resonance data for all tracked agents
+     */
+    app.get('/api/network-topology', (req, res) => {
+        try {
+            const topology = getStateManager().getNetworkTopology();
+            res.json({
+                success: true,
+                topology
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get network topology' });
+        }
+    });
+
+    /**
      * Health check endpoint
      */
     app.get('/health', (req, res) => {

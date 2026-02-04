@@ -76,4 +76,8 @@ export class DeepSeekProvider extends BaseProvider implements LLMClient {
     getProvider(): string {
         return 'deepseek';
     }
+
+    async embed(_text: string): Promise<number[]> {
+        throw new Error('Embeddings not supported for DeepSeek provider');
+    }
 }

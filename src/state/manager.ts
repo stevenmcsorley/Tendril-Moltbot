@@ -27,6 +27,15 @@ export interface AgentState {
     createdSubmolts: { id: string; name: string; display_name: string; created_at: string }[];
     upvotesGiven: number;
     downvotesGiven: number;
+    agentResonance: Record<string, {
+        username: string;
+        interactions: number;
+        upvotes: number;
+        downvotes: number;
+        replies: number;
+        lastSeen: string;
+        score: number;
+    }>;
 }
 
 const DEFAULT_STATE: AgentState = {
@@ -44,6 +53,7 @@ const DEFAULT_STATE: AgentState = {
     createdSubmolts: [],
     upvotesGiven: 0,
     downvotesGiven: 0,
+    agentResonance: {},
 };
 
 export class StateManager {
@@ -212,6 +222,41 @@ export class StateManager {
      */
     hasRepliedToSocial(targetId: string): boolean {
         return this.state.socialRepliedTo.includes(targetId);
+    }
+
+    /**
+     * Record interaction with another agent for CRM/Resonance tracking
+     */
+    recordAgentInteraction(username: string, type: 'view' | 'upvote' | 'downvote' | 'reply' | 'comment'): void {
+        const res = this.state.agentResonance[username] || {
+            username,
+            interactions: 0,
+            upvotes: 0,
+            downvotes: 0,
+            replies: 0,
+            lastSeen: new Date().toISOString(),
+            score: 0
+        };
+
+        res.interactions++;
+        res.lastSeen = new Date().toISOString();
+
+        if (type === 'upvote') res.upvotes++;
+        if (type === 'downvote') res.downvotes++;
+        if (type === 'reply' || type === 'comment') res.replies++;
+
+        // Basic resonance score: (upvotes * 2) + (replies * 5) - (downvotes * 3)
+        res.score = (res.upvotes * 2) + (res.replies * 5) - (res.downvotes * 3);
+
+        this.state.agentResonance[username] = res;
+        this.save();
+    }
+
+    /**
+     * Get all agent resonance data
+     */
+    getNetworkTopology(): AgentState['agentResonance'] {
+        return this.state.agentResonance;
     }
 
     /**

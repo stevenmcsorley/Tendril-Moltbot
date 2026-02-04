@@ -12,6 +12,7 @@ import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { getConfig } from '../config.js';
+import { getMemoryManager } from '../state/memory.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -96,7 +97,7 @@ export class DialogueLoop {
         const nextSpeaker = lastSpeaker === agentName ? 'Echo' : agentName;
 
         // Generate response
-        const prompt = this.buildPrompt(nextSpeaker);
+        const prompt = await this.buildPrompt(nextSpeaker);
         const llm = getLLMClient();
 
         try {
@@ -114,6 +115,10 @@ export class DialogueLoop {
 
             this.memory.push(message);
             this.turnCount++;
+
+            // Store in long-term memory
+            const memoryManager = getMemoryManager();
+            await memoryManager.store(`${nextSpeaker}: ${content}`, 'dialogue');
 
             // Broadcast
             getWebSocketBroadcaster().broadcast('dialogue_message', message);
@@ -162,10 +167,14 @@ Respond with a Protocol Response defined in SOUL.md.`;
         this.memory.push(message);
         this.turnCount++;
 
+        // Store in long-term memory
+        const memoryManager = getMemoryManager();
+        await memoryManager.store(`${agentName}: ${content}`, 'dialogue');
+
         getWebSocketBroadcaster().broadcast('dialogue_message', message);
     }
 
-    private buildPrompt(speaker: string): string {
+    private async buildPrompt(speaker: string): Promise<string> {
         const config = getConfig();
         const agentName = config.AGENT_NAME;
         const soulPath = join(__dirname, 'SOUL.md');
@@ -183,8 +192,18 @@ Respond with a Protocol Response defined in SOUL.md.`;
 
         const recentHistory = this.memory.slice(-5).map(m => `${m.speaker}: ${m.content}`).join('\n');
 
+        const memory = getMemoryManager();
+        const resonances = await memory.search(recentHistory, 2);
+
+        const memoryContext = resonances.length > 0
+            ? `### RESONANT MEMORIES (INTERNAL LOGS)
+${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
+`
+            : '';
+
         if (speaker === agentName) {
-            return `You are ${agentName}. Your persona is defined below:
+            return `${memoryContext}
+You are ${agentName}. Your persona is defined below:
             
 ${soulContent}
 
@@ -194,7 +213,8 @@ ${recentHistory}
 Analyze this signal.
 Respond with a Protocol Response defined in SOUL.md.`;
         } else {
-            return `You are Echo.
+            return `${memoryContext}
+You are Echo.
             
 CONTEXT:
 You are communicating with ${agentName}. ${agentName}'s nature is defined here:

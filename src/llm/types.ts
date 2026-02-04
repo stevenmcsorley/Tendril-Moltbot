@@ -25,4 +25,9 @@ export interface LLMClient {
      * Get the name of the provider (e.g., 'ollama', 'deepseek').
      */
     getProvider(): string;
+
+    /**
+     * Generate an embedding for the given text.
+     */
+    embed(text: string): Promise<number[]>;
 }
