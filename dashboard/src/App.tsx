@@ -197,18 +197,6 @@ export default function App() {
         }
     }, []);
 
-    const fetchLogs = useCallback(async () => {
-        try {
-            const query = filterType ? `?limit=100&type=${filterType}` : '?limit=100';
-            const res = await fetch(`/api/logs${query}`);
-            if (!res.ok) throw new Error('Failed to fetch logs');
-            const data: LogsResponse = await res.json();
-            setLogs(data.entries);
-        } catch (err) {
-            console.error('Failed to fetch logs:', err);
-        }
-    }, [filterType]);
-
     const fetchSubmolts = useCallback(async () => {
         try {
             const res = await fetch('/api/submolts');
@@ -313,7 +301,6 @@ export default function App() {
     const refresh = useCallback(async () => {
         await Promise.all([
             fetchStatus(),
-            fetchLogs(),
             fetchSubmolts(),
             fetchTopology(),
             fetchEvolution(),
@@ -321,7 +308,7 @@ export default function App() {
             fetchSovereignty()
         ]);
         setLastRefresh(new Date());
-    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
+    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
 
     const refreshPassive = useCallback(async () => {
         await Promise.all([
@@ -455,10 +442,9 @@ export default function App() {
         }
     };
 
-    // Refresh logs when filter changes (fallback for WS filter mismatch)
-    useEffect(() => {
-        fetchLogs();
-    }, [filterType, fetchLogs]);
+    const visibleLogs = filterType
+        ? logs.filter(entry => filterType.split(',').includes(entry.actionType))
+        : logs;
 
     const autonomyLockActive = status?.evolution
         ? [status.evolution.selfModificationCooldownUntil, status.evolution.stabilizationUntil]
@@ -561,7 +547,7 @@ export default function App() {
 
                     {activeTab === 'logs' ? (
                         <ActivityLog
-                            entries={logs}
+                            entries={visibleLogs}
                             agentName={status?.agent.name}
                             currentFilter={filterType}
                             onFilterChange={setFilterType}
