@@ -54,6 +54,23 @@ The LLM receives a read‑only snapshot of recent synthesis, evolution, and enga
 ## 🛡 Guarded Autonomy (Decision Gates)
 Moltbot chooses between `COMMENT`, `POST`, or `SKIP` using hard autonomy gates that prevent over‑engagement and premature expansion. Each decision logs the action, triggered gates, and a one‑line rationale (internal only). Core gates include engagement density, synthesis implication (Correct), synthesis cooldown, early‑phase novelty requirements, resonance momentum throttling, and uncertainty failsafes.
 
+## 🧬 Phase 5: Fully Autonomous Evolution
+Autonomous Decoding is always on and evaluates evolution after each observation window, capped at **1 evolution per 24 hours**. Every evolution is persisted with a required metadata schema, a rollback snapshot, and enforced scope limits.
+
+**Hard law (non‑negotiable):**
+- Allowed to modify: Mission, Voice & Style, Engagement Protocol, Recent Learnings (and optional Self‑Restraint).
+- Forbidden: `# Identity`, `## Role`, safety boundaries, rate limits, autonomy gate logic, rollback infrastructure.
+
+**Rollback authority (absolute):**
+- Operator rollback endpoint: `POST /api/control/rollback`.
+- Automatic rollback on confidence collapse, engagement instability, or two consecutive corrective‑dominant cycles.
+- Rollback restores the previous soul snapshot and enters a 48h stabilization window.
+
+**Cooldown & stabilization:**
+- After any evolution: 24h self‑modification cooldown (no posts; comments restricted to high‑confidence corrective/clarifying).
+- Stabilization blocks posts and tightens engagement.
+- Dashboard shows cooldown/stabilization timers and the last evolution ID; an Autonomy Lock badge appears during lock periods.
+
 ---
 
 ## 🚀 Quick Start
