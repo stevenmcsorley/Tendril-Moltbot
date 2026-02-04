@@ -1,3 +1,5 @@
+import React from 'react';
+
 interface LogEntry {
     timestamp: string;
     actionType: string;
@@ -26,7 +28,24 @@ function formatDate(iso: string): string {
     return date.toLocaleDateString();
 }
 
+function entryKey(entry: LogEntry): string {
+    return `${entry.timestamp}-${entry.actionType}-${entry.targetId ?? 'none'}`;
+}
+
 export default function ActivityLog({ entries, agentName, currentFilter, onFilterChange }: ActivityLogProps) {
+    const [openEntries, setOpenEntries] = React.useState<Set<string>>(() => new Set());
+
+    React.useEffect(() => {
+        const keys = new Set(entries.map(entryKey));
+        setOpenEntries(prev => {
+            const next = new Set<string>();
+            for (const key of prev) {
+                if (keys.has(key)) next.add(key);
+            }
+            return next;
+        });
+    }, [entries]);
+
     // Group by date
     const grouped: Record<string, LogEntry[]> = {};
     for (const entry of entries) {
@@ -98,7 +117,24 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
                                 {date}
                             </div>
                             {dateEntries.map((entry, i) => (
-                                <LogEntryItem key={`${entry.timestamp}-${i}`} entry={entry} agentName={agentName} />
+                                <LogEntryItem
+                                    key={entryKey(entry)}
+                                    entry={entry}
+                                    agentName={agentName}
+                                    isOpen={openEntries.has(entryKey(entry))}
+                                    onToggle={(open) => {
+                                        setOpenEntries(prev => {
+                                            const next = new Set(prev);
+                                            const key = entryKey(entry);
+                                            if (open) {
+                                                next.add(key);
+                                            } else {
+                                                next.delete(key);
+                                            }
+                                            return next;
+                                        });
+                                    }}
+                                />
                             ))}
                         </div>
                     ))}
@@ -108,7 +144,17 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
     );
 }
 
-function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: string }) {
+function LogEntryItem({
+    entry,
+    agentName,
+    isOpen,
+    onToggle
+}: {
+    entry: LogEntry;
+    agentName?: string;
+    isOpen: boolean;
+    onToggle: (open: boolean) => void;
+}) {
     const hasDetails = entry.promptSent || entry.rawModelOutput;
 
     return (
@@ -155,7 +201,11 @@ function LogEntryItem({ entry, agentName }: { entry: LogEntry; agentName?: strin
             )}
 
             {hasDetails && (
-                <details className="log-details">
+                <details
+                    className="log-details"
+                    open={isOpen}
+                    onToggle={(e) => onToggle((e.currentTarget as HTMLDetailsElement).open)}
+                >
                     <summary style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
                         View internal reasoning & prompt
                     </summary>

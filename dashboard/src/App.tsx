@@ -197,6 +197,17 @@ export default function App() {
         }
     }, []);
 
+    const fetchLogs = useCallback(async () => {
+        try {
+            const res = await fetch('/api/logs?limit=100');
+            if (!res.ok) throw new Error('Failed to fetch logs');
+            const data: LogsResponse = await res.json();
+            setLogs(data.entries);
+        } catch (err) {
+            console.error('Failed to fetch logs:', err);
+        }
+    }, []);
+
     const fetchSubmolts = useCallback(async () => {
         try {
             const res = await fetch('/api/submolts');
@@ -301,6 +312,7 @@ export default function App() {
     const refresh = useCallback(async () => {
         await Promise.all([
             fetchStatus(),
+            fetchLogs(),
             fetchSubmolts(),
             fetchTopology(),
             fetchEvolution(),
@@ -308,7 +320,7 @@ export default function App() {
             fetchSovereignty()
         ]);
         setLastRefresh(new Date());
-    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
+    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
 
     const refreshPassive = useCallback(async () => {
         await Promise.all([
