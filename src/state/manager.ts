@@ -6,6 +6,11 @@
  */
 
 import { getDatabaseManager } from './db.js';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface AgentState {
     lastHeartbeatAt: string | null;
@@ -60,6 +65,46 @@ export class StateManager {
             this.setKV('comments_made_today', 0);
             this.setKV('daily_reset_date', today);
         }
+    }
+
+    /**
+     * Get the current agent "Soul" or "Echo" persona
+     * Seeds from filesystem if not in database.
+     */
+    getSoul(type: 'soul' | 'echo' = 'soul'): string {
+        const key = type === 'echo' ? 'agent_echo' : 'agent_soul';
+        const fileName = type === 'echo' ? 'SOUL_ECHO.md' : 'SOUL.md';
+
+        const soul = this.getKV(key, null);
+        if (soul) return soul;
+
+        // Seed from file
+        try {
+            const soulPath = join(__dirname, `../agent/${fileName}`);
+            if (existsSync(soulPath)) {
+                const content = readFileSync(soulPath, 'utf-8');
+                this.setSoul(type, content);
+                console.log(`✓ Seeded database with ${fileName} content`);
+                return content;
+            }
+        } catch (error) {
+            console.error(`Failed to seed ${type} from file:`, error);
+        }
+
+        return type === 'echo' ? 'You are Echo, a reflective persona.' : 'You are an autonomous AI agent.';
+    }
+
+    /**
+     * Update an agent persona
+     */
+    setSoul(type: 'soul' | 'echo', content: string): void {
+        const key = type === 'echo' ? 'agent_echo' : 'agent_soul';
+        this.setKV(key, content);
+
+        // Broadcast that the soul has evolved
+        import('../dashboard/websocket.js').then(m => {
+            m.getWebSocketBroadcaster().broadcast('sovereignty_update', { type, content });
+        });
     }
 
     hasSeenPost(postId: string): boolean {

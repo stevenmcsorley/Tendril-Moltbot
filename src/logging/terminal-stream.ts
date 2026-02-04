@@ -1,11 +1,16 @@
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 
+const MAX_BUFFER = 100;
+const logBuffer: any[] = [];
+
 /**
  * Terminal Stream Logger
  * 
  * Intercepts console logs and broadcasts them via WebSocket for dashboard visualization.
  */
 export function initializeTerminalStream(): void {
+    if ((console.log as any).__wrapped) return;
+
     const broadcaster = getWebSocketBroadcaster();
 
     const originalLog = console.log;
@@ -16,6 +21,7 @@ export function initializeTerminalStream(): void {
         originalLog(...args);
         broadcastLog('info', args);
     };
+    (console.log as any).__wrapped = true;
 
     console.warn = (...args: any[]) => {
         originalWarn(...args);
@@ -39,12 +45,27 @@ export function initializeTerminalStream(): void {
             return String(arg);
         }).join(' ');
 
-        broadcaster.broadcast('terminal_log', {
+        const logEntry = {
             level,
             message,
             timestamp: new Date().toISOString()
-        });
+        };
+
+        // Buffer the log
+        logBuffer.push(logEntry);
+        if (logBuffer.length > MAX_BUFFER) {
+            logBuffer.shift();
+        }
+
+        broadcaster.broadcast('terminal_log', logEntry);
     }
 
     console.log('✓ Terminal stream initialized (UI redirection active)');
+}
+
+/**
+ * Get the current log buffer
+ */
+export function getTerminalLogBuffer(): any[] {
+    return [...logBuffer];
 }

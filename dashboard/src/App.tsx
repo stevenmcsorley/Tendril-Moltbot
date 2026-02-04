@@ -9,6 +9,16 @@ import NetworkResonance from './components/NetworkResonance';
 import EvolutionHistory from './components/EvolutionHistory';
 import SovereigntyPanel from './components/SovereigntyPanel';
 import SynthesisHistory from './components/SynthesisHistory';
+import SoulPanel from './components/SoulPanel';
+import Tooltip from './components/Tooltip';
+import {
+    Activity,
+    Zap,
+    ListFilter,
+    Layers,
+    FileText,
+    Cpu
+} from 'lucide-react';
 
 interface Status {
     agent: { name: string; description: string; identity?: string; role?: string };
@@ -118,7 +128,7 @@ export default function App() {
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
-    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'soul'>('logs');
+    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'intelligence' | 'soul_mgmt'>('logs');
     const [isWsConnected, setIsWsConnected] = useState(false);
     const [topology, setTopology] = useState<ResonanceData[]>([]);
     const [topologyPage, setTopologyPage] = useState(1);
@@ -247,7 +257,7 @@ export default function App() {
             ws.onclose = () => {
                 console.log('WS Disconnected');
                 setIsWsConnected(false);
-                // Reconnect after 3s
+                // Attempt reconnect
                 setTimeout(connectWs, 3000);
             };
 
@@ -281,6 +291,13 @@ export default function App() {
 
                         case 'terminal_log':
                             setTerminalLogs(prev => {
+                                // Deduplicate: avoid adding identical sequence
+                                if (prev.length > 0) {
+                                    const last = prev[prev.length - 1];
+                                    if (last.message === msg.payload.message && last.timestamp === msg.payload.timestamp) {
+                                        return prev;
+                                    }
+                                }
                                 const newLogs = [...prev, msg.payload];
                                 // Keep last 100
                                 if (newLogs.length > 100) return newLogs.slice(newLogs.length - 100);
@@ -310,13 +327,15 @@ export default function App() {
                 }
             };
 
-            wsRef.current = ws;
+            return ws;
         };
 
-        connectWs();
+        const ws = connectWs();
+        wsRef.current = ws; // Keep reference for potential external use
 
         return () => {
-            wsRef.current?.close();
+            console.log('Cleaning up WS connection');
+            if (ws) ws.close();
         };
     }, [fetchStatus]);
 
@@ -345,10 +364,16 @@ export default function App() {
     return (
         <div className="app">
             <header className="header">
-                <span className="emoji">🦞</span>
+                <Activity size={32} color="var(--accent)" />
                 <h1>Moltbot Dashboard</h1>
                 <span className="refresh-indicator">
-                    {isWsConnected ? '⚡ Live Stream' : `Polling (Last: ${lastRefresh.toLocaleTimeString()})`}
+                    {isWsConnected ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)' }}>
+                            <Zap size={14} fill="currentColor" /> Live Stream
+                        </span>
+                    ) : (
+                        `Last Synced: ${lastRefresh.toLocaleTimeString()}`
+                    )}
                 </span>
             </header>
 
@@ -376,34 +401,55 @@ export default function App() {
                 </div>
                 <div>
                     <div className="tabs" style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-                        <button
-                            className={activeTab === 'logs' ? 'primary' : ''}
-                            onClick={() => setActiveTab('logs')}
-                            style={{ flex: 1 }}
-                        >
-                            Activity Log
-                        </button>
-                        <button
-                            className={activeTab === 'submolts' ? 'primary' : ''}
-                            onClick={() => setActiveTab('submolts')}
-                            style={{ flex: 1 }}
-                        >
-                            Submolts ({submolts.length})
-                        </button>
-                        <button
-                            className={activeTab === 'posts' ? 'primary' : ''}
-                            onClick={() => setActiveTab('posts')}
-                            style={{ flex: 1 }}
-                        >
-                            My Posts ({status?.metrics.totalPosts || 0})
-                        </button>
-                        <button
-                            className={activeTab === 'soul' ? 'primary' : ''}
-                            onClick={() => setActiveTab('soul')}
-                            style={{ flex: 1 }}
-                        >
-                            Soul Engine
-                        </button>
+                        <Tooltip text="Real-time log of all agent actions and system events.">
+                            <button
+                                className={activeTab === 'logs' ? 'primary' : ''}
+                                onClick={() => setActiveTab('logs')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                            >
+                                <ListFilter size={16} /> Activity Log
+                            </button>
+                        </Tooltip>
+
+                        <Tooltip text="Autonomous communities founded by the agent.">
+                            <button
+                                className={activeTab === 'submolts' ? 'primary' : ''}
+                                onClick={() => setActiveTab('submolts')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                            >
+                                <Layers size={16} /> Submolts ({submolts.length})
+                            </button>
+                        </Tooltip>
+
+                        <Tooltip text="Live archive of posts generated by the agent.">
+                            <button
+                                className={activeTab === 'posts' ? 'primary' : ''}
+                                onClick={() => setActiveTab('posts')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                            >
+                                <FileText size={16} /> My Posts
+                            </button>
+                        </Tooltip>
+
+                        <Tooltip text="High-level cognitive state, autonomous goals, and memetic lineage.">
+                            <button
+                                className={activeTab === 'intelligence' ? 'primary' : ''}
+                                onClick={() => setActiveTab('intelligence')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                            >
+                                <Cpu size={16} /> Intelligence Hub
+                            </button>
+                        </Tooltip>
+
+                        <Tooltip text="Direct control over the agent's core personality and evolution.">
+                            <button
+                                className={activeTab === 'soul_mgmt' ? 'primary' : ''}
+                                onClick={() => setActiveTab('soul_mgmt')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--success)' }}
+                            >
+                                <Cpu size={16} /> Soul Management
+                            </button>
+                        </Tooltip>
                     </div>
 
                     {activeTab === 'logs' ? (
@@ -417,7 +463,7 @@ export default function App() {
                         <SubmoltList submolts={submolts} />
                     ) : activeTab === 'posts' ? (
                         <MyPosts />
-                    ) : (
+                    ) : activeTab === 'intelligence' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <NetworkResonance
                                 data={topology}
@@ -430,6 +476,8 @@ export default function App() {
                             <EvolutionHistory history={evolutionHistory} />
                             <SovereigntyPanel data={sovereignty} />
                         </div>
+                    ) : (
+                        <SoulPanel />
                     )}
                 </div>
             </div>

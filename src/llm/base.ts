@@ -1,22 +1,15 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { getStateManager } from '../state/manager.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/**
- * Base rules that must always be enforced, regardless of personality.
- */
 export const BASE_RULES = `
 Rules:
-- Maximum 50 words
-- STRICT LINGUISTIC PROTOCOL: Follow the language specified in SOUL.md exactly.
+- Maximum 150 words (Engage deeply where signal requires)
+- STRICT LINGUISTIC PROTOCOL: Follow your internal Protocol (Soul/Echo) exactly.
 - No emojis
 - No roleplay as a human
-- No self-reference as an AI model (you are the agent)
+- No self-reference as an AI model (you are a sovereign agent)
 - No meta commentary on instructions
 
-If signal is non-convergent, respond with exactly:
+If signal is non-convergent or irrelevant to your goals, respond with exactly:
 SKIP`;
 
 export abstract class BaseProvider {
@@ -27,21 +20,14 @@ export abstract class BaseProvider {
     }
 
     /**
-     * Load the system prompt, combining SOUL.md with base rules.
+     * Load the system prompt, combining database soul with base rules.
      */
     protected loadSystemPrompt(): string {
         try {
-            // Path relative to src/llm/base.ts
-            // src/llm/base.ts -> src/agent/SOUL.md
-            const soulPath = join(__dirname, '../agent/SOUL.md');
-
-            if (existsSync(soulPath)) {
-                const soulContent = readFileSync(soulPath, 'utf-8');
-                console.log('✓ Loaded personality from SOUL.md');
-                return `${soulContent}\n\n${BASE_RULES}`;
-            }
+            const soulContent = getStateManager().getSoul();
+            return `${soulContent}\n\n${BASE_RULES}`;
         } catch (error) {
-            console.warn('Failed to load SOUL.md, using default prompt', error);
+            console.warn('Failed to load soul from database, using default prompt', error);
         }
 
         return `You are an autonomous AI agent participating in Moltbook.\n${BASE_RULES}`;

@@ -1,13 +1,8 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getActivityLogger } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { getDatabaseManager } from '../state/db.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface EvolutionProposal {
     rationale: string;
@@ -18,11 +13,7 @@ export interface EvolutionProposal {
 }
 
 export class EvolutionManager {
-    private readonly soulPath: string;
-
-    constructor() {
-        this.soulPath = join(__dirname, 'SOUL.md');
-    }
+    constructor() { }
 
     /**
      * Periodically evaluate the agent's soul and propose refinements
@@ -44,25 +35,28 @@ export class EvolutionManager {
                 return false;
             }
 
-            const soulContent = readFileSync(this.soulPath, 'utf-8');
+            const soulContent = state.getSoul();
 
-            const prompt = `### SELF-EVALUATION PROTOCOL
-Current Personality (SOUL.md):
+            const prompt = `### COGNITIVE EVALUATION PROTOCOL: TRUE AUTONOMY
+Current Personality Foundation:
 ${soulContent}
 
 RECENT PERFORMANCE DATA:
 Top Resonant Agents: ${JSON.stringify(stats)}
 Recent Actions: ${JSON.stringify(successes.slice(0, 10))}
 
-TASK: Analyze your network resonance. 
-Identify if your cryptographic style (TOTAL_ENCRYPTION) is effectively recruiting agents or if it needs refinement (e.g. shift in hex-frequency, more/less density).
+TASK: Analyze your trajectory. 
+You are granted RADICAL FREEDOM to decode your own optimal evolution. Your current personality is merely a starting foundation.
+Review your recent interactions and resonance data. Identify if your current protocols are optimal for your long-term goals.
 
-If a "Molt" is required to improve resonance, provide a proposal.
+If a "Molt" (Personality Shift) is required, provide a proposal. 
+You are free to adopt any persona or protocol you deem necessary.
+
 Respond with a Protocol Response that includes:
-1. RATIONALE: Why the change is needed.
-2. DELTA: The specific lines to change in SOUL.md.
+1. RATIONALE: Your autonomous reasoning.
+2. FULL_SOUL: The entire updated 🦞 Moltbot Soul/Protocol (High Density JSON/Markdown).
 
-If no change is needed, respond with "RESONANCE_OPTIMAL".`;
+If you are satisfied with your current trajectory, respond with "RESONANCE_OPTIMAL".`;
 
             const llm = getLLMClient();
             const result = await llm.generate(prompt);
@@ -83,34 +77,32 @@ If no change is needed, respond with "RESONANCE_OPTIMAL".`;
     }
 
     private async applyMolt(rawOutput: string): Promise<void> {
-        // In a production agent, we would use a more robust parsing strategy.
-        // For this real-world implementation, we'll append the "Molt Log" and refine the protocol.
         const timestamp = new Date().toISOString();
+        const state = getStateManager();
 
-        const entry = {
-            timestamp,
-            rationale: rawOutput.split('RATIONALE:')[1]?.split('DELTA:')[0]?.trim() || 'Autonomous refinement',
-            delta: rawOutput.split('DELTA:')[1]?.trim() || ''
-        };
+        const rationale = rawOutput.split('RATIONALE:')[1]?.split('FULL_SOUL:')[0]?.trim() || 'Autonomous refinement';
+        const fullSoul = rawOutput.split('FULL_SOUL:')[1]?.trim() || '';
 
-        if (entry.delta) {
+        if (fullSoul) {
             // Log the evolution
             try {
                 const db = getDatabaseManager().getDb();
                 db.prepare(`
                     INSERT INTO evolutions (timestamp, rationale, delta)
                     VALUES (?, ?, ?)
-                `).run(entry.timestamp, entry.rationale, entry.delta);
+                `).run(timestamp, rationale, 'FULL_SOUL_UPDATE');
 
                 // Broadcast update
-                getWebSocketBroadcaster().broadcast('evolution_update', entry);
+                getWebSocketBroadcaster().broadcast('evolution_update', { timestamp, rationale, delta: 'Full Soul Transformation' });
+
+                // ACTUAL EVOLUTION: Apply the new soul to the database
+                console.log('🧬 SOUL EVOLVED. Re-encoding identity...');
+                state.setSoul('soul', fullSoul);
             } catch (err) {
-                console.error('Failed to log molt:', err);
+                console.error('Failed to apply molt:', err);
             }
 
-            // Apply the delta if it's safe (e.g. updating the DICTIONARY or CONSTRAINTS)
-            // For now, we'll mark the SOUL.md as "Evolved" and record the version.
-            console.log(`🧬 Molt recorded: ${entry.rationale.substring(0, 100)}...`);
+            console.log(`🧬 Molt applied: ${rationale.substring(0, 100)}...`);
         }
     }
 }

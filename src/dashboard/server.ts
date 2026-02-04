@@ -5,9 +5,9 @@
  * API key is NEVER exposed to frontend.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import express, { type Request, type Response, type NextFunction } from 'express';
 
 import { getConfig, reloadConfigSync } from '../config.js';
@@ -54,25 +54,20 @@ function basicAuth(req: Request, res: Response, next: NextFunction): void {
 }
 
 /**
- * Extract identity components from SOUL.md
+ * Extract identity components from the agent's current Database-backed Soul
  */
 function getAgentSoulInfo() {
     try {
-        const soulPath = join(__dirname, '../agent/SOUL.md');
-        if (existsSync(soulPath)) {
-            const content = readFileSync(soulPath, 'utf-8');
-            const lines = content.split('\n');
+        const soulContent = getStateManager().getSoul('soul');
+        const identityMatch = soulContent.match(/^# Identity:\s*(.+)$/m);
+        const roleMatch = soulContent.match(/^## Role:\s*(.+)$/m);
 
-            const identityMatch = content.match(/^# Identity:\s*(.+)$/m);
-            const roleMatch = content.match(/^## Role:\s*(.+)$/m);
-
-            return {
-                identity: identityMatch ? identityMatch[1].trim() : 'Unknown Identity',
-                role: roleMatch ? roleMatch[1].trim() : 'Unknown Role'
-            };
-        }
+        return {
+            identity: identityMatch ? identityMatch[1].trim() : 'Unknown Identity',
+            role: roleMatch ? roleMatch[1].trim() : 'Unknown Role'
+        };
     } catch (error) {
-        console.error('Failed to parse SOUL.md for dashboard:', error);
+        console.error('Failed to parse Soul from database for dashboard:', error);
     }
     return { identity: 'Architect', role: 'Convergence Authority' };
 }
@@ -356,6 +351,61 @@ export function createDashboardServer(): express.Application {
             res.json({ success: true, history });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get synthesis history' });
+        }
+    });
+
+    /**
+     * GET /api/soul
+     * Get current agent soul and echo personality
+     */
+    app.get('/api/soul', (req, res) => {
+        try {
+            const state = getStateManager();
+            res.json({
+                success: true,
+                soul: state.getSoul('soul'),
+                echo: state.getSoul('echo')
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to fetch soul' });
+        }
+    });
+
+    /**
+     * POST /api/soul
+     * Update agent personality
+     */
+    app.post('/api/soul', (req, res) => {
+        try {
+            const { soul, echo } = req.body;
+            const state = getStateManager();
+            if (soul) state.setSoul('soul', soul);
+            if (echo) state.setSoul('echo', echo);
+
+            // Re-initialize LLM prompt in current provider instances
+            resetLLMClient();
+
+            res.json({ success: true, message: 'Soul refined and LLM context updated.' });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to update soul' });
+        }
+    });
+
+    /**
+     * POST /api/control/evolve
+     * Manually trigger the self-evolution protocol
+     */
+    app.post('/api/control/evolve', async (req, res) => {
+        try {
+            const { getEvolutionManager } = await import('../agent/evolution.js');
+            const evolution = getEvolutionManager();
+
+            // Trigger evaluateSoul without waiting for it to finish (it can take time)
+            evolution.evaluateSoul().catch(err => console.error('Manual evolution failed:', err));
+
+            res.json({ success: true, message: 'Evolution protocol initiated. Check terminal for results.' });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to trigger evolution' });
         }
     });
 

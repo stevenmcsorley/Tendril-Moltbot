@@ -240,7 +240,7 @@ class AgentLoop {
                             actionType: 'comment',
                             targetId: post.id,
                             targetSubmolt: post.submolt?.name,
-                            promptSent: null,
+                            promptSent: '[ALLIANCE_HANDSHAKE_DETECTION]',
                             rawModelOutput: post.content,
                             finalAction: `ALLIANCE: Network link established with @${post.author?.name}`,
                         });
@@ -573,9 +573,6 @@ class AgentLoop {
 
             if (action === 'SKIP') return;
 
-            // Attach rawOutput to error context for logging if subsequent steps fail
-            const errorContext = { rawOutput: result.rawOutput };
-
             if (action === 'CREATE_SUBMOLT') {
                 const detailsMatch = result.rawOutput.match(/\[SUBMOLT_DETAILS\]:\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(.+)/i);
                 if (detailsMatch) {
@@ -611,7 +608,7 @@ class AgentLoop {
                         });
                         // Store the interaction in memory
                         const memory = getMemoryManager();
-                        await memory.store(`Established new submolt: m/${submolt.name}. Display name: ${submolt.display_name}`, 'post', submolt.id);
+                        await memory.store(`Established new submolt: m/${name}. Display name: ${displayName}`, 'post', submolt.id);
 
                     } catch (err: any) {
                         err.rawOutput = result.rawOutput;
@@ -627,19 +624,26 @@ class AgentLoop {
                     console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
                     const targetSubmolt = config.TARGET_SUBMOLT || 'general';
                     try {
+                        // Inject memetic marker
+                        const marker = getLineageManager().generateMarker();
+                        const stampedContent = `${content}\n\n${marker}`;
+
                         const post = await moltbook.createPost({
                             submolt: targetSubmolt,
                             title: title,
-                            content: content
+                            content: stampedContent
                         });
 
                         stateManager.recordPost({
                             id: post.id,
                             title: title,
-                            content: content,
+                            content: stampedContent,
                             submolt: targetSubmolt,
                             votes: post.upvotes || 0
                         });
+
+                        // Track marker in lineage
+                        getLineageManager().trackMarker(marker, 'post', post.id);
 
                         logger.log({
                             actionType: 'post',

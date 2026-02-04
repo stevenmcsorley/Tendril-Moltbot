@@ -34,6 +34,18 @@ export class WebSocketBroadcaster {
                 timestamp: new Date().toISOString(),
                 payload: { message: 'Connected to Moltbot Stream' }
             }));
+
+            // Send buffered terminal logs
+            import('../logging/terminal-stream.js').then(m => {
+                const logs = m.getTerminalLogBuffer();
+                logs.forEach(log => {
+                    ws.send(JSON.stringify({
+                        type: 'terminal_log',
+                        timestamp: log.timestamp,
+                        payload: log
+                    }));
+                });
+            });
         });
     }
 

@@ -67,11 +67,12 @@ async function main(): Promise<void> {
         }
     }
 
+    // Start terminal log stream (Capture all startup logs)
+    const { initializeTerminalStream } = await import('./logging/terminal-stream.js');
+    initializeTerminalStream();
+
     // Start dashboard server
     startDashboardServer();
-
-    // Start terminal log stream
-    import('./logging/terminal-stream.js').then(m => m.initializeTerminalStream());
 
     // Start agent loop
     const loop = getAgentLoop();

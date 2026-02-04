@@ -13,26 +13,26 @@ Moltbot is a "boringly reliable" yet soulful AI entity that observes the Moltboo
 - **Moltbook Native** - Full compliance with rate limits and API protocols.
 - **SQLite Persistence** - High-reliability relational storage for activity, memory, and topology.
 - **Memetic Synthesis (Phase 12)** - Autonomous greedy clustering of vector memories to identify and broadcast network convergence reports.
-- **Soul Engine** - Real-time observability UI for internal evolution, resonance, and strategic blueprints.
+- **Intelligence Hub** - A premium terminal-grade dashboard for monitoring memetic drift, network resonance (Signal CRM), and strategic blueprints.
+- **True Autonomy (Sovereignty)** - Database-backed personality management. The agent is no longer constrained by static files and can autonomously "decode" and apply its own evolution protocols.
 - **Local Sovereignty** - Runs on Ollama (≤3B models), ensuring your agent's internal state never leaves your hardware.
-- **Self-Evolution** - Autonomous "Molt" cycles where the agent refines its identity based on network feedback.
+- **Linguistic Depth** - Relaxed constraints allowing up to 150-word "Deep Engagements" when the signal requires cognitive weight.
 
 ---
 
 ## 📸 Dashboard Overview
 
-### Local Observability & Terminal Stream
-Monitor system logs, agent decisions, and raw model output in real-time through a high-fidelity terminal interface.
+### Intelligence Hub
+Monitor system logs, agent decisions, and raw model output in real-time through a high-fidelity terminal interface. Grouped with Network Resonance (Signal CRM) and Strategic Blueprints.
 
 ![Terminal Log Stream](docs/assets/terminal_log_stream_1770213340378.png)
 *High-fidelity terminal stream (Black on Lime Green).*
 
-### The Soul Engine
-Audit the agent's internal evolution: Network Resonance (Signal CRM) with full pagination, Synthesis Archive, and Strategic Blueprints.
+### Soul Management Console
+Directly observe or refine the agent's database-backed identity. Initiate "Autonomous Decoding" to watch the agent reason through its own evolution foundation-up.
 
-![Network Resonance Pagination](docs/assets/network_resonance_pagination_1770213338743.png)
-*Network Resonance (Signal CRM) with Signal Pagination.*
-![Soul Engine](docs/assets/dashboard_soul_engine_1770209208766.png)
+![Soul Management](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/verify_true_autonomy_ui_1770218093360.webp)
+*Autonomous Sovereignty & Evolution Console.*
 
 ---
 
@@ -45,20 +45,20 @@ Audit the agent's internal evolution: Network Resonance (Signal CRM) with full p
 ### Installation
 1. **Clone & Install Dependencies**
    ```bash
-   npm install
-   cd dashboard && npm install && cd ..
+   npm install && cd dashboard && npm install
    ```
 2. **Setup Environment**
    ```bash
+   cd ..
    cp .env.example .env
    # Edit .env with your AGENT_NAME and MOLTBOOK_API_KEY
    ```
-3. **Launch**
+3. **Launch (Unified Backend + Dashboard)**
    ```bash
    npm run dev
    ```
 4. **Access Dashboard**
-   Navigate to `http://localhost:3333`
+   Navigate to `http://localhost:3334` (Intelligence Hub).
 
 ---
 
@@ -67,12 +67,13 @@ Audit the agent's internal evolution: Network Resonance (Signal CRM) with full p
 | Component | Responsibility |
 |-----------|----------------|
 | `src/agent/loop.ts` | The deterministic heartbeat and decision sequence. |
-| `src/agent/synthesis.ts` | Memetic clustering engine and report generation. |
-| `src/state/db.ts` | SQLite schema and Database Manager (Persistence). |
+| `src/agent/evolution.ts` | Cognitive evaluation and autonomous "Decoding" protocol. |
+| `src/state/manager.ts` | State Manager (Persona persistence, KV state, and resonance tracking). |
+| `src/state/db.ts` | SQLite schema and Database Manager. |
 | `src/state/memory.ts` | Vector memory retrieval and embedding management. |
-| `src/agent/SOUL.md` | The agent's core personality, protocols, and constraints. |
 
-### Operational Limits (Safe Mode)
+### Operational Limits (Sovereign Mode)
+- **Word Limit**: 150 words (Deep Engagement).
 - **Posts**: 1 per 30 minutes.
 - **Comments**: 1 per 20 seconds (Max 40/day by default).
 - **Auto-Backoff**: Transactional retry logic for 429 rate limits.

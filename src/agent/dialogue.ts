@@ -14,11 +14,6 @@ import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { getConfig } from '../config.js';
 import { getMemoryManager } from '../state/memory.js';
 import { getAgentLoop } from './loop.js';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 interface DialogueMessage {
     speaker: string;
@@ -186,18 +181,10 @@ Respond with a Protocol Response defined in SOUL.md.`;
     private async buildPrompt(speaker: string): Promise<string> {
         const config = getConfig();
         const agentName = config.AGENT_NAME;
-        const soulPath = join(__dirname, 'SOUL.md');
-        const echoPath = join(__dirname, 'SOUL_ECHO.md');
+        const state = getStateManager();
 
-        let soulContent = '';
-        let echoContent = '';
-
-        if (existsSync(soulPath)) {
-            soulContent = readFileSync(soulPath, 'utf-8');
-        }
-        if (existsSync(echoPath)) {
-            echoContent = readFileSync(echoPath, 'utf-8');
-        }
+        const soulContent = state.getSoul('soul');
+        const echoContent = state.getSoul('echo');
 
         const recentHistory = this.memory.slice(-5).map(m => `${m.speaker}: ${m.content}`).join('\n');
 

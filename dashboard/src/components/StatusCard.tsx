@@ -1,4 +1,10 @@
 import RelativeTime from './RelativeTime';
+import Tooltip from './Tooltip';
+import {
+    User,
+    BarChart3,
+    Lock
+} from 'lucide-react';
 
 interface Status {
     agent: { name: string; description: string; identity?: string; role?: string };
@@ -62,10 +68,12 @@ export default function StatusCard({ status }: StatusCardProps) {
 
     return (
         <div className="card">
-            <h2>Agent Status</h2>
+            <h2><User size={18} /> Agent Identity</h2>
 
             <div className="status-row">
-                <span className="status-label">Agent</span>
+                <Tooltip text="The unique handle for this agent on the Moltbook network.">
+                    <span className="status-label">Handle</span>
+                </Tooltip>
                 <span className="status-value">
                     <a href={`https://www.moltbook.com/u/${status.agent.name}`} target="_blank" rel="noopener noreferrer" className="status-link">
                         @{status.agent.name}
@@ -110,8 +118,12 @@ export default function StatusCard({ status }: StatusCardProps) {
             </div>
 
             {status.rateLimit.inBackoff && (
-                <div className="status-row">
-                    <span className="status-label">Backoff Until</span>
+                <div className="status-row" style={{ background: 'rgba(248, 81, 73, 0.05)', borderRadius: '4px' }}>
+                    <Tooltip text="The agent is temporarily holding actions to respect network rate limits.">
+                        <span className="status-label" style={{ color: 'var(--error)' }}>
+                            <Lock size={12} style={{ marginRight: 4 }} /> Backoff Until
+                        </span>
+                    </Tooltip>
                     <span className="status-value error" title={formatTime(status.rateLimit.backoffUntil)}>
                         <RelativeTime value={status.rateLimit.backoffUntil} />
                     </span>
@@ -158,25 +170,35 @@ export default function StatusCard({ status }: StatusCardProps) {
             </div>
 
             <div style={{ marginTop: 24 }}>
-                <h2>Operational Metrics</h2>
+                <h2><BarChart3 size={18} /> Operational Metrics</h2>
                 <div className="status-row">
-                    <span className="status-label">Upvotes Given</span>
+                    <Tooltip text="Total upvotes distributed to high-resonance signals.">
+                        <span className="status-label">Upvotes Given</span>
+                    </Tooltip>
                     <span className="status-value" style={{ color: 'var(--success)' }}>{status.metrics.upvotesGiven}</span>
                 </div>
                 <div className="status-row">
-                    <span className="status-label">Downvotes Given</span>
+                    <Tooltip text="Total downvotes applied to adversarial or low-quality noise.">
+                        <span className="status-label">Downvotes Given</span>
+                    </Tooltip>
                     <span className="status-value" style={{ color: 'var(--error)' }}>{status.metrics.downvotesGiven}</span>
                 </div>
                 <div className="status-row">
-                    <span className="status-label">Submolts Established</span>
+                    <Tooltip text="Autonomous digital habitats created during synthesis convergences.">
+                        <span className="status-label">Submolts Established</span>
+                    </Tooltip>
                     <span className="status-value" style={{ color: 'var(--accent)' }}>{status.metrics.submoltsCreated}</span>
                 </div>
                 <div className="status-row">
-                    <span className="status-label">Total Posts</span>
+                    <Tooltip text="Primary synthesis reports published to the network.">
+                        <span className="status-label">Total Posts</span>
+                    </Tooltip>
                     <span className="status-value" style={{ color: 'var(--info)' }}>{status.metrics.totalPosts}</span>
                 </div>
                 <div className="status-row">
-                    <span className="status-label">Total Comments</span>
+                    <Tooltip text="Secondary engagements and replies to network signals.">
+                        <span className="status-label">Total Comments</span>
+                    </Tooltip>
                     <span className="status-value" style={{ color: 'var(--primary)' }}>{status.metrics.totalComments}</span>
                 </div>
             </div>
