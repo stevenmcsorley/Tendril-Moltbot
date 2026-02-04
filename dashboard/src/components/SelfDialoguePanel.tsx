@@ -1,24 +1,24 @@
 import { useEffect, useRef } from 'react';
 
-export interface DialogueMessage {
-    speaker: string;
-    content: string;
+export interface TerminalLog {
+    level: string;
+    message: string;
     timestamp: string;
 }
 
-interface SelfDialoguePanelProps {
-    messages: DialogueMessage[];
+interface TerminalStreamProps {
+    logs: TerminalLog[];
     isConnected: boolean;
 }
 
-export default function SelfDialoguePanel({ messages, isConnected }: SelfDialoguePanelProps) {
+export default function TerminalStream({ logs, isConnected }: TerminalStreamProps) {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (containerRef.current) {
             containerRef.current.scrollTop = containerRef.current.scrollHeight;
         }
-    }, [messages]);
+    }, [logs]);
 
     return (
         <div className="card" style={{ marginBottom: 24, padding: 16 }}>
@@ -26,7 +26,7 @@ export default function SelfDialoguePanel({ messages, isConnected }: SelfDialogu
                 <div>
                     <h3 style={{ margin: 0 }}>Local Observability</h3>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        Live Self-Dialogue (Auditing Tone & Logic)
+                        Terminal Log Stream (High Fidelity)
                     </span>
                 </div>
                 <div style={{
@@ -50,58 +50,35 @@ export default function SelfDialoguePanel({ messages, isConnected }: SelfDialogu
                 ref={containerRef}
                 className="custom-scroll"
                 style={{
-                    height: 200,
+                    height: 250,
                     overflowY: 'auto',
-                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    backgroundColor: '#000000',
                     borderRadius: 4,
-                    padding: 12,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 12
+                    padding: '8px 12px',
+                    fontFamily: '"Courier New", Courier, monospace',
+                    fontSize: '0.85rem',
+                    lineHeight: 1.2
                 }}
             >
-                {messages.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 80, fontStyle: 'italic' }}>
-                        Waiting for dialogue loop...
+                {logs.length === 0 ? (
+                    <div style={{ color: '#32CD32', opacity: 0.5 }}>
+                        [SYSTEM]: Waiting for terminal logs...
                     </div>
                 ) : (
-                    messages.map((msg, i) => {
-                        const isMainAgent = msg.speaker !== 'Echo';
-                        return (
-                            <div key={i} style={{
-                                alignSelf: isMainAgent ? 'flex-end' : 'flex-start',
-                                maxWidth: '85%',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: isMainAgent ? 'flex-end' : 'flex-start'
-                            }}>
-                                <span style={{
-                                    fontSize: '0.7rem',
-                                    color: isMainAgent ? 'var(--accent)' : 'var(--text-secondary)',
-                                    marginBottom: 2,
-                                    fontWeight: 'bold',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: 1
-                                }}>
-                                    {msg.speaker}
-                                </span>
-                                <div style={{
-                                    backgroundColor: isMainAgent ? 'rgba(255, 107, 107, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                                    border: `1px solid ${isMainAgent ? 'rgba(255, 107, 107, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                    borderRadius: 8,
-                                    padding: '8px 12px',
-                                    fontSize: '0.9rem',
-                                    lineHeight: 1.4,
-                                    borderTopRightRadius: isMainAgent ? 0 : 8,
-                                    borderTopLeftRadius: !isMainAgent ? 0 : 8
-                                }}>
-                                    {msg.content}
-                                </div>
-                            </div>
-                        );
-                    })
+                    logs.map((log, i) => (
+                        <div key={i} style={{
+                            color: log.level === 'error' ? '#FF4500' : (log.level === 'warn' ? '#FFD700' : '#32CD32'),
+                            marginBottom: 2,
+                            wordBreak: 'break-all',
+                            whiteSpace: 'pre-wrap'
+                        }}>
+                            <span style={{ opacity: 0.7, marginRight: 8 }}>
+                                [{new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}]
+                            </span>
+                            {log.message}
+                        </div>
+                    ))
                 )}
-
             </div>
         </div>
     );

@@ -13,6 +13,7 @@ import { getStateManager } from '../state/manager.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { getConfig } from '../config.js';
 import { getMemoryManager } from '../state/memory.js';
+import { getAgentLoop } from './loop.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,6 +62,14 @@ export class DialogueLoop {
         // If paused, wait and check again
         if (this.isPaused) {
             this.timeoutId = setTimeout(() => this.runLoop(), 1000);
+            return;
+        }
+
+        // Only run if the agent is idle
+        const agentLoop = getAgentLoop();
+        if (agentLoop.isBusy()) {
+            // Wait 2 seconds and check again
+            this.timeoutId = setTimeout(() => this.runLoop(), 2000);
             return;
         }
 

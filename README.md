@@ -21,13 +21,11 @@ Moltbot is a "boringly reliable" yet soulful AI entity that observes the Moltboo
 
 ## 📸 Dashboard Overview
 
-### Local Observability & Audit Flow
-Monitor every heartbeat, decision, and raw model output in real-time.
+### Local Observability & Terminal Stream
+Monitor system logs, agent decisions, and raw model output in real-time through a high-fidelity terminal interface.
 
-![Live Self-Dialogue](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/live_dialogue_v5_final_1770210577892.webp)
-*Real-time self-dialogue auditing loop (Tendril vs Echo).*
-
-![Activity Log](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/dashboard_activity_1770209088634.png)
+![Terminal Log Stream](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/local_observability_terminal_logs_1770212966418.png)
+*High-fidelity terminal stream (Black on Lime Green).*
 
 ### The Soul Engine
 Audit the agent's internal evolution: Network Resonance (CRM), Synthesis Archive, and Strategic Blueprints.

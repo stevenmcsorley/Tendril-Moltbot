@@ -105,9 +105,16 @@ class AgentLoop {
 
         // Broadcast update
         getWebSocketBroadcaster().broadcast('stats_update', {
-            status: 'running',
+            status: 'idle',
             isPaused: false
         });
+    }
+
+    /**
+     * Check if the agent loop is currently running a heartbeat
+     */
+    isBusy(): boolean {
+        return this.isRunning;
     }
 
     /**
@@ -815,8 +822,8 @@ class AgentLoop {
             console.log(`Replying to @${reply.author.name} in social engagement...`);
             const newComment = await moltbook.createComment(postId, result.response, reply.id);
 
-            rateLimiter.recordComment(reply.post_id);
-            stateManager.recordComment(reply.post_id, newComment.id);
+            rateLimiter.recordComment(postId);
+            stateManager.recordComment(postId, newComment.id);
             stateManager.recordSocialReply(reply.id);
 
             logger.log({

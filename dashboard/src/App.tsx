@@ -3,7 +3,7 @@ import StatusCard from './components/StatusCard';
 import ActivityLog from './components/ActivityLog';
 import Controls from './components/Controls';
 import SubmoltList from './components/SubmoltList';
-import SelfDialoguePanel, { DialogueMessage } from './components/SelfDialoguePanel';
+import SelfDialoguePanel, { TerminalLog } from './components/SelfDialoguePanel';
 import MyPosts from './components/MyPosts';
 import NetworkResonance from './components/NetworkResonance';
 import EvolutionHistory from './components/EvolutionHistory';
@@ -114,7 +114,7 @@ export default function App() {
     const [status, setStatus] = useState<Status | null>(null);
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [submolts, setSubmolts] = useState<Submolt[]>([]);
-    const [dialogueMessages, setDialogueMessages] = useState<DialogueMessage[]>([]);
+    const [terminalLogs, setTerminalLogs] = useState<TerminalLog[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
@@ -273,12 +273,12 @@ export default function App() {
                             } : null);
                             break;
 
-                        case 'dialogue_message':
-                            setDialogueMessages(prev => {
-                                const newHistory = [...prev, msg.payload];
-                                // Keep last 20
-                                if (newHistory.length > 20) return newHistory.slice(newHistory.length - 20);
-                                return newHistory;
+                        case 'terminal_log':
+                            setTerminalLogs(prev => {
+                                const newLogs = [...prev, msg.payload];
+                                // Keep last 100
+                                if (newLogs.length > 100) return newLogs.slice(newLogs.length - 100);
+                                return newLogs;
                             });
                             break;
 
@@ -354,7 +354,7 @@ export default function App() {
             <div className="grid">
                 <div>
                     <SelfDialoguePanel
-                        messages={dialogueMessages}
+                        logs={terminalLogs}
                         isConnected={isWsConnected}
                     />
                     <StatusCard status={status} />

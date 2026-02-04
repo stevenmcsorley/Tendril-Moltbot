@@ -70,14 +70,17 @@ async function main(): Promise<void> {
     // Start dashboard server
     startDashboardServer();
 
+    // Start terminal log stream
+    import('./logging/terminal-stream.js').then(m => m.initializeTerminalStream());
+
     // Start agent loop
     const loop = getAgentLoop();
     loop.start();
     console.log('✓ Agent loop started');
 
-    // Start dialogue loop
-    const dialogue = getDialogueLoop();
-    dialogue.start();
+    // Dialogue loop disabled (too heavy for local dev)
+    // const dialogue = getDialogueLoop();
+    // dialogue.start();
 
     // Log startup
     const logger = getActivityLogger();
