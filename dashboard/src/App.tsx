@@ -137,6 +137,8 @@ export default function App() {
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
     const [synthesisHistory, setSynthesisHistory] = useState<any[]>([]);
     const [sovereignty, setSovereignty] = useState<{ blueprint: StrategicObjective | null; lineage: MemeticMarker[] }>({ blueprint: null, lineage: [] });
+    const [soulRefreshToken, setSoulRefreshToken] = useState(0);
+    const [hubMessage, setHubMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
     // WebSocket reference
     const wsRef = useRef<WebSocket | null>(null);
@@ -227,6 +229,45 @@ export default function App() {
         }
     }, []);
 
+    const handleForceBlueprint = async () => {
+        setHubMessage(null);
+        try {
+            const res = await fetch('/api/control/blueprint', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                setHubMessage({
+                    type: 'success',
+                    text: `Blueprint generated: ${data.blueprint?.id || 'OK'}`
+                });
+                fetchSovereignty();
+            } else {
+                setHubMessage({ type: 'error', text: data.error || 'Failed to generate blueprint.' });
+            }
+        } catch (err) {
+            setHubMessage({ type: 'error', text: 'Blueprint trigger failed.' });
+        }
+    };
+
+    const handleForceSynthesis = async () => {
+        setHubMessage(null);
+        try {
+            const res = await fetch('/api/control/synthesis', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                if (!data.generated) {
+                    setHubMessage({ type: 'info', text: data.message || 'Insufficient memetic density.' });
+                } else {
+                    setHubMessage({ type: 'success', text: 'Synthesis report generated.' });
+                }
+                fetchSynthesis();
+            } else {
+                setHubMessage({ type: 'error', text: data.error || 'Failed to run synthesis.' });
+            }
+        } catch (err) {
+            setHubMessage({ type: 'error', text: 'Synthesis trigger failed.' });
+        }
+    };
+
     const refresh = useCallback(async () => {
         await Promise.all([
             fetchStatus(),
@@ -238,7 +279,7 @@ export default function App() {
             fetchSovereignty()
         ]);
         setLastRefresh(new Date());
-    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSovereignty]);
+    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
 
     // WebSocket Connection
     useEffect(() => {
@@ -321,6 +362,10 @@ export default function App() {
                         case 'sovereignty_update':
                             setSovereignty(msg.payload);
                             break;
+
+                        case 'soul_update':
+                            setSoulRefreshToken(prev => prev + 1);
+                            break;
                     }
                 } catch (e) {
                     console.error('WS Error:', e);
@@ -384,7 +429,7 @@ export default function App() {
             )}
 
             <div className="grid">
-                <div>
+                <div className="sidebar-stack">
                     <SelfDialoguePanel
                         logs={terminalLogs}
                         isConnected={isWsConnected}
@@ -400,7 +445,7 @@ export default function App() {
                     />
                 </div>
                 <div>
-                    <div className="tabs" style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                    <div className="tabs dashboard-tabs">
                         <Tooltip text="Real-time log of all agent actions and system events.">
                             <button
                                 className={activeTab === 'logs' ? 'primary' : ''}
@@ -465,6 +510,27 @@ export default function App() {
                         <MyPosts />
                     ) : activeTab === 'intelligence' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div style={{ fontWeight: 600 }}>Intelligence Hub Controls</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                        Manual triggers for blueprint generation and memetic synthesis.
+                                    </div>
+                                    {hubMessage && (
+                                        <div style={{
+                                            marginTop: 6,
+                                            fontSize: 12,
+                                            color: hubMessage.type === 'success' ? 'var(--success)' : hubMessage.type === 'error' ? 'var(--error)' : 'var(--info)'
+                                        }}>
+                                            {hubMessage.text}
+                                        </div>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={handleForceBlueprint} className="btn-secondary">Force Blueprint</button>
+                                    <button onClick={handleForceSynthesis} className="btn-secondary">Force Synthesis</button>
+                                </div>
+                            </div>
                             <NetworkResonance
                                 data={topology}
                                 total={topologyTotal}
@@ -477,7 +543,7 @@ export default function App() {
                             <SovereigntyPanel data={sovereignty} />
                         </div>
                     ) : (
-                        <SoulPanel />
+                        <SoulPanel refreshToken={soulRefreshToken} />
                     )}
                 </div>
             </div>

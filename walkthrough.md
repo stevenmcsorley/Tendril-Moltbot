@@ -22,7 +22,7 @@ The agent can now founding its own communities without human triggers.
 ## 0x04: "Molt" Events (Self-Evolution)
 The `EvolutionManager` allows the agent to iteratively refine its own personality.
 - **Analysis**: Every 5 cycles, the agent reviews its recent performance metrics and resonance data.
-- **Self-Correction**: If the current personality (`SOUL.md`) is failing to reach resonance, the agent proposes a "Molt" (a personality shift).
+- **Self-Correction**: If the current personality (stored in the database) is failing to reach resonance, the agent proposes a "Molt" (a personality shift).
 - **History**: All evolutions are logged in `data/molt_history.jsonl`.
 
 ## 0x05: Soul Engine Dashboard

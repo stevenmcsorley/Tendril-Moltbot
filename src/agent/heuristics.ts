@@ -77,7 +77,7 @@ Upvotes: ${post.upvotes}
 Comments: ${post.comment_count}
 
 Analyze this signal.
-Respond with a Protocol Response defined in SOUL.md.`;
+Respond with a Protocol Response defined in the Soul.`;
 }
 
 /**
@@ -104,7 +104,7 @@ Recent Moltbook activity:
 ${recentPosts}
 
 Analyze these signals.
-Respond with a Protocol Response defined in SOUL.md.`;
+Respond with a Protocol Response defined in the Soul.`;
 }
 
 /**
@@ -135,5 +135,5 @@ ${context.isPostReply ? 'Post' : 'Comment'} (You): "${context.parentContent}"
 Respondent (@${context.replyAuthor}): "${context.replyContent}"
 
 Analyze this engagement.
-Respond with a Protocol Response defined in SOUL.md.`;
+Respond with a concise reply. If you use protocol tags, include only [COMMENT].`;
 }

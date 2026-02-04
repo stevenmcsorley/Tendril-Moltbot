@@ -22,6 +22,7 @@ import { getLineageManager } from '../agent/lineage.js';
 import { getBlueprintManager } from '../agent/blueprints.js';
 import { getDatabaseManager } from '../state/db.js';
 import { getSynthesisManager } from '../agent/synthesis.js';
+import { getWebSocketBroadcaster } from './websocket.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -58,7 +59,7 @@ function basicAuth(req: Request, res: Response, next: NextFunction): void {
  */
 function getAgentSoulInfo() {
     try {
-        const soulContent = getStateManager().getSoul('soul');
+        const soulContent = getStateManager().getSoul();
         const identityMatch = soulContent.match(/^# Identity:\s*(.+)$/m);
         const roleMatch = soulContent.match(/^## Role:\s*(.+)$/m);
 
@@ -363,8 +364,7 @@ export function createDashboardServer(): express.Application {
             const state = getStateManager();
             res.json({
                 success: true,
-                soul: state.getSoul('soul'),
-                echo: state.getSoul('echo')
+                soul: state.getSoul()
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to fetch soul' });
@@ -377,10 +377,9 @@ export function createDashboardServer(): express.Application {
      */
     app.post('/api/soul', (req, res) => {
         try {
-            const { soul, echo } = req.body;
+            const { soul } = req.body;
             const state = getStateManager();
-            if (soul) state.setSoul('soul', soul);
-            if (echo) state.setSoul('echo', echo);
+            if (soul) state.setSoul(soul);
 
             // Re-initialize LLM prompt in current provider instances
             resetLLMClient();
@@ -401,11 +400,45 @@ export function createDashboardServer(): express.Application {
             const evolution = getEvolutionManager();
 
             // Trigger evaluateSoul without waiting for it to finish (it can take time)
-            evolution.evaluateSoul().catch(err => console.error('Manual evolution failed:', err));
+            evolution.evaluateSoul({ force: true, reason: 'manual' }).catch(err => console.error('Manual evolution failed:', err));
 
             res.json({ success: true, message: 'Evolution protocol initiated. Check terminal for results.' });
         } catch (error) {
             res.status(500).json({ error: 'Failed to trigger evolution' });
+        }
+    });
+
+    /**
+     * POST /api/control/blueprint
+     * Manually trigger blueprint generation
+     */
+    app.post('/api/control/blueprint', async (req, res) => {
+        try {
+            const blueprint = await getBlueprintManager().generateBlueprint();
+            getWebSocketBroadcaster().broadcast('sovereignty_update', {
+                blueprint,
+                lineage: getLineageManager().getMarkers()
+            });
+            res.json({ success: true, blueprint });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to trigger blueprint generation' });
+        }
+    });
+
+    /**
+     * POST /api/control/synthesis
+     * Manually trigger memetic synthesis
+     */
+    app.post('/api/control/synthesis', async (req, res) => {
+        try {
+            const report = await getSynthesisManager().performSynthesis();
+            if (!report) {
+                res.json({ success: true, generated: false, message: 'Insufficient memetic density for synthesis.' });
+                return;
+            }
+            res.json({ success: true, generated: true, report });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to trigger synthesis' });
         }
     });
 

@@ -1,6 +1,6 @@
 import { getConfig } from '../../config.js';
 import { BaseProvider } from '../base.js';
-import { LLMClient, LLMResponse } from '../types.js';
+import { LLMClient, LLMResponse, GenerateOptions } from '../types.js';
 
 export class DeepSeekProvider extends BaseProvider implements LLMClient {
     private apiKey: string;
@@ -15,7 +15,7 @@ export class DeepSeekProvider extends BaseProvider implements LLMClient {
         this.model = config.DEEPSEEK_MODEL;
     }
 
-    async generate(prompt: string): Promise<LLMResponse> {
+    async generate(prompt: string, options: GenerateOptions = {}): Promise<LLMResponse> {
         if (!this.apiKey) {
             throw new Error('DeepSeek API key is missing');
         }
@@ -29,12 +29,12 @@ export class DeepSeekProvider extends BaseProvider implements LLMClient {
             body: JSON.stringify({
                 model: this.model,
                 messages: [
-                    { role: 'system', content: this.systemPrompt },
+                    { role: 'system', content: options.systemOverride ?? this.systemPrompt },
                     { role: 'user', content: prompt },
                 ],
                 stream: false,
-                temperature: 0.2,
-                max_tokens: 120,
+                temperature: options.temperature ?? 0.2,
+                max_tokens: options.maxTokens ?? 120,
             }),
         });
 
@@ -59,7 +59,7 @@ export class DeepSeekProvider extends BaseProvider implements LLMClient {
             return { response: null, rawOutput, isSkip: true };
         }
 
-        const processed = this.applyPostProcessing(rawOutput);
+        const processed = options.skipPostProcessing ? rawOutput : this.applyPostProcessing(rawOutput);
         return { response: processed, rawOutput, isSkip: false };
     }
 

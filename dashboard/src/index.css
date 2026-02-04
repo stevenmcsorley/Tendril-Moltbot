@@ -8,6 +8,7 @@
   --text-muted: #6e7681;
   --accent: #f97316;
   --accent-rgb: 249, 115, 22;
+  --primary: #f97316;
   --success: #3fb950;
   --success-rgb: 63, 185, 80;
   --warning: #d29922;
@@ -39,9 +40,9 @@ body {
 }
 
 .app {
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 24px;
+  padding: 24px clamp(16px, 3vw, 40px);
 }
 
 .header {
@@ -51,6 +52,15 @@ body {
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.dashboard-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 12px 0;
+  background: linear-gradient(180deg, rgba(13, 17, 23, 0.98) 0%, rgba(13, 17, 23, 0.9) 60%, rgba(13, 17, 23, 0) 100%);
+  backdrop-filter: blur(6px);
 }
 
 .header h1 {
@@ -64,14 +74,49 @@ body {
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
   gap: 24px;
+  align-items: start;
 }
 
-@media (max-width: 900px) {
+.sidebar-stack {
+  position: sticky;
+  top: 72px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 1600px) {
+  .grid {
+    grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1100px) {
   .grid {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 1100px) {
+  .sidebar-stack {
+    position: static;
+  }
+}
+
+@media (max-width: 1100px) {
+  .dashboard-tabs {
+    top: 0;
+  }
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .card {
@@ -91,6 +136,13 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.panel-subtitle {
+  margin-top: -8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* Tooltip Styles */
@@ -223,6 +275,18 @@ button.primary {
 
 button.primary:hover {
   background: #ea580c;
+}
+
+button.secondary,
+button.btn-secondary {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+button.secondary:hover,
+button.btn-secondary:hover {
+  background: #2b313a;
 }
 
 .activity-log {
@@ -412,4 +476,17 @@ button.primary:hover {
 .custom-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--border) var(--bg-secondary);
+}
+
+.synthesis-report {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.synthesis-summary {
+  color: var(--success);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }

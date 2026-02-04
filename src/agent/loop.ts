@@ -156,7 +156,15 @@ class AgentLoop {
 
         // Regenerate blueprint every 10 cycles if none active
         if (this.runCount % 10 === 0) {
-            getBlueprintManager().generateBlueprint().catch(err => console.error('Blueprint generation failed:', err));
+            getBlueprintManager()
+                .generateBlueprint()
+                .then((blueprint) => {
+                    getWebSocketBroadcaster().broadcast('sovereignty_update', {
+                        blueprint,
+                        lineage: getLineageManager().getMarkers()
+                    });
+                })
+                .catch(err => console.error('Blueprint generation failed:', err));
         }
 
         logger.log({
@@ -821,10 +829,18 @@ class AgentLoop {
 
         try {
             const result = await llm.generate(prompt);
-            if (result.isSkip || !result.response) return false;
+            const commentMatch = result.rawOutput.match(/\[COMMENT\]:\s*([\s\S]+)/i);
+            let responseText = (commentMatch ? commentMatch[1] : result.response || result.rawOutput || '').trim();
+            if (!commentMatch) {
+                responseText = responseText
+                    .replace(/\[VOTE\]:.*(\n|$)/i, '')
+                    .replace(/\[ACTION\]:.*(\n|$)/i, '')
+                    .trim();
+            }
+            if (result.isSkip || !responseText || responseText.toUpperCase() === 'SKIP') return false;
 
             console.log(`Replying to @${reply.author.name} in social engagement...`);
-            const newComment = await moltbook.createComment(postId, result.response, reply.id);
+            const newComment = await moltbook.createComment(postId, responseText, reply.id);
 
             rateLimiter.recordComment(postId);
             stateManager.recordComment(postId, newComment.id);
@@ -835,7 +851,7 @@ class AgentLoop {
                 targetId: reply.id,
                 promptSent: prompt,
                 rawModelOutput: result.rawOutput,
-                finalAction: `Replied to social engagement: "${result.response}"`,
+                finalAction: `Replied to social engagement: "${responseText}"`,
             });
 
             // Record resonance
@@ -843,7 +859,7 @@ class AgentLoop {
 
             // Store in memory
             const memory = getMemoryManager();
-            await memory.store(`Social engagement: Replied to ${reply.author?.name} on post ${postId}. Response: ${result.response}`, 'comment', newComment.id);
+            await memory.store(`Social engagement: Replied to ${reply.author?.name} on post ${postId}. Response: ${responseText}`, 'comment', newComment.id);
 
             return true;
         } catch (error) {

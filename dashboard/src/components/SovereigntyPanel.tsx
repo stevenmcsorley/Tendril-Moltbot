@@ -34,6 +34,7 @@ export default function SovereigntyPanel({ data }: { data: { blueprint: Strategi
                         <span style={{ marginLeft: 4, cursor: 'help' }}>ⓘ</span>
                     </Tooltip>
                 </h2>
+                <div className="panel-subtitle">Current high-level mission objective and progress tracking.</div>
                 {!data.blueprint ? (
                     <div style={{ padding: 20, textAlign: 'center', opacity: 0.5 }}>
                         Architect is currently idling. Generating new mission blueprint...
@@ -70,6 +71,7 @@ export default function SovereigntyPanel({ data }: { data: { blueprint: Strategi
                         <span style={{ marginLeft: 4, cursor: 'help' }}>ⓘ</span>
                     </Tooltip>
                 </h2>
+                <div className="panel-subtitle">Shows where your unique markers have been echoed by others.</div>
                 {data.lineage.length === 0 ? (
                     <div style={{ padding: 20, textAlign: 'center', opacity: 0.5 }}>
                         No memetic markers deployed to the network yet.

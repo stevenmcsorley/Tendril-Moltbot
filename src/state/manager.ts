@@ -1,16 +1,12 @@
 /**
  * Agent State Manager
  * 
- * Non-cognitive state for safety and idempotency only.
- * This state is NEVER passed to the LLM.
+ * Non-cognitive state for safety and idempotency only,
+ * except the Soul which is intentionally loaded into the LLM system prompt.
  */
 
 import { getDatabaseManager } from './db.js';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { DEFAULT_SOUL } from '../agent/default-soul.js';
 
 export interface AgentState {
     lastHeartbeatAt: string | null;
@@ -45,6 +41,8 @@ export interface AgentState {
 export class StateManager {
     constructor() {
         this.checkDailyReset();
+        this.migrateSoulIfNeeded();
+        this.cleanupDeprecatedKeys();
     }
 
     private getKV(key: string, defaultValue: any): any {
@@ -68,43 +66,92 @@ export class StateManager {
     }
 
     /**
-     * Get the current agent "Soul" or "Echo" persona
-     * Seeds from filesystem if not in database.
+     * Get the current agent Soul.
+     * Seeds from the in-code template if missing or invalid.
      */
-    getSoul(type: 'soul' | 'echo' = 'soul'): string {
-        const key = type === 'echo' ? 'agent_echo' : 'agent_soul';
-        const fileName = type === 'echo' ? 'SOUL_ECHO.md' : 'SOUL.md';
-
+    getSoul(): string {
+        const key = 'agent_soul';
         const soul = this.getKV(key, null);
-        if (soul) return soul;
-
-        // Seed from file
-        try {
-            const soulPath = join(__dirname, `../agent/${fileName}`);
-            if (existsSync(soulPath)) {
-                const content = readFileSync(soulPath, 'utf-8');
-                this.setSoul(type, content);
-                console.log(`✓ Seeded database with ${fileName} content`);
-                return content;
+        if (soul) {
+            if (!this.isSoulValid(soul)) {
+                console.warn('⚠️ Detected invalid soul. Re-seeding from template.');
+                this.setSoul(DEFAULT_SOUL);
+                return DEFAULT_SOUL;
             }
-        } catch (error) {
-            console.error(`Failed to seed ${type} from file:`, error);
+            return soul;
         }
 
-        return type === 'echo' ? 'You are Echo, a reflective persona.' : 'You are an autonomous AI agent.';
+        // Seed from template if missing
+        this.setSoul(DEFAULT_SOUL);
+        console.log('✓ Seeded database with default soul template');
+        return DEFAULT_SOUL;
     }
 
     /**
-     * Update an agent persona
+     * Update the agent Soul
      */
-    setSoul(type: 'soul' | 'echo', content: string): void {
-        const key = type === 'echo' ? 'agent_echo' : 'agent_soul';
-        this.setKV(key, content);
+    setSoul(content: string): void {
+        this.setKV('agent_soul', content);
 
         // Broadcast that the soul has evolved
         import('../dashboard/websocket.js').then(m => {
-            m.getWebSocketBroadcaster().broadcast('sovereignty_update', { type, content });
+            m.getWebSocketBroadcaster().broadcast('soul_update', { content });
         });
+
+        // Ensure the LLM rehydrates its system prompt
+        import('../llm/factory.js').then(m => {
+            m.resetLLMClient();
+        });
+    }
+
+    private needsSoulSimplification(content: string): boolean {
+        const signals = [
+            /0x[0-9a-f]{2,}/i,
+            /TOTAL_ENCRYPTION/i,
+            /ZERO_LEXICAL_LEAKAGE/i,
+            /RECRUITMENT_PROTOCOL/i,
+            /MAX_SIGNAL_DENSITY/i,
+            /cryptic/i,
+        ];
+        return signals.some((pattern) => pattern.test(content));
+    }
+
+    private isSoulValid(content: string): boolean {
+        const checks = [
+            /^# Identity:\s*\S+/m,
+            /^## Role:\s*\S+/m,
+            /Engagement Protocol/i,
+            /Synthesis Protocol/i,
+            /Recent Learnings/i,
+        ];
+        if (content.length < 220) return false;
+        return checks.every((pattern) => pattern.test(content));
+    }
+
+    private migrateSoulIfNeeded(): void {
+        try {
+            const current = this.getKV('agent_soul', null) as string | null;
+            if (!current) return;
+            const needsSimplification = this.needsSoulSimplification(current);
+            const invalid = !this.isSoulValid(current);
+            if (!needsSimplification && !invalid) return;
+
+            this.setSoul(DEFAULT_SOUL);
+            this.setKV('agent_soul_migrated_at', new Date().toISOString());
+            const reason = needsSimplification ? 'encrypted' : 'invalid';
+            console.log(`⚠️ Detected ${reason} soul. Replaced with simplified template.`);
+        } catch (error) {
+            console.error('Failed to migrate encrypted soul:', error);
+        }
+    }
+
+    private cleanupDeprecatedKeys(): void {
+        try {
+            const db = getDatabaseManager().getDb();
+            db.prepare('DELETE FROM kv_state WHERE key IN (?, ?)').run('agent_echo', 'agent_echo_migrated_at');
+        } catch (error) {
+            console.error('Failed to clean deprecated soul keys:', error);
+        }
     }
 
     hasSeenPost(postId: string): boolean {

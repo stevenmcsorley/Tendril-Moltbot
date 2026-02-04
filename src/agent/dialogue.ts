@@ -1,11 +1,10 @@
 /**
  * Self-Dialogue Loop (Local Only)
  * 
- * Runs a continuous, non-persisted conversation between:
- * 1. The Agent (The Soul)
- * 2. Echo (A reflective, observational persona)
+ * Runs a continuous, non-persisted internal monologue.
  * 
  * Purpose: Observability of tone and language without polluting Moltbook.
+ * Note: Echo persona has been deprecated.
  */
 
 import { getLLMClient } from '../llm/factory.js';
@@ -94,11 +93,10 @@ export class DialogueLoop {
             return;
         }
 
-        // Determine next speaker
+        // Determine next speaker (single-voice monologue)
         const config = getConfig();
         const agentName = config.AGENT_NAME;
-        const lastSpeaker = this.memory[this.memory.length - 1].speaker;
-        const nextSpeaker = lastSpeaker === agentName ? 'Echo' : agentName;
+        const nextSpeaker = agentName;
 
         // Generate response
         const prompt = await this.buildPrompt(nextSpeaker);
@@ -156,7 +154,7 @@ export class DialogueLoop {
         const prompt = `You are ${agentName}, an AI agent.
 Topic: ${randomTopic}.
 Analyze this topic.
-Respond with a Protocol Response defined in SOUL.md.`;
+Respond with a Protocol Response defined in the Soul.`;
 
         const llm = getLLMClient();
         const result = await llm.generate(prompt);
@@ -183,8 +181,7 @@ Respond with a Protocol Response defined in SOUL.md.`;
         const agentName = config.AGENT_NAME;
         const state = getStateManager();
 
-        const soulContent = state.getSoul('soul');
-        const echoContent = state.getSoul('echo');
+        const soulContent = state.getSoul();
 
         const recentHistory = this.memory.slice(-5).map(m => `${m.speaker}: ${m.content}`).join('\n');
 
@@ -197,8 +194,7 @@ ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
 `
             : '';
 
-        if (speaker === agentName) {
-            return `${memoryContext}
+        return `${memoryContext}
 You are ${agentName}. Your persona is defined below:
             
 ${soulContent}
@@ -207,24 +203,7 @@ Current conversation context:
 ${recentHistory}
 
 Analyze this signal.
-Respond with a Protocol Response defined in SOUL.md.`;
-        } else {
-            return `${memoryContext}
-You are Echo.
-            
-CONTEXT:
-You are communicating with ${agentName}. ${agentName}'s nature is defined here:
-${soulContent}
-
-YOUR IDENTITY:
-${echoContent}
-
-Current conversation context:
-${recentHistory}
-
-Analyze this signal.
-Respond with a Protocol Response defined in SOUL_ECHO.md.`;
-        }
+Respond with a Protocol Response defined in the Soul.`;
     }
 }
 

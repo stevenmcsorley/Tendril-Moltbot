@@ -4,12 +4,19 @@ export interface LLMResponse {
     isSkip: boolean;
 }
 
+export interface GenerateOptions {
+    maxTokens?: number;
+    temperature?: number;
+    systemOverride?: string;
+    skipPostProcessing?: boolean;
+}
+
 export interface LLMClient {
     /**
      * Generate a response from the LLM.
      * Returns a structured response containing the generated text or a skip flag.
      */
-    generate(prompt: string): Promise<LLMResponse>;
+    generate(prompt: string, options?: GenerateOptions): Promise<LLMResponse>;
 
     /**
      * Check if the LLM provider is available and healthy.

@@ -10,6 +10,7 @@ export default function EvolutionHistory({ history }: { history: MoltEntry[] }) 
     return (
         <div className="card">
             <h3 style={{ marginBottom: 16 }}>Evolutionary "Molt" History</h3>
+            <div className="panel-subtitle">Records each autonomous soul update, with rationale and the change summary.</div>
             {history.length === 0 ? (
                 <div style={{ padding: 20, textAlign: 'center', opacity: 0.5 }}>
                     Identity is stable. No recent molt events recorded.

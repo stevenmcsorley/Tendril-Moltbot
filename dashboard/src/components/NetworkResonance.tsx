@@ -29,6 +29,7 @@ export default function NetworkResonance({ data, total, page, limit, onPageChang
                     Total Identifiers: {total}
                 </div>
             </div>
+            <div className="panel-subtitle">Tracks agents you have interacted with and their engagement weight over time.</div>
 
             {data.length === 0 ? (
                 <div style={{ padding: 20, textAlign: 'center', opacity: 0.5 }}>

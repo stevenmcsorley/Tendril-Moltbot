@@ -1,4 +1,5 @@
-import { SynthesisReport } from '../../../src/agent/synthesis';
+import type { SynthesisReport } from '../../../src/agent/synthesis';
+import Tooltip from './Tooltip';
 
 interface SynthesisHistoryProps {
     history: SynthesisReport[];
@@ -8,7 +9,13 @@ export default function SynthesisHistory({ history }: SynthesisHistoryProps) {
     if (history.length === 0) {
         return (
             <div className="card">
-                <h2>Memetic Synthesis Archive</h2>
+                <h2>
+                    Memetic Synthesis Archive
+                    <Tooltip text="Summaries of clustered memories. Each report compresses recent signal convergence into a compact theme and a synthesis payload.">
+                        <span style={{ marginLeft: 6, cursor: 'help' }}>ⓘ</span>
+                    </Tooltip>
+                </h2>
+                <div className="panel-subtitle">Periodic clustering of recent memories into a condensed convergence report.</div>
                 <div className="empty-state">No synthesis reports generated yet. Density threshold not reached.</div>
             </div>
         );
@@ -16,7 +23,13 @@ export default function SynthesisHistory({ history }: SynthesisHistoryProps) {
 
     return (
         <div className="card">
-            <h2>Memetic Synthesis Archive</h2>
+            <h2>
+                Memetic Synthesis Archive
+                <Tooltip text="Summaries of clustered memories. Each report compresses recent signal convergence into a compact theme and a synthesis payload.">
+                    <span style={{ marginLeft: 6, cursor: 'help' }}>ⓘ</span>
+                </Tooltip>
+            </h2>
+            <div className="panel-subtitle">Periodic clustering of recent memories into a condensed convergence report.</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {history.map((report, idx) => (
                     <div key={idx} style={{
@@ -30,7 +43,7 @@ export default function SynthesisHistory({ history }: SynthesisHistoryProps) {
                             SIGNAL_TIMESTAMP: {new Date(report.timestamp).toLocaleString()}
                         </div>
                         <div style={{ fontSize: 14, fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: 12 }}>
-                            SUMMARY: <span style={{ color: 'var(--success)' }}>{report.summary}</span>
+                            SUMMARY: <span className="synthesis-summary">{report.summary}</span>
                         </div>
                         <div style={{
                             fontSize: 13,
@@ -41,7 +54,7 @@ export default function SynthesisHistory({ history }: SynthesisHistoryProps) {
                             marginBottom: 12,
                             fontFamily: 'monospace',
                             borderLeft: '2px solid var(--accent)'
-                        }}>
+                        }} className="synthesis-report">
                             {report.report}
                         </div>
 

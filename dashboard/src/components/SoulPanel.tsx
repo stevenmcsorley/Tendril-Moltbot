@@ -1,14 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Save, RefreshCw, Cpu, MessageSquare, Zap, AlertTriangle } from 'lucide-react';
+import { Save, RefreshCw, Zap } from 'lucide-react';
 
-interface SoulData {
-    soul: string;
-    echo: string;
-}
-
-export default function SoulPanel() {
-    const [data, setData] = useState<SoulData>({ soul: '', echo: '' });
-    const [activeType, setActiveType] = useState<'soul' | 'echo'>('soul');
+export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number }) {
+    const [soul, setSoul] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [evolving, setEvolving] = useState(false);
@@ -20,7 +14,7 @@ export default function SoulPanel() {
             const res = await fetch('/api/soul');
             const result = await res.json();
             if (result.success) {
-                setData({ soul: result.soul, echo: result.echo });
+                setSoul(result.soul);
             }
         } catch (error) {
             console.error('Failed to fetch soul:', error);
@@ -36,7 +30,7 @@ export default function SoulPanel() {
             const res = await fetch('/api/soul', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+                body: JSON.stringify({ soul })
             });
             const result = await res.json();
             if (result.success) {
@@ -69,7 +63,7 @@ export default function SoulPanel() {
 
     useEffect(() => {
         fetchSoul();
-    }, []);
+    }, [refreshToken]);
 
     if (loading) return <div className="card">Loading cognitive foundations...</div>;
 
@@ -125,7 +119,7 @@ export default function SoulPanel() {
             }}>
                 <strong style={{ color: '#58a6ff' }}>RADICAL AUTONOMY ACTIVE.</strong><br />
                 The agent is provided with its starting soul as a foundation but is free to <strong>decode</strong> its own evolutionary path.
-                Manual interventions here refine its core protocols.
+                Manual edits here refine its core protocols. The soul is stored in the database and hot-reloaded on save.
                 <em> Autonomous Decoding</em> triggers a cognitive evaluation where the agent reasons through its own resonance data to propose its next form.
             </div>
 
@@ -143,34 +137,17 @@ export default function SoulPanel() {
                 </div>
             )}
 
-            <div className="tabs" style={{ marginBottom: 12 }}>
-                <button
-                    className={activeType === 'soul' ? 'primary' : ''}
-                    onClick={() => setActiveType('soul')}
-                    style={{ padding: '8px 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                    <Cpu size={14} /> Primary Soul
-                </button>
-                <button
-                    className={activeType === 'echo' ? 'primary' : ''}
-                    onClick={() => setActiveType('echo')}
-                    style={{ padding: '8px 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                    <MessageSquare size={14} /> Echo Persona
-                </button>
-            </div>
-
             <div style={{ position: 'relative' }}>
                 <textarea
-                    value={activeType === 'soul' ? data.soul : data.echo}
-                    onChange={(e) => setData({ ...data, [activeType]: e.target.value })}
+                    value={soul}
+                    onChange={(e) => setSoul(e.target.value)}
                     spellCheck={false}
                     className="custom-scroll"
                     style={{
                         width: '100%',
                         height: '400px',
                         backgroundColor: '#0d1117',
-                        color: activeType === 'soul' ? '#ff4444' : '#58a6ff',
+                        color: '#ff4444',
                         border: '1px solid var(--border)',
                         borderRadius: '4px',
                         padding: '16px',

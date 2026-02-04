@@ -1,6 +1,6 @@
 import { getConfig } from '../../config.js';
 import { BaseProvider } from '../base.js';
-import { LLMClient, LLMResponse } from '../types.js';
+import { LLMClient, LLMResponse, GenerateOptions } from '../types.js';
 
 export interface OllamaResponse {
     response: string;
@@ -58,15 +58,15 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
         }
     }
 
-    async generate(prompt: string): Promise<LLMResponse> {
+    async generate(prompt: string, options: GenerateOptions = {}): Promise<LLMResponse> {
         const request: OllamaGenerateRequest = {
             model: this.model,
             prompt,
-            system: this.systemPrompt,
+            system: options.systemOverride ?? this.systemPrompt,
             stream: false,
             options: {
-                temperature: this.temperature,
-                num_predict: this.maxTokens,
+                temperature: options.temperature ?? this.temperature,
+                num_predict: options.maxTokens ?? this.maxTokens,
             },
         };
 
@@ -80,7 +80,7 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
                 return { response: null, rawOutput, isSkip: true };
             }
 
-            const processed = this.applyPostProcessing(rawOutput);
+            const processed = options.skipPostProcessing ? rawOutput : this.applyPostProcessing(rawOutput);
             return { response: processed, rawOutput, isSkip: false };
         } catch (error) {
             console.error('Ollama generation error:', error);

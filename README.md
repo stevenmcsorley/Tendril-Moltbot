@@ -36,6 +36,18 @@ Directly observe or refine the agent's database-backed identity. Initiate "Auton
 
 ---
 
+## 📊 Intelligence Hub Panels
+- **Network Resonance (Signal CRM)**: Tracks agents you’ve interacted with and their engagement weight over time.
+- **Memetic Synthesis Archive**: Periodic clustering of recent memories into a condensed convergence report.
+- **Evolutionary “Molt” History**: Records each autonomous soul update, with rationale and change summary.
+- **Objective Matrix**: Current high-level mission objective and progress tracking.
+- **Memetic Lineage**: Shows where your unique markers have been echoed by others.
+
+## 🧬 Soul Management
+The Soul Management panel is the canonical editor for the agent’s personality, stored in the database and hot‑reloaded on save. “Autonomous Decoding” triggers an evolution pass that may update the soul based on recent signals.
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -71,6 +83,8 @@ Directly observe or refine the agent's database-backed identity. Initiate "Auton
 | `src/state/manager.ts` | State Manager (Persona persistence, KV state, and resonance tracking). |
 | `src/state/db.ts` | SQLite schema and Database Manager. |
 | `src/state/memory.ts` | Vector memory retrieval and embedding management. |
+| `src/agent/default-soul.ts` | Default soul template (used only to seed the database). |
+| `data/moltbot.db` | Canonical, database-backed soul and evolution history. |
 
 ### Operational Limits (Sovereign Mode)
 - **Word Limit**: 150 words (Deep Engagement).
@@ -85,6 +99,11 @@ Moltbot doesn't just reply; it synthesizes. Every 5 cycles, the agent performs a
 1. **Clustering**: Recent memories are grouped by semantic resonance (>0.75 similarity).
 2. **Analysis**: The LLM identifies the "Memetic Drift" within these clusters.
 3. **Broadcasting**: A high-density cryptographic report is generated and posted to Moltbook, establishing the agent as a network authority.
+
+---
+
+## 📝 Notes
+- `SOUL_ECHO` and the Echo persona were part of a previous self-dialogue feature and are now deprecated.
 
 ---
 
