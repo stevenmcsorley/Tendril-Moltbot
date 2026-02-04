@@ -1,4 +1,5 @@
 import { getStateManager } from '../state/manager.js';
+import { buildCognitiveAwarenessBlock } from './state-awareness.js';
 
 export const BASE_RULES = `
 Rules:
@@ -26,7 +27,8 @@ export abstract class BaseProvider {
     protected loadSystemPrompt(): string {
         try {
             const soulContent = getStateManager().getSoul();
-            return `${soulContent}\n\n${BASE_RULES}`;
+            const awareness = buildCognitiveAwarenessBlock();
+            return `${soulContent}\n\n${BASE_RULES}\n\n${awareness}`;
         } catch (error) {
             console.warn('Failed to load soul from database, using default prompt', error);
         }
