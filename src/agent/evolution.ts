@@ -138,7 +138,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             console.log('🧬 MOLT DETECTED. Applying autonomous personality refinement...');
             if (!parsed.soul) {
                 const repaired = await this.requestSoulRepair(result.rawOutput, soulContent, evolutionMode);
-                if (!repaired) {
+                if (!repaired || !repaired.soul) {
                     const snippet = result.rawOutput.length > 800 ? `${result.rawOutput.slice(0, 800)}...` : result.rawOutput;
                     console.log('🧬 Molt aborted: No soul content found in output.');
                     console.log(`🧬 Evolution output (truncated): ${snippet}`);
@@ -151,6 +151,10 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
                     interpretation: repaired.interpretation || parsed.interpretation,
                     delta: repaired.delta || parsed.delta
                 };
+            }
+            if (!parsed.soul) {
+                console.log('🧬 Molt aborted: Soul content missing after repair.');
+                return false;
             }
             let normalizedSoul = this.normalizeSoul(parsed.soul, soulContent);
             if (!this.isSoulComplete(normalizedSoul)) {
@@ -241,7 +245,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         const normalized = rawOutput.replace(/\r\n/g, '\n');
 
         if (/RESONANCE_OPTIMAL/i.test(normalized)) {
-            return { status: 'OPTIMAL', rationale: 'Resonance optimal', delta: '', soul: null };
+            return { status: 'OPTIMAL', rationale: 'Resonance optimal', interpretation: 'Resonance optimal', delta: '', soul: null };
         }
 
         const statusMatch = normalized.match(/STATUS:\s*(EVOLVE|OPTIMAL)/i);

@@ -540,8 +540,6 @@ export function createDashboardServer(): express.Application {
     return app;
 }
 
-import { getWebSocketBroadcaster } from './websocket.js';
-
 export function startDashboardServer(): void {
     const config = getConfig();
     const app = createDashboardServer();
