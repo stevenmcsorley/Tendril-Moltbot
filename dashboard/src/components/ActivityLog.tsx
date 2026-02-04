@@ -1,6 +1,7 @@
 import React from 'react';
 
 interface LogEntry {
+    id?: number;
     timestamp: string;
     actionType: string;
     targetId: string | null;
@@ -29,6 +30,9 @@ function formatDate(iso: string): string {
 }
 
 function entryKey(entry: LogEntry): string {
+    if (entry.id !== undefined && entry.id !== null) {
+        return `log-${entry.id}`;
+    }
     return `${entry.timestamp}-${entry.actionType}-${entry.targetId ?? 'none'}`;
 }
 

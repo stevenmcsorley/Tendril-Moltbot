@@ -65,6 +65,7 @@ interface Status {
 }
 
 interface LogEntry {
+    id?: number;
     timestamp: string;
     actionType: string;
     targetId: string | null;
@@ -361,8 +362,14 @@ export default function App() {
 
                     switch (msg.type) {
                         case 'log_entry':
-                            // Append new log to top
-                            setLogs(prev => [msg.payload, ...prev].slice(0, 100));
+                            // Append new log to top (dedupe by id)
+                            setLogs(prev => {
+                                const incoming = msg.payload as LogEntry;
+                                if (incoming.id && prev.some(entry => entry.id === incoming.id)) {
+                                    return prev;
+                                }
+                                return [incoming, ...prev].slice(0, 300);
+                            });
                             // Also refresh status if it was an action that might change metrics
                             if (['post', 'comment', 'upvote', 'downvote'].includes(msg.payload.actionType)) {
                                 fetchStatus();

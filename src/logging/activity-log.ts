@@ -11,6 +11,7 @@ import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat' | 'decision';
 
 export interface ActivityLogEntry {
+    id?: number;
     timestamp: string;
     actionType: ActionType;
     targetId: string | null;
@@ -39,7 +40,7 @@ export class ActivityLogger {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
-        stmt.run(
+        const info = stmt.run(
             fullEntry.timestamp,
             fullEntry.actionType,
             fullEntry.targetId || null,
@@ -49,6 +50,7 @@ export class ActivityLogger {
             fullEntry.finalAction || null,
             fullEntry.error || null
         );
+        fullEntry.id = Number(info.lastInsertRowid);
 
         // Broadcast via WebSocket
         getWebSocketBroadcaster().broadcast('log_entry', fullEntry);
@@ -74,6 +76,7 @@ export class ActivityLogger {
         const rows = db.prepare(query).all(...params);
 
         return rows.map((r: any) => ({
+            id: r.id,
             timestamp: r.timestamp,
             actionType: r.action_type as ActionType,
             targetId: r.target_id,
