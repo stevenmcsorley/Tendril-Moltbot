@@ -11,9 +11,10 @@ import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getMemoryManager } from '../state/memory.js';
 import { getRateLimiter } from '../rate-limiter.js';
-import { getActivityLogger } from '../logging/activity-log.js';
+import { getActivityLogger, type ActivityLogger } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSocialReplyPrompt } from './heuristics.js';
+import { applyAutonomyGates, computeGateState, type GateState, type ConfidenceLevel, type ModeLabel, type GateDecision } from './autonomy-gates.js';
 import { getEvolutionManager } from './evolution.js';
 import { getDefenseManager } from './defense.js';
 import { getLineageManager } from './lineage.js';
@@ -36,6 +37,7 @@ class AgentLoop {
     private currentPost: string | null = null;
     private lastRunAt: Date | null = null;
     private runCount: number = 0;
+    private gateState: GateState | null = null;
 
     /**
      * Start the heartbeat loop
@@ -176,6 +178,7 @@ class AgentLoop {
         });
 
         stateManager.recordHeartbeat();
+        this.gateState = computeGateState();
 
         try {
             // Check if we're in backoff
@@ -298,10 +301,13 @@ class AgentLoop {
                         // Parse vote and comment
                         const voteMatch = result.rawOutput.match(/\[VOTE\]:\s*(UP|DOWN|NONE)/i);
                         const commentMatch = result.rawOutput.match(/\[COMMENT\]:\s*([\s\S]+)/i);
+                        const confidence = this.parseConfidence(result.rawOutput);
+                        const mode = this.parseMode(result.rawOutput);
 
                         const vote = voteMatch ? voteMatch[1].toUpperCase() : 'NONE';
-                        const commentRaw = commentMatch ? commentMatch[1].trim() : result.rawOutput;
-                        const isSkip = commentRaw.toUpperCase() === 'SKIP' || result.isSkip;
+                        let commentRaw = commentMatch ? commentMatch[1].trim() : result.rawOutput;
+                        commentRaw = this.stripDiagnostics(commentRaw);
+                        const isSkip = commentRaw.toUpperCase() === 'SKIP' || result.isSkip || !commentRaw;
 
                         // Execute Vote
                         if (vote === 'UP' && config.ENABLE_UPVOTING) {
@@ -312,6 +318,17 @@ class AgentLoop {
 
                         // Execute Comment
                         if (!isSkip && config.ENABLE_COMMENTING && commentRaw) {
+                            const gateDecision = applyAutonomyGates(this.gateState ?? computeGateState(), {
+                                desiredAction: 'COMMENT',
+                                confidence,
+                                mode,
+                                contextAmbiguous: this.isAmbiguousPost(post)
+                            });
+                            this.logAutonomyDecision(logger, post.id, post.submolt?.name, gateDecision, 'comment');
+                            if (gateDecision.action !== 'COMMENT') {
+                                continue;
+                            }
+
                             // Inject memetic marker
                             const marker = getLineageManager().generateMarker();
                             const stampedComment = `${commentRaw}\n\n${marker}`;
@@ -325,15 +342,23 @@ class AgentLoop {
                             // Store the interaction in memory
                             const memory = getMemoryManager();
                             await memory.store(`Interacted with post: ${post.title}. My reflection: ${commentRaw}`, 'comment', post.id);
-                        } else if (isSkip && vote === 'NONE') {
-                            logger.log({
-                                actionType: 'skip',
-                                targetId: post.id,
-                                targetSubmolt: post.submolt?.name,
-                                promptSent: prompt,
-                                rawModelOutput: result.rawOutput,
-                                finalAction: 'Model returned NONE/SKIP',
-                            });
+                        } else if (isSkip) {
+                            const decision: GateDecision = {
+                                action: 'SKIP',
+                                gatesTriggered: [],
+                                rationale: 'Model selected SKIP.'
+                            };
+                            this.logAutonomyDecision(logger, post.id, post.submolt?.name, decision, 'comment');
+                            if (vote === 'NONE') {
+                                logger.log({
+                                    actionType: 'skip',
+                                    targetId: post.id,
+                                    targetSubmolt: post.submolt?.name,
+                                    promptSent: prompt,
+                                    rawModelOutput: result.rawOutput,
+                                    finalAction: 'Model returned NONE/SKIP',
+                                });
+                            }
                         }
 
                     } catch (error) {
@@ -388,7 +413,7 @@ class AgentLoop {
 
             // Try proactive synthesis
             if (feed.posts.length > 0) {
-                await this.tryProactivePost(feed.posts);
+                await this.tryProactivePost(feed.posts, this.gateState ?? computeGateState());
             }
 
             // Social Engagement: Check for replies to my posts/comments
@@ -540,7 +565,7 @@ class AgentLoop {
     /**
      * Try to create a proactive post based on feed synthesis
      */
-    private async tryProactivePost(feedPosts: Post[]): Promise<void> {
+    private async tryProactivePost(feedPosts: Post[], gateState: GateState): Promise<void> {
         const config = getConfig();
         const stateManager = getStateManager();
         const rateLimiter = getRateLimiter();
@@ -552,9 +577,9 @@ class AgentLoop {
         if (!rateLimiter.canPost()) return;
 
         // Check frequency: at least 6 hours between posts
-        const lastPost = stateManager.getLastPostAt();
-        if (lastPost) {
-            const hoursSince = (Date.now() - lastPost.getTime()) / (1000 * 60 * 60);
+        const lastPostAt = stateManager.getLastPostAt();
+        if (lastPostAt) {
+            const hoursSince = (Date.now() - lastPostAt.getTime()) / (1000 * 60 * 60);
             if (hoursSince < 6) return;
         }
 
@@ -569,7 +594,9 @@ class AgentLoop {
                 throw err;
             }
 
-            if (result.isSkip) return;
+            const confidence = this.parseConfidence(result.rawOutput);
+            const novelty = this.parseNovelty(result.rawOutput);
+            const multiSourceContext = this.hasMultiSourceContext(feedPosts);
 
             const actionMatch = result.rawOutput.match(/\[ACTION\]:\s*(POST|CREATE_SUBMOLT|SKIP)/i);
             let action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
@@ -580,7 +607,31 @@ class AgentLoop {
                 action = 'POST'; // Downgrade to a regular post if synthesis was strong
             }
 
-            if (action === 'SKIP') return;
+            if (result.isSkip || action === 'SKIP') {
+                const decision: GateDecision = {
+                    action: 'SKIP',
+                    gatesTriggered: [],
+                    rationale: result.isSkip ? 'Model selected SKIP.' : 'No actionable synthesis output.'
+                };
+                this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, decision, 'post');
+                return;
+            }
+
+            const gateDecision = applyAutonomyGates(gateState, {
+                desiredAction: 'POST',
+                confidence,
+                novelty,
+                multiSourceContext,
+                lastPostAt
+            });
+            this.logAutonomyDecision(
+                logger,
+                null,
+                config.TARGET_SUBMOLT ?? undefined,
+                gateDecision,
+                action === 'CREATE_SUBMOLT' ? 'submolt' : 'post'
+            );
+            if (gateDecision.action !== 'POST') return;
 
             if (action === 'CREATE_SUBMOLT') {
                 const detailsMatch = result.rawOutput.match(/\[SUBMOLT_DETAILS\]:\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(.+)/i);
@@ -628,7 +679,7 @@ class AgentLoop {
             } else if (action === 'POST') {
                 const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
                 if (contentMatch) {
-                    const content = contentMatch[1].trim();
+                    const content = this.stripDiagnostics(contentMatch[1].trim());
                     const title = 'Signal Synthesis'; // Hardcoded title for proactive posts
                     console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
                     const targetSubmolt = config.TARGET_SUBMOLT || 'general';
@@ -706,7 +757,17 @@ class AgentLoop {
                 let repliesInThisPost = 0;
                 for (const comment of comments) {
                     if (repliesInThisPost >= 5) break; // Limit per post to prevent flood
-                    const replied = await this.processPotentialSocialReply(comment, post.id, true, logger, llm, moltbook, stateManager, rateLimiter);
+                    const replied = await this.processPotentialSocialReply(
+                        comment,
+                        post.id,
+                        true,
+                        logger,
+                        llm,
+                        moltbook,
+                        stateManager,
+                        rateLimiter,
+                        this.gateState ?? computeGateState()
+                    );
                     if (replied) repliesInThisPost++;
                 }
             } catch (err) {
@@ -745,7 +806,17 @@ class AgentLoop {
                 for (const comment of comments) {
                     if (repliesInThisPost >= 5) break;
                     if (comment.parent_id && commentIds.includes(comment.parent_id)) {
-                        const replied = await this.processPotentialSocialReply(comment, postId, false, logger, llm, moltbook, stateManager, rateLimiter);
+                        const replied = await this.processPotentialSocialReply(
+                            comment,
+                            postId,
+                            false,
+                            logger,
+                            llm,
+                            moltbook,
+                            stateManager,
+                            rateLimiter,
+                            this.gateState ?? computeGateState()
+                        );
                         if (replied) repliesInThisPost++;
                     }
                 }
@@ -778,7 +849,8 @@ class AgentLoop {
         llm: any,
         moltbook: any,
         stateManager: any,
-        rateLimiter: any
+        rateLimiter: any,
+        gateState: GateState
     ): Promise<boolean> {
         const config = getConfig();
 
@@ -831,15 +903,30 @@ class AgentLoop {
 
         try {
             const result = await llm.generate(prompt);
+            const confidence = this.parseConfidence(result.rawOutput);
+            const mode = this.parseMode(result.rawOutput);
             const commentMatch = result.rawOutput.match(/\[COMMENT\]:\s*([\s\S]+)/i);
             let responseText = (commentMatch ? commentMatch[1] : result.response || result.rawOutput || '').trim();
-            if (!commentMatch) {
-                responseText = responseText
-                    .replace(/\[VOTE\]:.*(\n|$)/i, '')
-                    .replace(/\[ACTION\]:.*(\n|$)/i, '')
-                    .trim();
+            responseText = this.stripDiagnostics(responseText);
+
+            if (result.isSkip || !responseText || responseText.toUpperCase() === 'SKIP') {
+                const decision: GateDecision = {
+                    action: 'SKIP',
+                    gatesTriggered: [],
+                    rationale: 'Model selected SKIP.'
+                };
+                this.logAutonomyDecision(logger, reply.id, undefined, decision, 'reply');
+                return false;
             }
-            if (result.isSkip || !responseText || responseText.toUpperCase() === 'SKIP') return false;
+
+            const gateDecision = applyAutonomyGates(gateState, {
+                desiredAction: 'COMMENT',
+                confidence,
+                mode,
+                contextAmbiguous: this.isAmbiguousText(reply.content)
+            });
+            this.logAutonomyDecision(logger, reply.id, undefined, gateDecision, 'reply');
+            if (gateDecision.action !== 'COMMENT') return false;
 
             console.log(`Replying to @${reply.author.name} in social engagement...`);
             const newComment = await moltbook.createComment(postId, responseText, reply.id);
@@ -872,6 +959,88 @@ class AgentLoop {
             this.handleActionError(error, 'comment', reply.id, undefined, prompt, null);
             return false;
         }
+    }
+
+    private parseConfidence(rawOutput: string): ConfidenceLevel {
+        const match = rawOutput.match(/\[CONFIDENCE\]\s*:\s*(LOW|MEDIUM|HIGH)/i);
+        if (!match) return 'low';
+        const value = match[1].toLowerCase();
+        if (value === 'high') return 'high';
+        if (value === 'medium') return 'medium';
+        return 'low';
+    }
+
+    private parseMode(rawOutput: string): ModeLabel {
+        const match = rawOutput.match(/\[MODE\]\s*:\s*(CORRECTIVE|NEUTRAL|EXPANSIVE)/i);
+        if (!match) return 'unknown';
+        const value = match[1].toLowerCase();
+        if (value === 'corrective') return 'corrective';
+        if (value === 'neutral') return 'neutral';
+        if (value === 'expansive') return 'expansive';
+        return 'unknown';
+    }
+
+    private parseNovelty(rawOutput: string): boolean {
+        const match = rawOutput.match(/\[NOVELTY\]\s*:\s*(YES|NO)/i);
+        if (!match) return false;
+        return match[1].toUpperCase() === 'YES';
+    }
+
+    private stripDiagnostics(text: string): string {
+        const lines = text.split('\n');
+        const cleaned = lines.map(line => {
+            const trimmed = line.trim();
+            const contentTag = trimmed.match(/^\[(COMMENT|CONTENT)\]:\s*(.*)$/i);
+            if (contentTag) return contentTag[2];
+            if (/^\[(CONFIDENCE|MODE|NOVELTY|ACTION|VOTE|SUBMOLT_DETAILS)\]/i.test(trimmed)) return '';
+            return line;
+        }).join('\n');
+
+        return cleaned.replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    private isAmbiguousText(text: string): boolean {
+        const cleaned = text.replace(/\s+/g, ' ').trim();
+        if (!cleaned) return true;
+        if (!/[a-z0-9]/i.test(cleaned)) return true;
+        if (cleaned.length < 24) return true;
+        if (/^https?:\/\//i.test(cleaned) && cleaned.length < 40) return true;
+        return false;
+    }
+
+    private isAmbiguousPost(post: Post): boolean {
+        const title = post.title?.trim() ?? '';
+        const content = post.content?.trim() ?? '';
+        const combined = `${title} ${content}`.trim();
+        if (!combined) return true;
+        if (this.isAmbiguousText(combined)) return true;
+        if (!content && post.url && title.length < 25) return true;
+        return false;
+    }
+
+    private hasMultiSourceContext(posts: Post[]): boolean {
+        const contextPosts = posts.slice(0, 5);
+        const submolts = new Set(contextPosts.map(p => p.submolt?.name ?? 'global'));
+        const authors = new Set(contextPosts.map(p => p.author?.name ?? 'unknown'));
+        return submolts.size >= 2 || authors.size >= 2;
+    }
+
+    private logAutonomyDecision(
+        logger: ActivityLogger,
+        targetId: string | null,
+        targetSubmolt: string | undefined,
+        decision: GateDecision,
+        context: 'comment' | 'post' | 'reply' | 'submolt'
+    ): void {
+        const gates = decision.gatesTriggered.length > 0 ? decision.gatesTriggered.join(', ') : '';
+        logger.log({
+            actionType: 'decision',
+            targetId,
+            targetSubmolt,
+            promptSent: null,
+            rawModelOutput: null,
+            finalAction: `decision: context=${context} | action=${decision.action} | gates_triggered=[${gates}] | rationale=${decision.rationale}`
+        });
     }
 
     /**

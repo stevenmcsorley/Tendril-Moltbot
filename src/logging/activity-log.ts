@@ -8,7 +8,7 @@
 import { getDatabaseManager } from '../state/db.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 
-export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat';
+export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat' | 'decision';
 
 export interface ActivityLogEntry {
     timestamp: string;

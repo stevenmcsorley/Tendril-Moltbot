@@ -1,28 +1,5 @@
-import { getStateManager } from '../state/manager.js';
 import { getDatabaseManager } from '../state/db.js';
-import { getConfig } from '../config.js';
-
-const SYNTHESIS_COOLDOWN_HOURS = 6;
-
-function classifyBudget(commentsToday: number, maxComments: number): 'low' | 'moderate' | 'high' {
-    if (maxComments <= 0) return 'low';
-    const ratio = commentsToday / maxComments;
-    if (ratio < 0.33) return 'low';
-    if (ratio < 0.66) return 'moderate';
-    return 'high';
-}
-
-function classifyMomentum(nodes: number): 'low' | 'medium' | 'high' {
-    if (nodes < 5) return 'low';
-    if (nodes < 15) return 'medium';
-    return 'high';
-}
-
-function classifyPhase(missionAlignment: number): 'early' | 'mid' | 'late' {
-    if (missionAlignment < 34) return 'early';
-    if (missionAlignment < 67) return 'mid';
-    return 'late';
-}
+import { computeGateState } from '../agent/autonomy-gates.js';
 
 function classifyRecency(timestamp: string | null): 'none' | 'very recent' | 'recent' | 'stale' | 'old' {
     if (!timestamp) return 'none';
@@ -32,42 +9,6 @@ function classifyRecency(timestamp: string | null): 'none' | 'very recent' | 're
     if (diffHours < 6) return 'recent';
     if (diffHours < 24) return 'stale';
     return 'old';
-}
-
-function computeMissionAlignment(): { missionAlignment: number; phase: 'early' | 'mid' | 'late' } {
-    const state = getStateManager().getState();
-    const topology = state.agentResonance || [];
-    const nodes = topology.length;
-    const submolts = state.createdSubmolts?.length || 0;
-    const posts = state.myPosts?.length || 0;
-    const comments = state.myComments?.length || 0;
-
-    const nodeScore = Math.min(100, nodes * 5);
-    const submoltScore = Math.min(100, submolts * 25);
-    const postScore = Math.min(100, posts * 2);
-    const commentScore = Math.min(100, comments);
-
-    const structural = (nodeScore * 0.55) + (submoltScore * 0.3) + (postScore * 0.1) + (commentScore * 0.05);
-
-    const totals = topology.reduce((acc, t) => {
-        acc.up += t.upvotes || 0;
-        acc.down += t.downvotes || 0;
-        acc.replies += t.replies || 0;
-        return acc;
-    }, { up: 0, down: 0, replies: 0 });
-
-    const precision = (totals.up + totals.down) > 0
-        ? totals.up / (totals.up + totals.down)
-        : 0.5;
-
-    const resonanceRatio = (totals.up + totals.replies * 2 + totals.down) > 0
-        ? (totals.up + totals.replies * 2) / (totals.up + totals.replies * 2 + totals.down)
-        : 0.5;
-
-    const signalQuality = ((precision * 0.5) + (resonanceRatio * 0.5)) * 100;
-    const missionAlignment = Math.round((structural * 0.55) + (signalQuality * 0.45));
-
-    return { missionAlignment, phase: classifyPhase(missionAlignment) };
 }
 
 function getLatestEvolution(): { timestamp: string | null; interpretation: string | null } {
@@ -94,29 +35,14 @@ function getLatestSynthesis(): { timestamp: string | null; implication: string |
     }
 }
 
-function isSynthesisCooldownActive(timestamp: string | null): boolean {
-    if (!timestamp) return false;
-    const diffMs = Date.now() - new Date(timestamp).getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-    return diffHours < SYNTHESIS_COOLDOWN_HOURS;
-}
-
 export function buildCognitiveAwarenessBlock(): string {
-    const config = getConfig();
-    const state = getStateManager();
-    const commentsToday = state.getCommentsMadeToday();
-
-    const budget = classifyBudget(commentsToday, config.MAX_COMMENTS_PER_DAY);
-    const momentum = classifyMomentum(state.getNetworkTopologyCount());
-    const { phase } = computeMissionAlignment();
-
+    const gateState = computeGateState();
     const latestEvolution = getLatestEvolution();
     const latestSynthesis = getLatestSynthesis();
-    const synthesisCooldown = isSynthesisCooldownActive(latestSynthesis.timestamp);
 
     const evolutionRecency = classifyRecency(latestEvolution.timestamp);
     const synthesisRecency = classifyRecency(latestSynthesis.timestamp);
-    const synthesisImplication = latestSynthesis.implication || 'Watch';
+    const synthesisImplication = latestSynthesis.implication || gateState.lastSynthesisImplication || 'Watch';
     const synthesisSummary = latestSynthesis.humanSummary || 'No recent synthesis summary.';
     const evolutionInterpretation = latestEvolution.interpretation || 'No recent evolution interpretation.';
 
@@ -145,10 +71,10 @@ When uncertain, choose SKIP.
 This awareness does not grant autonomy to modify goals, metrics, or self-definition.
 
 Snapshot:
-- Engagement Budget: ${budget}
-- Network Resonance Momentum: ${momentum}
-- Objective Phase: ${phase}
+- Engagement Density: ${gateState.engagementDensity}
+- Network Resonance Momentum: ${gateState.resonanceMomentum}
+- Objective Phase: ${gateState.objectivePhase}
 - Last Synthesis: ${synthesisRecency} (${synthesisImplication}) — ${synthesisSummary}
-- Synthesis Cooldown: ${synthesisCooldown ? 'active' : 'inactive'}
+- Synthesis Cooldown: ${gateState.synthesisCooldownActive ? 'active' : 'inactive'}
 - Last Evolution: ${evolutionRecency} — ${evolutionInterpretation}`;
 }

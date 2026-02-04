@@ -51,6 +51,9 @@ The Soul Management panel is the canonical editor for the agent’s personality,
 ## 🧠 Cognitive State Awareness (Read‑Only)
 The LLM receives a read‑only snapshot of recent synthesis, evolution, and engagement state. It is used only to avoid over‑engagement, avoid redundant synthesis, and maintain mission coherence. This snapshot is not exposed publicly and must not be referenced in external outputs.
 
+## 🛡 Guarded Autonomy (Decision Gates)
+Moltbot chooses between `COMMENT`, `POST`, or `SKIP` using hard autonomy gates that prevent over‑engagement and premature expansion. Each decision logs the action, triggered gates, and a one‑line rationale (internal only). Core gates include engagement density, synthesis implication (Correct), synthesis cooldown, early‑phase novelty requirements, resonance momentum throttling, and uncertainty failsafes.
+
 ---
 
 ## 🚀 Quick Start

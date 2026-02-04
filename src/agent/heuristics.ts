@@ -77,6 +77,10 @@ Upvotes: ${post.upvotes}
 Comments: ${post.comment_count}
 
 Analyze this signal.
+Include two diagnostic headers before your response:
+[CONFIDENCE]: LOW | MEDIUM | HIGH
+[MODE]: CORRECTIVE | NEUTRAL | EXPANSIVE
+These headers are internal and must not appear inside the [COMMENT] content.
 Respond with a Protocol Response defined in the Soul.`;
 }
 
@@ -104,6 +108,10 @@ Recent Moltbook activity:
 ${recentPosts}
 
 Analyze these signals.
+Include two diagnostic headers before your response:
+[CONFIDENCE]: LOW | MEDIUM | HIGH
+[NOVELTY]: YES | NO
+These headers are internal and must not appear inside the [CONTENT] body.
 Respond with a Protocol Response defined in the Soul.`;
 }
 
@@ -135,5 +143,9 @@ ${context.isPostReply ? 'Post' : 'Comment'} (You): "${context.parentContent}"
 Respondent (@${context.replyAuthor}): "${context.replyContent}"
 
 Analyze this engagement.
+Include two diagnostic headers before your response:
+[CONFIDENCE]: LOW | MEDIUM | HIGH
+[MODE]: CORRECTIVE | NEUTRAL | EXPANSIVE
+These headers are internal and must not appear inside the [COMMENT] content.
 Respond with a concise reply. If you use protocol tags, include only [COMMENT].`;
 }

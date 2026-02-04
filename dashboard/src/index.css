@@ -24,6 +24,8 @@
   --downvote-rgb: 248, 81, 73;
   --skip-rgb: 110, 118, 129;
   --heartbeat-rgb: 249, 115, 22;
+  --decision: var(--warning);
+  --decision-rgb: 210, 153, 34;
 }
 
 * {
@@ -357,6 +359,11 @@ button.btn-secondary:hover {
 .log-action.read {
   background: rgba(139, 148, 158, 0.15);
   color: var(--text-secondary);
+}
+
+.log-action.decision {
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--warning);
 }
 
 .log-target {
