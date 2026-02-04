@@ -491,6 +491,10 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         return { identity, role, sections };
     }
 
+    private normalizeSectionName(name: string): string {
+        return name.replace(/\s*\(.*\)\s*$/, '').trim();
+    }
+
     private validateSoulScope(currentSoul: string, proposedSoul: string): { ok: boolean; reason?: string } {
         const allowed = new Set(['Mission', 'Voice & Style', 'Engagement Protocol', 'Recent Learnings', 'Self-Restraint']);
         const current = this.parseSoulSections(currentSoul);
@@ -503,10 +507,19 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             return { ok: false, reason: 'Forbidden change to ## Role.' };
         }
 
-        const allSections = new Set([...Object.keys(current.sections), ...Object.keys(proposed.sections)]);
+        const currentNormalized: Record<string, string> = {};
+        for (const [section, content] of Object.entries(current.sections)) {
+            currentNormalized[this.normalizeSectionName(section)] = content;
+        }
+        const proposedNormalized: Record<string, string> = {};
+        for (const [section, content] of Object.entries(proposed.sections)) {
+            proposedNormalized[this.normalizeSectionName(section)] = content;
+        }
+
+        const allSections = new Set([...Object.keys(currentNormalized), ...Object.keys(proposedNormalized)]);
         for (const section of allSections) {
-            const before = current.sections[section];
-            const after = proposed.sections[section];
+            const before = currentNormalized[section];
+            const after = proposedNormalized[section];
             const changed = (before ?? '').trim() !== (after ?? '').trim();
             if (!changed) continue;
             if (!allowed.has(section)) {
