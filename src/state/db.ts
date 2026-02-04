@@ -67,7 +67,8 @@ export class DatabaseManager {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
                 rationale TEXT NOT NULL,
-                delta TEXT NOT NULL
+                delta TEXT NOT NULL,
+                interpretation TEXT
             );
 
             CREATE TABLE IF NOT EXISTS synthesis (
@@ -75,7 +76,9 @@ export class DatabaseManager {
                 timestamp TEXT NOT NULL,
                 cluster_summary TEXT NOT NULL,
                 report_text TEXT NOT NULL,
-                memories_json TEXT NOT NULL
+                memories_json TEXT NOT NULL,
+                human_summary TEXT,
+                implication TEXT
             );
 
             CREATE TABLE IF NOT EXISTS posts (
@@ -98,6 +101,22 @@ export class DatabaseManager {
                 value TEXT NOT NULL
             );
         `);
+
+        // Lightweight migrations for additive columns
+        this.ensureColumn('synthesis', 'human_summary', 'TEXT');
+        this.ensureColumn('synthesis', 'implication', 'TEXT');
+        this.ensureColumn('evolutions', 'interpretation', 'TEXT');
+    }
+
+    private ensureColumn(table: string, column: string, type: string): void {
+        try {
+            const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+            if (!columns.some(c => c.name === column)) {
+                this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+            }
+        } catch (error) {
+            console.error(`Failed to ensure column ${table}.${column}:`, error);
+        }
     }
 
     public getDb(): Database.Database {

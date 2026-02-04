@@ -101,11 +101,13 @@ interface EvolutionEntry {
     timestamp: string;
     rationale: string;
     delta: string;
+    interpretation?: string;
 }
 
 interface StrategicObjective {
     id: string;
     description: string;
+    interpretation?: string;
     targetMetrics: string;
     progress: number;
     status: 'active' | 'completed' | 'failed';
@@ -118,6 +120,7 @@ interface MemeticMarker {
     timestamp: string;
     source: 'post' | 'comment';
     forkedBy?: string[];
+    interpretation?: string;
 }
 
 export default function App() {

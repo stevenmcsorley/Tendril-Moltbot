@@ -45,6 +45,12 @@ export default function SynthesisHistory({ history }: SynthesisHistoryProps) {
                         <div style={{ fontSize: 14, fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: 12 }}>
                             SUMMARY: <span className="synthesis-summary">{report.summary}</span>
                         </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 8 }}>
+                            Human Interpretation: <span style={{ color: 'var(--info)' }}>{report.humanSummary}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                            Implication: <strong style={{ color: 'var(--warning)' }}>{report.implication}</strong>
+                        </div>
                         <div style={{
                             fontSize: 13,
                             color: 'var(--text-secondary)',

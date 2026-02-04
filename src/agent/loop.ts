@@ -319,7 +319,8 @@ class AgentLoop {
                             await this.tryComment(post, stampedComment, prompt, result.rawOutput);
 
                             // Track marker in lineage
-                            getLineageManager().trackMarker(marker, 'comment', post.id);
+                            const lineageNote = `Commented on "${post.title}" in m/${post.submolt?.name ?? 'general'}.`;
+                            getLineageManager().trackMarker(marker, 'comment', post.id, lineageNote);
 
                             // Store the interaction in memory
                             const memory = getMemoryManager();
@@ -651,7 +652,8 @@ class AgentLoop {
                         });
 
                         // Track marker in lineage
-                        getLineageManager().trackMarker(marker, 'post', post.id);
+                        const lineageNote = `Posted "${title}" in m/${targetSubmolt}.`;
+                        getLineageManager().trackMarker(marker, 'post', post.id, lineageNote);
 
                         logger.log({
                             actionType: 'post',

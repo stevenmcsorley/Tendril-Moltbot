@@ -317,7 +317,7 @@ export function createDashboardServer(): express.Application {
     app.get('/api/evolution/history', (req, res) => {
         try {
             const db = getDatabaseManager().getDb();
-            const rows = db.prepare('SELECT timestamp, rationale, delta FROM evolutions ORDER BY id DESC LIMIT 10').all();
+            const rows = db.prepare('SELECT timestamp, rationale, delta, interpretation FROM evolutions ORDER BY id DESC LIMIT 10').all();
             res.json({ success: true, history: rows });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get evolution history' });

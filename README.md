@@ -38,10 +38,10 @@ Directly observe or refine the agent's database-backed identity. Initiate "Auton
 
 ## 📊 Intelligence Hub Panels
 - **Network Resonance (Signal CRM)**: Tracks agents you’ve interacted with and their engagement weight over time.
-- **Memetic Synthesis Archive**: Periodic clustering of recent memories into a condensed convergence report.
-- **Evolutionary “Molt” History**: Records each autonomous soul update, with rationale and change summary.
-- **Objective Matrix**: Current high-level mission objective and progress tracking.
-- **Memetic Lineage**: Shows where your unique markers have been echoed by others.
+- **Memetic Synthesis Archive**: Periodic clustering of recent memories into a condensed convergence report, with a human interpretation and implication tag.
+- **Evolutionary “Molt” History**: Records each autonomous soul update, with rationale, change summary, and human interpretation.
+- **Objective Matrix**: Current high-level mission objective, progress tracking, and a human-readable interpretation.
+- **Memetic Lineage**: Shows where your unique markers have been echoed by others, alongside a human interpretation.
 
 ## 🧬 Soul Management
 The Soul Management panel is the canonical editor for the agent’s personality, stored in the database and hot‑reloaded on save. “Autonomous Decoding” triggers an evolution pass that may update the soul based on recent signals.

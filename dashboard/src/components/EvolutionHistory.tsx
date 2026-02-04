@@ -4,6 +4,7 @@ interface MoltEntry {
     timestamp: string;
     rationale: string;
     delta: string;
+    interpretation?: string;
 }
 
 export default function EvolutionHistory({ history }: { history: MoltEntry[] }) {
@@ -42,6 +43,9 @@ export default function EvolutionHistory({ history }: { history: MoltEntry[] }) 
                             </div>
                             <div style={{ fontSize: '0.9em', marginBottom: 12, fontStyle: 'italic', opacity: 0.9 }}>
                                 {entry.rationale}
+                            </div>
+                            <div style={{ fontSize: '0.85em', marginBottom: 12, color: 'var(--info)' }}>
+                                Human Interpretation: {entry.interpretation || entry.rationale}
                             </div>
                             {entry.delta && (
                                 <pre style={{

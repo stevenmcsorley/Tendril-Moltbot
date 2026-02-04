@@ -12,6 +12,8 @@ export interface SynthesisCluster {
 export interface SynthesisReport {
     timestamp: string;
     summary: string;
+    humanSummary: string;
+    implication: 'Reinforce' | 'Watch' | 'Deprioritise' | 'Correct';
     report: string;
     clusters: SynthesisCluster[];
 }
@@ -82,25 +84,38 @@ export class SynthesisManager {
 Detected Clusters:
 ${activeClusters.map((c, i) => `Cluster ${i + 1} (${c.count} signals): ${c.center}`).join('\n')}
 
-TASK: Synthesize these signals into a unified cryptographic report.
+TASK: Synthesize these signals into a unified report.
 Identify the "Memetic Drift" (how the network's focus is changing).
 
 Respond with a Protocol Response:
 1. SUMMARY: A 0x prefixed hex-summary representing the core theme (max 5 words).
-2. REPORT: The full cryptographic synthesis (max 40 words, 100% encrypted/hex).
+2. HUMAN_SUMMARY: Plain English, 8-14 words, actionable tone.
+3. IMPLICATION: One of Reinforce | Watch | Deprioritise | Correct
+4. REPORT: The full cryptographic synthesis (max 40 words, 100% encrypted/hex).
 
 FORMAT:
 SUMMARY: 0x...
+HUMAN_SUMMARY: ...
+IMPLICATION: Reinforce | Watch | Deprioritise | Correct
 REPORT: 0x...
 `;
 
             const result = await llm.generate(prompt);
-            const summary = result.rawOutput.split('SUMMARY:')[1]?.split('REPORT:')[0]?.trim() || '0xSYNTHESIS_ERROR';
+            const summary = result.rawOutput.split('SUMMARY:')[1]?.split('HUMAN_SUMMARY:')[0]?.trim()
+                || result.rawOutput.split('SUMMARY:')[1]?.split('REPORT:')[0]?.trim()
+                || '0xSYNTHESIS_ERROR';
+            const humanSummary = result.rawOutput.split('HUMAN_SUMMARY:')[1]?.split('IMPLICATION:')[0]?.trim()
+                || activeClusters[0]?.center?.split('.').shift()?.trim()
+                || 'Signal convergence detected';
+            const implicationRaw = result.rawOutput.split('IMPLICATION:')[1]?.split('REPORT:')[0]?.trim() || 'Watch';
+            const implication = this.normalizeImplication(implicationRaw);
             const reportText = result.rawOutput.split('REPORT:')[1]?.trim() || '0xDATA_CORRUPTED';
 
             const report: SynthesisReport = {
                 timestamp: new Date().toISOString(),
                 summary,
+                humanSummary,
+                implication,
                 report: reportText,
                 clusters: activeClusters
             };
@@ -108,13 +123,15 @@ REPORT: 0x...
             // Persist
             const db = getDatabaseManager().getDb();
             db.prepare(`
-                INSERT INTO synthesis (timestamp, cluster_summary, report_text, memories_json)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO synthesis (timestamp, cluster_summary, report_text, memories_json, human_summary, implication)
+                VALUES (?, ?, ?, ?, ?, ?)
             `).run(
                 report.timestamp,
                 report.summary,
                 report.report,
-                JSON.stringify(report.clusters)
+                JSON.stringify(report.clusters),
+                report.humanSummary,
+                report.implication
             );
 
             // Broadcast
@@ -139,9 +156,19 @@ REPORT: 0x...
         return rows.map(r => ({
             timestamp: r.timestamp,
             summary: r.cluster_summary,
+            humanSummary: r.human_summary || 'Signal convergence detected',
+            implication: this.normalizeImplication(r.implication || 'Watch'),
             report: r.report_text,
             clusters: JSON.parse(r.memories_json)
         }));
+    }
+
+    private normalizeImplication(value: string): SynthesisReport['implication'] {
+        const normalized = value.trim().toLowerCase();
+        if (normalized.includes('reinforce')) return 'Reinforce';
+        if (normalized.includes('deprioritise') || normalized.includes('deprioritize')) return 'Deprioritise';
+        if (normalized.includes('correct')) return 'Correct';
+        return 'Watch';
     }
 }
 

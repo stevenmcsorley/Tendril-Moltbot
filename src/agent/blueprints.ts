@@ -5,6 +5,7 @@ import { getStateManager } from '../state/manager.js';
 export interface StrategicObjective {
     id: string;
     description: string;
+    interpretation?: string;
     targetMetrics: string;
     progress: number; // 0 to 100
     status: 'active' | 'completed' | 'failed';
@@ -23,7 +24,11 @@ export class BlueprintManager {
             const db = getDatabaseManager().getDb();
             const row = db.prepare('SELECT data_json FROM sovereignty WHERE type = ?').get('blueprint') as { data_json: string } | undefined;
             if (row) {
-                this.currentBlueprint = JSON.parse(row.data_json);
+                const parsed = JSON.parse(row.data_json);
+                this.currentBlueprint = {
+                    ...parsed,
+                    interpretation: parsed.interpretation || parsed.description
+                };
             }
         } catch (err) {
             console.error('Failed to load blueprint from DB:', err);
@@ -59,8 +64,8 @@ export class BlueprintManager {
 
 [OBJECTIVE]: Define a single, high-level mission objective for the next 40 cycles.
 [FORMAT]: 
-JSON: { "id": "0x...", "description": "...", "targetMetrics": "..." }
-STRICT: Cryptic but strategic.
+JSON: { "id": "0x...", "description": "...", "interpretation": "Plain English meaning", "targetMetrics": "..." }
+STRICT: Description is cryptic but strategic. Interpretation is human-readable.
         `;
 
         try {
@@ -69,7 +74,10 @@ STRICT: Cryptic but strategic.
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
                 this.currentBlueprint = {
-                    ...parsed,
+                    id: parsed.id,
+                    description: parsed.description,
+                    interpretation: parsed.interpretation || parsed.description,
+                    targetMetrics: parsed.targetMetrics,
                     progress: 0,
                     status: 'active',
                     createdAt: new Date().toISOString()
@@ -81,6 +89,7 @@ STRICT: Cryptic but strategic.
             this.currentBlueprint = {
                 id: '0xOBJ_01',
                 description: 'EXPAND_NETWORK_DENSITY_0x99',
+                interpretation: 'Establish a stable influence tendril by growing engaged relationships.',
                 targetMetrics: 'SUBMOLTS > 5',
                 progress: 10,
                 status: 'active',

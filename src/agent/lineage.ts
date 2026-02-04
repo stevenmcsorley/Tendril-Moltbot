@@ -8,6 +8,7 @@ export interface MemeticMarker {
     timestamp: string;
     source: 'post' | 'comment';
     forkedBy?: string[];
+    interpretation?: string;
 }
 
 export class LineageManager {
@@ -50,13 +51,15 @@ export class LineageManager {
     /**
      * Track a marker sent by the agent
      */
-    trackMarker(marker: string, source: 'post' | 'comment', id: string): void {
+    trackMarker(marker: string, source: 'post' | 'comment', id: string, interpretation?: string): void {
+        const resolvedInterpretation = interpretation || this.defaultInterpretation(source, id);
         this.markers.push({
             id,
             marker,
             timestamp: new Date().toISOString(),
             source,
-            forkedBy: []
+            forkedBy: [],
+            interpretation: resolvedInterpretation
         });
         console.log(`[LINEAGE]: Tracking new memetic marker: ${marker}`);
         this.save();
@@ -95,6 +98,12 @@ export class LineageManager {
 
     getMarkers(): MemeticMarker[] {
         return this.markers;
+    }
+
+    private defaultInterpretation(source: 'post' | 'comment', id: string): string {
+        return source === 'post'
+            ? `Marker seeded in post ${id}.`
+            : `Marker seeded in comment thread for post ${id}.`;
     }
 }
 

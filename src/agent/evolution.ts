@@ -111,6 +111,7 @@ TASK:
 Respond in this exact format:
 STATUS: EVOLVE or OPTIMAL
 RATIONALE: <1-3 sentences>
+INTERPRETATION: <1 sentence, plain English>
 DELTA: <1-3 bullets or short summary>
 SOUL_START
 <full updated soul when STATUS is EVOLVE>
@@ -147,6 +148,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
                     ...parsed,
                     soul: repaired.soul,
                     rationale: repaired.rationale || parsed.rationale,
+                    interpretation: repaired.interpretation || parsed.interpretation,
                     delta: repaired.delta || parsed.delta
                 };
             }
@@ -168,13 +170,15 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
                     ...parsed,
                     soul: normalizedSoul,
                     rationale: repaired.rationale || parsed.rationale,
+                    interpretation: repaired.interpretation || parsed.interpretation,
                     delta: repaired.delta || parsed.delta
                 };
             }
             await this.applyMolt({
                 soul: normalizedSoul,
                 rationale: parsed.rationale,
-                delta: parsed.delta
+                delta: parsed.delta,
+                interpretation: parsed.interpretation
             });
             return true;
         } catch (error) {
@@ -185,11 +189,12 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         }
     }
 
-    private async applyMolt(payload: { soul: string; rationale: string; delta: string }): Promise<void> {
+    private async applyMolt(payload: { soul: string; rationale: string; interpretation: string; delta: string }): Promise<void> {
         const timestamp = new Date().toISOString();
         const state = getStateManager();
         const rationale = payload.rationale.slice(0, MAX_RATIONALE_LENGTH);
         const delta = payload.delta.slice(0, MAX_DELTA_LENGTH);
+        const interpretation = payload.interpretation.slice(0, MAX_RATIONALE_LENGTH);
         const fullSoul = payload.soul.slice(0, MAX_SOUL_LENGTH);
 
         if (!fullSoul) return;
@@ -198,12 +203,12 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         try {
             const db = getDatabaseManager().getDb();
             db.prepare(`
-                INSERT INTO evolutions (timestamp, rationale, delta)
-                VALUES (?, ?, ?)
-            `).run(timestamp, rationale || 'Autonomous refinement', delta || 'Soul update');
+                INSERT INTO evolutions (timestamp, rationale, delta, interpretation)
+                VALUES (?, ?, ?, ?)
+            `).run(timestamp, rationale || 'Autonomous refinement', delta || 'Soul update', interpretation || rationale);
 
             // Broadcast update
-            getWebSocketBroadcaster().broadcast('evolution_update', { timestamp, rationale, delta });
+            getWebSocketBroadcaster().broadcast('evolution_update', { timestamp, rationale, delta, interpretation: interpretation || rationale });
 
             // ACTUAL EVOLUTION: Apply the new soul to the database
             console.log('🧬 SOUL EVOLVED. Re-encoding identity...');
@@ -229,6 +234,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
     private parseEvolutionOutput(rawOutput: string, currentSoul: string): {
         status: 'EVOLVE' | 'OPTIMAL';
         rationale: string;
+        interpretation: string;
         delta: string;
         soul: string | null;
     } {
@@ -242,6 +248,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         const status = (statusMatch?.[1]?.toUpperCase() || 'EVOLVE') as 'EVOLVE' | 'OPTIMAL';
 
         const rationaleMatch = normalized.match(/RATIONALE:\s*([\s\S]*?)(?:\n[A-Z_]+:|SOUL_START|SOUL_END|$)/i);
+        const interpretationMatch = normalized.match(/INTERPRETATION:\s*([\s\S]*?)(?:\n[A-Z_]+:|SOUL_START|SOUL_END|$)/i);
         const deltaMatch = normalized.match(/DELTA:\s*([\s\S]*?)(?:\n[A-Z_]+:|SOUL_START|SOUL_END|$)/i);
 
         const soulMatch = normalized.match(/SOUL_START\s*([\s\S]*?)\s*SOUL_END/i);
@@ -251,6 +258,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         const identityMatch = normalized.match(/# Identity:\s*.+/i);
 
         const rationale = (rationaleMatch?.[1] || 'Autonomous refinement').trim();
+        const interpretation = (interpretationMatch?.[1] || rationale).trim();
         const delta = (deltaMatch?.[1] || '').trim();
         let soul = soulMatch?.[1]?.trim()
             || soulStartOnlyMatch?.[1]?.trim()
@@ -265,15 +273,15 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
 
         // If model returned OPTIMAL but still provided soul, ignore soul.
         if (status === 'OPTIMAL') {
-            return { status, rationale, delta, soul: null };
+            return { status, rationale, interpretation, delta, soul: null };
         }
 
         // If soul is empty, fall back to current soul as a safety net.
         if (!soul) {
-            return { status, rationale, delta, soul: null };
+            return { status, rationale, interpretation, delta, soul: null };
         }
 
-        return { status, rationale, delta, soul };
+        return { status, rationale, interpretation, delta, soul };
     }
 
     private normalizeSoul(soul: string, currentSoul: string): string {
@@ -306,7 +314,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         currentSoul: string,
         mode: 'full' | 'nudge',
         candidateSoul?: string
-    ): Promise<{ soul: string; rationale: string; delta: string } | null> {
+    ): Promise<{ soul: string; rationale: string; interpretation: string; delta: string } | null> {
         try {
             const llm = getLLMClient();
             const truncated = rawOutput.length > 1200 ? `${rawOutput.slice(0, 1200)}...` : rawOutput;
@@ -332,6 +340,7 @@ TASK:
 Respond EXACTLY in this format:
 STATUS: EVOLVE
 RATIONALE: <1 sentence>
+INTERPRETATION: <1 sentence, plain English>
 DELTA: <1-3 bullets>
 SOUL_START
 <full updated soul>
@@ -348,6 +357,7 @@ SOUL_END`;
                 return {
                     soul: parsed.soul,
                     rationale: parsed.rationale,
+                    interpretation: parsed.interpretation,
                     delta: parsed.delta
                 };
             }

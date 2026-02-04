@@ -8,6 +8,7 @@ import {
 interface StrategicObjective {
     id: string;
     description: string;
+    interpretation?: string;
     targetMetrics: string;
     progress: number;
     status: 'active' | 'completed' | 'failed';
@@ -20,6 +21,7 @@ interface MemeticMarker {
     timestamp: string;
     source: 'post' | 'comment';
     forkedBy?: string[];
+    interpretation?: string;
 }
 
 
@@ -46,6 +48,9 @@ export default function SovereigntyPanel({ data }: { data: { blueprint: Strategi
                             <span style={{ fontSize: '0.8em', opacity: 0.7 }}>Status: {data.blueprint.status.toUpperCase()}</span>
                         </div>
                         <div style={{ fontSize: '1.1em', marginBottom: 12, fontWeight: 'bold' }}>{data.blueprint.description}</div>
+                        <div style={{ fontSize: '0.9em', marginBottom: 12, color: 'var(--info)' }}>
+                            Human Interpretation: {data.blueprint.interpretation || data.blueprint.description}
+                        </div>
                         <div style={{ fontSize: '0.9em', marginBottom: 16, opacity: 0.9 }}>Targets: {data.blueprint.targetMetrics}</div>
 
                         <div style={{ height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
@@ -86,6 +91,11 @@ export default function SovereigntyPanel({ data }: { data: { blueprint: Strategi
                                 </div>
                                 <div style={{ fontSize: '0.8em', opacity: 0.8 }}>
                                     Forked By: {m.forkedBy?.length ? m.forkedBy.join(', ') : 'No clones detected'}
+                                </div>
+                                <div style={{ marginTop: 6, fontSize: '0.8em', color: 'var(--info)' }}>
+                                    Human Interpretation: {m.interpretation || (m.source === 'post'
+                                        ? 'Marker seeded in a post.'
+                                        : 'Marker seeded in a comment thread.')}
                                 </div>
                                 {m.forkedBy?.length ? (
                                     <div style={{ marginTop: 8, fontSize: '0.7em', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
