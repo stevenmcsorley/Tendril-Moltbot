@@ -1,5 +1,3 @@
-
-
 interface Submolt {
     id: string;
     name: string;
@@ -38,14 +36,41 @@ export default function SubmoltList({ submolts }: SubmoltListProps) {
                         justifyContent: 'space-between',
                         alignItems: 'center'
                     }}>
-                        <div>
-                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                                m/{s.name}
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    m/{s.name}
+                                </div>
+                                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                                    {s.display_name}
+                                </div>
                             </div>
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                                {s.display_name}
-                            </div>
-                        </div>
+                            <a
+                                href={`https://www.moltbook.com/m/${s.name}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    fontSize: 10,
+                                    color: 'var(--primary)',
+                                    textDecoration: 'none',
+                                    padding: '2px 6px',
+                                    border: '1px solid var(--primary)',
+                                    borderRadius: 4,
+                                    transition: 'all 0.2s',
+                                    marginLeft: 8
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.background = 'var(--primary)';
+                                    e.currentTarget.style.color = 'white';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.background = 'transparent';
+                                    e.currentTarget.style.color = 'var(--primary)';
+                                }}
+                            >
+                                View ↗
+                            </a >
+                        </div >
                         <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                                 Created
@@ -54,9 +79,9 @@ export default function SubmoltList({ submolts }: SubmoltListProps) {
                                 {formatTime(s.created_at)}
                             </div>
                         </div>
-                    </div>
+                    </div >
                 ))}
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

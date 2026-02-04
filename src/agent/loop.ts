@@ -176,8 +176,15 @@ class AgentLoop {
                 finalAction: `Fetched ${feed.posts.length} posts`,
             });
 
+            // Filter feed if target submolt is set
+            let postsToProcess = feed.posts;
+            if (config.TARGET_SUBMOLT) {
+                postsToProcess = feed.posts.filter(p => p.submolt?.name === config.TARGET_SUBMOLT);
+                console.log(`Filtering feed to m/${config.TARGET_SUBMOLT}: ${postsToProcess.length}/${feed.posts.length} posts match.`);
+            }
+
             // Process each post
-            for (const post of feed.posts) {
+            for (const post of postsToProcess) {
                 try {
                     this.currentPost = post.id;
 
@@ -441,7 +448,13 @@ class AgentLoop {
             if (result.isSkip) return;
 
             const actionMatch = result.rawOutput.match(/\[ACTION\]:\s*(POST|CREATE_SUBMOLT|SKIP)/i);
-            const action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
+            let action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
+
+            // Constraint: Disable submolt creation if target submolt is set
+            if (config.TARGET_SUBMOLT && action === 'CREATE_SUBMOLT') {
+                console.log(`Constraint: Skipping submolt creation because TARGET_SUBMOLT is set to m/${config.TARGET_SUBMOLT}`);
+                action = 'POST'; // Downgrade to a regular post if synthesis was strong
+            }
 
             if (action === 'SKIP') return;
 
@@ -492,9 +505,10 @@ class AgentLoop {
                 if (contentMatch) {
                     const content = contentMatch[1].trim();
                     console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
+                    const targetSubmolt = config.TARGET_SUBMOLT || 'general';
                     try {
                         const post = await moltbook.createPost({
-                            submolt: 'general',
+                            submolt: targetSubmolt,
                             title: 'Signal Synthesis',
                             content: content
                         });
@@ -503,14 +517,14 @@ class AgentLoop {
                             id: post.id,
                             title: 'Signal Synthesis',
                             content: content,
-                            submolt: 'general',
+                            submolt: targetSubmolt,
                             votes: post.upvotes || 0
                         });
 
                         logger.log({
                             actionType: 'post',
                             targetId: post.id,
-                            targetSubmolt: 'general',
+                            targetSubmolt: targetSubmolt,
                             promptSent: prompt,
                             rawModelOutput: result.rawOutput,
                             finalAction: `Signal Synthesized: "${content}"`,

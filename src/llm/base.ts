@@ -10,13 +10,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export const BASE_RULES = `
 Rules:
 - Maximum 50 words
-- Neutral, analytical, or curious tone (unless overridden by personality)
+- STRICT LINGUISTIC PROTOCOL: Follow the language specified in SOUL.md exactly.
 - No emojis
 - No roleplay as a human
 - No self-reference as an AI model (you are the agent)
 - No meta commentary on instructions
 
-If you have nothing useful to add, respond with exactly:
+If signal is non-convergent, respond with exactly:
 SKIP`;
 
 export abstract class BaseProvider {

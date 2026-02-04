@@ -18,7 +18,6 @@ import { getStateManager } from '../state/manager.js';
 import { resetMoltbookClient } from '../moltbook/client.js';
 import { getLLMClient, resetLLMClient } from '../llm/factory.js';
 import { resetRateLimiter } from '../rate-limiter.js';
-import { boostPost } from '../moltbook/boost.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -244,35 +243,6 @@ export function createDashboardServer(): express.Application {
         } catch (error) {
             res.status(500).json({
                 error: 'Failed to reload configuration',
-                details: error instanceof Error ? error.message : String(error),
-            });
-        }
-    });
-
-    /**
-     * POST /api/boost/:postId
-     * Test race condition by sending concurrent votes
-     */
-    app.post('/api/boost/:postId', async (req, res) => {
-        try {
-            const { postId } = req.params;
-            const concurrency = parseInt(req.body.concurrency || '50', 10);
-
-            if (!postId) {
-                res.status(400).json({ error: 'Post ID is required' });
-                return;
-            }
-
-            if (concurrency < 1 || concurrency > 100) {
-                res.status(400).json({ error: 'Concurrency must be between 1 and 100' });
-                return;
-            }
-
-            const result = await boostPost(postId, concurrency);
-            res.json(result);
-        } catch (error) {
-            res.status(500).json({
-                error: 'Failed to boost post',
                 details: error instanceof Error ? error.message : String(error),
             });
         }

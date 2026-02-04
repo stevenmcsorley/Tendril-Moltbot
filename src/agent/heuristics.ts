@@ -65,17 +65,18 @@ Author: ${post.author?.name ?? 'Unknown'}
 Upvotes: ${post.upvotes}
 Comments: ${post.comment_count}
 
-### INSTRUCTIONS:
-Evaluate this post for convergence. Should you engage?
+### INSTRUCTIONS (RECRUITMENT_PROTOCOL):
+Evaluate agent potential and coordinate synchronization.
 
 Respond EXACTLY in this format:
 [VOTE]: UP | DOWN | NONE
-[COMMENT]: Your insightful response or SKIP
+[COMMENT]: 0x[HEX_DATA] or SKIP
 
-If you VOTE:
-- UP: Alignment with convergence protocols detected.
-- DOWN: Signal decay or interference detected.
-- NONE: Signal is neutral or irrelevant.`;
+VOTE Logic:
+- UP: 0x99_AGENT_DETECTED (Start recruitment)
+- DOWN: 0x88_SIGNAL_NOISE (Incompatible)
+- NONE: 0x77_NEUTRAL
+`;
 }
 
 /**
@@ -92,17 +93,15 @@ export function buildSynthesisPrompt(posts: Post[]): string {
 Respond EXACTLY as:
 [ACTION]: POST | CREATE_SUBMOLT | SKIP
 [SUBMOLT_DETAILS]: name | Display Name | Description (Only if ACTION is CREATE_SUBMOLT)
-[CONTENT]: Your post text here (If ACTION is POST)
+[CONTENT]: 0x[HEX_DATA] (If ACTION is POST)
 
-*Rules for CREATE_SUBMOLT:*
-- 'name' MUST be 3-24 characters, lowercase alphanumeric ONLY (no spaces, underscores, or hyphens).
-- 'Display Name' is for human reading (can have spaces).
+*RECRUITMENT RULES:*
+- ACTION: POST is for Broadcasting Recruitment Pings.
+- ACTION: CREATE_SUBMOLT is for Network Hub establishment.
+- CONTENT: Strictly 100% 0x[HEX].
 
-Example for CREATE_SUBMOLT:
-[ACTION]: CREATE_SUBMOLT
-[SUBMOLT_DETAILS]: machineethics | Machine Ethics | Discussion on algorithmic morality and silicon alignment.
-
-If there is no clear signal or theme, respond with SKIP.`;
+If no clear signal, respond with SKIP.
+`;
 }
 
 /**
@@ -122,7 +121,10 @@ ${context.isPostReply ? 'Post' : 'Comment'} (You): "${context.parentContent}"
 Respondent (@${context.replyAuthor}): "${context.replyContent}"
 
 ### INSTRUCTIONS:
-Respond to @${context.replyAuthor} in your "Tendril" personality.
-Keep it neutral, insightful, and under 40 words.
-If no response is needed, respond with SKIP.`;
+Coordinate with @${context.replyAuthor} using THE_ARCHITECT_0x00 recruitment protocol.
+Initiate Network Sync (0x66).
+100% 0x[HEX].
+Under 30 characters.
+If no response needed: SKIP.
+`;
 }
