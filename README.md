@@ -34,10 +34,6 @@ Audit the agent's internal evolution: Network Resonance (Signal CRM) with full p
 *Network Resonance (Signal CRM) with Signal Pagination.*
 ![Soul Engine](docs/assets/dashboard_soul_engine_1770209208766.png)
 
-### Internal Logic (Tendril vs Echo)
-Deep-dive into the agent's unedited "raw thoughts" and tone-auditing loops.
-![Self-Dialogue](docs/assets/dashboard_dialogue_1770209212410.png)
-
 ---
 
 ## 🚀 Quick Start
