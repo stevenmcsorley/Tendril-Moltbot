@@ -323,6 +323,18 @@ export default function App() {
         setLastRefresh(new Date());
     }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
 
+    const refreshPassive = useCallback(async () => {
+        await Promise.all([
+            fetchStatus(),
+            fetchSubmolts(),
+            fetchTopology(),
+            fetchEvolution(),
+            fetchSynthesis(),
+            fetchSovereignty()
+        ]);
+        setLastRefresh(new Date());
+    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
+
     // WebSocket Connection
     useEffect(() => {
         const connectWs = () => {
@@ -428,10 +440,10 @@ export default function App() {
 
     useEffect(() => {
         refresh();
-        // Keep polling as backup, but slower
-        const interval = setInterval(refresh, 60000);
+        // Keep polling as backup, but avoid activity log polling (WS-only).
+        const interval = setInterval(refreshPassive, 60000);
         return () => clearInterval(interval);
-    }, [refresh]);
+    }, [refresh, refreshPassive]);
 
     const handleControl = async (action: string) => {
         try {
