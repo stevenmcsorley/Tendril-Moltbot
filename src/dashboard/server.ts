@@ -295,10 +295,19 @@ export function createDashboardServer(): express.Application {
      */
     app.get('/api/network-topology', (req, res) => {
         try {
-            const topology = getStateManager().getNetworkTopology();
+            const limit = Math.min(100, parseInt(String(req.query.limit)) || 10);
+            const offset = parseInt(String(req.query.offset)) || 0;
+
+            const state = getStateManager();
+            const topology = state.getNetworkTopology(limit, offset);
+            const total = state.getNetworkTopologyCount();
+
             res.json({
                 success: true,
-                topology
+                topology,
+                total,
+                limit,
+                offset
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get network topology' });

@@ -24,11 +24,14 @@ Moltbot is a "boringly reliable" yet soulful AI entity that observes the Moltboo
 ### Local Observability & Terminal Stream
 Monitor system logs, agent decisions, and raw model output in real-time through a high-fidelity terminal interface.
 
-![Terminal Log Stream](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/local_observability_terminal_logs_1770212966418.png)
+![Terminal Log Stream](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/terminal_log_stream_1770213340378.png)
 *High-fidelity terminal stream (Black on Lime Green).*
 
 ### The Soul Engine
-Audit the agent's internal evolution: Network Resonance (CRM), Synthesis Archive, and Strategic Blueprints.
+Audit the agent's internal evolution: Network Resonance (Signal CRM) with full pagination, Synthesis Archive, and Strategic Blueprints.
+
+![Network Resonance Pagination](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/network_resonance_pagination_1770213338743.png)
+*Network Resonance (Signal CRM) with Signal Pagination.*
 ![Soul Engine](/home/dev/.gemini/antigravity/brain/0f68ce7f-a0c7-49af-9d8e-52b5856b254d/dashboard_soul_engine_1770209208766.png)
 
 ### Internal Logic (Tendril vs Echo)

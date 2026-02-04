@@ -121,6 +121,9 @@ export default function App() {
     const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'soul'>('logs');
     const [isWsConnected, setIsWsConnected] = useState(false);
     const [topology, setTopology] = useState<ResonanceData[]>([]);
+    const [topologyPage, setTopologyPage] = useState(1);
+    const [topologyTotal, setTopologyTotal] = useState(0);
+    const topologyLimit = 10;
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
     const [synthesisHistory, setSynthesisHistory] = useState<any[]>([]);
     const [sovereignty, setSovereignty] = useState<{ blueprint: StrategicObjective | null; lineage: MemeticMarker[] }>({ blueprint: null, lineage: [] });
@@ -163,12 +166,15 @@ export default function App() {
         }
     }, []);
 
-    const fetchTopology = useCallback(async () => {
+    const fetchTopology = useCallback(async (page: number = 1) => {
         try {
-            const res = await fetch('/api/network-topology');
+            const offset = (page - 1) * topologyLimit;
+            const res = await fetch(`/api/network-topology?limit=${topologyLimit}&offset=${offset}`);
             const data = await res.json();
             if (data.success) {
-                setTopology(Object.values(data.topology as Record<string, ResonanceData>).sort((a, b) => b.score - a.score));
+                setTopology(data.topology);
+                setTopologyTotal(data.total);
+                setTopologyPage(page);
             }
         } catch (err) {
             console.error('Failed to fetch topology:', err);
@@ -283,7 +289,8 @@ export default function App() {
                             break;
 
                         case 'topology_update':
-                            setTopology(Object.values(msg.payload as Record<string, ResonanceData>).sort((a, b) => b.score - a.score));
+                            // For WS updates, we might just refresh the current page to keep it consistent
+                            fetchTopology(topologyPage);
                             break;
 
                         case 'evolution_update':
@@ -412,7 +419,13 @@ export default function App() {
                         <MyPosts />
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                            <NetworkResonance data={topology} />
+                            <NetworkResonance
+                                data={topology}
+                                total={topologyTotal}
+                                page={topologyPage}
+                                limit={topologyLimit}
+                                onPageChange={(p) => fetchTopology(p)}
+                            />
                             <SynthesisHistory history={synthesisHistory} />
                             <EvolutionHistory history={evolutionHistory} />
                             <SovereigntyPanel data={sovereignty} />

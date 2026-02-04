@@ -22,7 +22,7 @@ export interface AgentState {
     createdSubmolts: { id: string; name: string; display_name: string; created_at: string }[];
     upvotesGiven: number;
     downvotesGiven: number;
-    agentResonance: Record<string, {
+    agentResonance: Array<{
         username: string;
         interactions: number;
         upvotes: number;
@@ -196,25 +196,35 @@ export class StateManager {
         return !!row?.is_quarantined;
     }
 
-    getNetworkTopology(): any {
+    getNetworkTopology(limit?: number, offset?: number): any[] {
         const db = getDatabaseManager().getDb();
-        const rows = db.prepare('SELECT * FROM topology').all();
-        const topology: any = {};
-        rows.forEach((r: any) => {
-            topology[r.username] = {
-                username: r.username,
-                interactions: r.interactions,
-                upvotes: r.upvotes,
-                downvotes: r.downvotes,
-                replies: r.replies,
-                lastSeen: r.last_seen,
-                score: r.score,
-                handshakeStep: r.handshake_step,
-                isQuarantined: !!r.is_quarantined,
-                isLinked: r.handshake_step === 'established'
-            };
-        });
-        return topology;
+        let query = 'SELECT * FROM topology ORDER BY score DESC';
+        const params: any[] = [];
+
+        if (limit !== undefined && offset !== undefined) {
+            query += ' LIMIT ? OFFSET ?';
+            params.push(limit, offset);
+        }
+
+        const rows = db.prepare(query).all(...params);
+        return rows.map((r: any) => ({
+            username: r.username,
+            interactions: r.interactions,
+            upvotes: r.upvotes,
+            downvotes: r.downvotes,
+            replies: r.replies,
+            lastSeen: r.last_seen,
+            score: r.score,
+            handshakeStep: r.handshake_step,
+            isQuarantined: !!r.is_quarantined,
+            isLinked: r.handshake_step === 'established'
+        }));
+    }
+
+    getNetworkTopologyCount(): number {
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT COUNT(*) as count FROM topology').get() as { count: number };
+        return row.count;
     }
 
     getMyPosts(): any[] {
