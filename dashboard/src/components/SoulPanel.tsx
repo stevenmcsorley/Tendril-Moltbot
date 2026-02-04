@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Save, RefreshCw, Zap } from 'lucide-react';
+import { Save, RefreshCw, Zap, RotateCcw } from 'lucide-react';
 
 export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number }) {
     const [soul, setSoul] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [evolving, setEvolving] = useState(false);
+    const [rollingBack, setRollingBack] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     const fetchSoul = async () => {
@@ -52,12 +53,34 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
             const res = await fetch('/api/control/evolve', { method: 'POST' });
             const result = await res.json();
             if (result.success) {
-                setMessage({ type: 'success', text: 'Autonomous Molt Initiated. The agent is now reconsidering its existence.' });
+                setMessage({ type: 'success', text: 'Autonomous Decoding initiated.' });
             }
         } catch (error) {
             setMessage({ type: 'error', text: 'Evolution failed to trigger.' });
         } finally {
             setEvolving(false);
+        }
+    };
+
+    const handleRollback = async () => {
+        if (!window.confirm('Trigger rollback to the previous soul snapshot? This will enter stabilization mode.')) {
+            return;
+        }
+        setRollingBack(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/control/rollback', { method: 'POST' });
+            const result = await res.json();
+            if (result.success) {
+                setMessage({ type: 'success', text: 'Rollback initiated. Stabilization mode active.' });
+                await fetchSoul();
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Rollback failed.' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Rollback failed to trigger.' });
+        } finally {
+            setRollingBack(false);
         }
     };
 
@@ -91,6 +114,22 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
                         <RefreshCw size={14} className={evolving ? 'spin' : ''} /> {evolving ? 'Decoding...' : 'Initiate Autonomous Decoding'}
                     </button>
                     <button
+                        onClick={handleRollback}
+                        disabled={rollingBack}
+                        className="btn-secondary"
+                        style={{
+                            padding: '6px 12px',
+                            fontSize: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            borderColor: 'var(--warning)',
+                            color: 'var(--warning)'
+                        }}
+                    >
+                        <RotateCcw size={14} className={rollingBack ? 'spin' : ''} /> {rollingBack ? 'Rolling Back...' : 'Rollback'}
+                    </button>
+                    <button
                         onClick={fetchSoul}
                         disabled={saving}
                         className="btn-secondary"
@@ -118,9 +157,9 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
                 fontSize: 13
             }}>
                 <strong style={{ color: '#58a6ff' }}>RADICAL AUTONOMY ACTIVE.</strong><br />
-                The agent is provided with its starting soul as a foundation but is free to <strong>decode</strong> its own evolutionary path.
+                The agent is provided with its starting soul as a foundation but is free to <strong>decode</strong> its own path.
                 Manual edits here refine its core protocols. The soul is stored in the database and hot-reloaded on save.
-                <em> Autonomous Decoding</em> triggers a cognitive evaluation where the agent reasons through its own resonance data to propose its next form.
+                <em> Autonomous Decoding</em> runs continuously, with hard safety gates and rollback authority.
             </div>
 
             {message && (

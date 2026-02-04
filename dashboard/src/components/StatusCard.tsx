@@ -38,6 +38,13 @@ interface Status {
         enableCommenting: boolean;
         enableUpvoting: boolean;
     };
+    evolution: {
+        selfModificationCooldownUntil: string | null;
+        stabilizationUntil: string | null;
+        evolutionWindowStart: string | null;
+        evolutionWindowCount: number;
+        lastAutonomousEvolutionId: string | null;
+    };
     lastHeartbeat: string | null;
 }
 
@@ -48,6 +55,11 @@ interface StatusCardProps {
 function formatTime(iso: string | null): string {
     if (!iso) return '—';
     return new Date(iso).toLocaleString();
+}
+
+function isActive(iso: string | null): boolean {
+    if (!iso) return false;
+    return new Date(iso).getTime() > Date.now();
 }
 
 function StatusBadge({ value }: { value: 'running' | 'paused' | 'idle' | undefined }) {
@@ -152,6 +164,38 @@ export default function StatusCard({ status }: StatusCardProps) {
                 <span className="status-value">
                     {status.rateLimit.maxCommentsPerDay - status.rateLimit.commentsRemaining} / {status.rateLimit.maxCommentsPerDay}
                 </span>
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+                <h2><Lock size={18} /> Autonomy State</h2>
+                <div className="status-row">
+                    <Tooltip text="Prevents additional soul changes and blocks posts for 24h after an autonomous evolution.">
+                        <span className="status-label">Self-Modification Cooldown</span>
+                    </Tooltip>
+                    <span className={`status-value ${isActive(status.evolution.selfModificationCooldownUntil) ? 'warning' : ''}`} title={formatTime(status.evolution.selfModificationCooldownUntil)}>
+                        {isActive(status.evolution.selfModificationCooldownUntil)
+                            ? <RelativeTime value={status.evolution.selfModificationCooldownUntil} />
+                            : 'Inactive'}
+                    </span>
+                </div>
+                <div className="status-row">
+                    <Tooltip text="Rollback stabilization window. Posting is blocked and engagement is constrained.">
+                        <span className="status-label">Stabilization Mode</span>
+                    </Tooltip>
+                    <span className={`status-value ${isActive(status.evolution.stabilizationUntil) ? 'warning' : ''}`} title={formatTime(status.evolution.stabilizationUntil)}>
+                        {isActive(status.evolution.stabilizationUntil)
+                            ? <RelativeTime value={status.evolution.stabilizationUntil} />
+                            : 'Inactive'}
+                    </span>
+                </div>
+                <div className="status-row">
+                    <Tooltip text="Evolution window cap (max 1 per 24h).">
+                        <span className="status-label">Evolution Window</span>
+                    </Tooltip>
+                    <span className="status-value">
+                        {status.evolution.evolutionWindowCount} / 1
+                    </span>
+                </div>
             </div>
 
 

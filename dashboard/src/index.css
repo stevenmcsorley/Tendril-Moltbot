@@ -241,6 +241,10 @@ body {
   color: var(--error);
 }
 
+.status-value.warning {
+  color: var(--warning);
+}
+
 .controls {
   display: flex;
   gap: 8px;

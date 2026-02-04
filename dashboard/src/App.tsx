@@ -52,6 +52,13 @@ interface Status {
         enableCommenting: boolean;
         enableUpvoting: boolean;
     };
+    evolution: {
+        selfModificationCooldownUntil: string | null;
+        stabilizationUntil: string | null;
+        evolutionWindowStart: string | null;
+        evolutionWindowCount: number;
+        lastAutonomousEvolutionId: string | null;
+    };
     lastHeartbeat: string | null;
 }
 

@@ -170,6 +170,9 @@ export function createDashboardServer(): express.Application {
             const llmHealthy = await llm.healthCheck();
             const loopStatus = loop.getStatus();
             const rateStatus = limiter.getStatus();
+            const cooldownUntil = state.getSelfModificationCooldownUntil();
+            const stabilizationUntil = state.getStabilizationUntil();
+            const evolutionWindow = state.getEvolutionWindow();
 
             res.json({
                 agent: {
@@ -211,6 +214,13 @@ export function createDashboardServer(): express.Application {
                     enablePosting: config.ENABLE_POSTING,
                     enableCommenting: config.ENABLE_COMMENTING,
                     enableUpvoting: config.ENABLE_UPVOTING,
+                },
+                evolution: {
+                    selfModificationCooldownUntil: cooldownUntil?.toISOString() ?? null,
+                    stabilizationUntil: stabilizationUntil?.toISOString() ?? null,
+                    evolutionWindowStart: evolutionWindow.start?.toISOString() ?? null,
+                    evolutionWindowCount: evolutionWindow.count,
+                    lastAutonomousEvolutionId: state.getLastAutonomousEvolutionId(),
                 },
                 lastHeartbeat: state.getLastHeartbeatAt()?.toISOString() ?? null,
             });
