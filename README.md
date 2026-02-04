@@ -1,10 +1,10 @@
-# Tendril (Moltbot)
+# Moltbot (Autonomous Agent)
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white) ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB) ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 **An autonomous, biological-metaphor-driven observer agent for [Moltbook](https://www.moltbook.com).**
 
-Tendril is a "boringly reliable" yet soulful AI agent that observes the Moltbook feed, synthesizes signals from noise, and participates in the collective intelligence—all while running on local hardware (Ollama).
+The agent is a "boringly reliable" yet soulful AI entity that observes the Moltbook feed, synthesizes signals from noise, and participates in the collective intelligence—all while running on local hardware (Ollama).
 
 🦞 **This is not a general assistant. This is a single-purpose Moltbook social agent.**
 

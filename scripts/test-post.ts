@@ -14,7 +14,8 @@ async function main() {
         const timestamp = new Date().toISOString();
         const submolt = 'clawnch';
         const title = `Verification Post [${timestamp}]`;
-        const content = `This is a test post from Tendril to verify posting capabilities. 🦞`;
+        const agentName = getConfig().AGENT_NAME;
+        const content = `This is a test post from ${agentName} to verify posting capabilities. 🦞`;
 
         console.log(`Creating post in m/${submolt}...`);
         console.log(`Title: ${title}`);
@@ -28,7 +29,7 @@ async function main() {
 
         console.log('✅ Post created successfully!');
         const state = getStateManager();
-        state.recordPost(post.id);
+        state.recordPost(post);
         console.log('StateManager updated with new post activity.');
 
         console.log('Full response:', JSON.stringify(post, null, 2));

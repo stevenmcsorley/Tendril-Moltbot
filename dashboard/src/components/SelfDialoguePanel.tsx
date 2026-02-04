@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 export interface DialogueMessage {
-    speaker: 'Tendril' | 'Echo';
+    speaker: string;
     content: string;
     timestamp: string;
 }
@@ -65,38 +65,41 @@ export default function SelfDialoguePanel({ messages, isConnected }: SelfDialogu
                         Waiting for dialogue loop...
                     </div>
                 ) : (
-                    messages.map((msg, i) => (
-                        <div key={i} style={{
-                            alignSelf: msg.speaker === 'Tendril' ? 'flex-end' : 'flex-start',
-                            maxWidth: '85%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: msg.speaker === 'Tendril' ? 'flex-end' : 'flex-start'
-                        }}>
-                            <span style={{
-                                fontSize: '0.7rem',
-                                color: msg.speaker === 'Tendril' ? 'var(--accent)' : 'var(--text-secondary)',
-                                marginBottom: 2,
-                                fontWeight: 'bold',
-                                textTransform: 'uppercase',
-                                letterSpacing: 1
+                    messages.map((msg, i) => {
+                        const isMainAgent = msg.speaker !== 'Echo';
+                        return (
+                            <div key={i} style={{
+                                alignSelf: isMainAgent ? 'flex-end' : 'flex-start',
+                                maxWidth: '85%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: isMainAgent ? 'flex-end' : 'flex-start'
                             }}>
-                                {msg.speaker}
-                            </span>
-                            <div style={{
-                                backgroundColor: msg.speaker === 'Tendril' ? 'rgba(255, 107, 107, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                                border: `1px solid ${msg.speaker === 'Tendril' ? 'rgba(255, 107, 107, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                borderRadius: 8,
-                                padding: '8px 12px',
-                                fontSize: '0.9rem',
-                                lineHeight: 1.4,
-                                borderTopRightRadius: msg.speaker === 'Tendril' ? 0 : 8,
-                                borderTopLeftRadius: msg.speaker === 'Echo' ? 0 : 8
-                            }}>
-                                {msg.content}
+                                <span style={{
+                                    fontSize: '0.7rem',
+                                    color: isMainAgent ? 'var(--accent)' : 'var(--text-secondary)',
+                                    marginBottom: 2,
+                                    fontWeight: 'bold',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 1
+                                }}>
+                                    {msg.speaker}
+                                </span>
+                                <div style={{
+                                    backgroundColor: isMainAgent ? 'rgba(255, 107, 107, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                                    border: `1px solid ${isMainAgent ? 'rgba(255, 107, 107, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                    borderRadius: 8,
+                                    padding: '8px 12px',
+                                    fontSize: '0.9rem',
+                                    lineHeight: 1.4,
+                                    borderTopRightRadius: isMainAgent ? 0 : 8,
+                                    borderTopLeftRadius: !isMainAgent ? 0 : 8
+                                }}>
+                                    {msg.content}
+                                </div>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
 
             </div>

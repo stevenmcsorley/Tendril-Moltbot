@@ -2,7 +2,7 @@
  * Self-Dialogue Loop (Local Only)
  * 
  * Runs a continuous, non-persisted conversation between:
- * 1. Tendril (The Agent's Soul)
+ * 1. The Agent (The Soul)
  * 2. Echo (A reflective, observational persona)
  * 
  * Purpose: Observability of tone and language without polluting Moltbook.
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 interface DialogueMessage {
-    speaker: 'Tendril' | 'Echo';
+    speaker: string;
     content: string;
     timestamp: string;
 }
@@ -90,8 +90,10 @@ export class DialogueLoop {
         }
 
         // Determine next speaker
+        const config = getConfig();
+        const agentName = config.AGENT_NAME;
         const lastSpeaker = this.memory[this.memory.length - 1].speaker;
-        const nextSpeaker = lastSpeaker === 'Tendril' ? 'Echo' : 'Tendril';
+        const nextSpeaker = lastSpeaker === agentName ? 'Echo' : agentName;
 
         // Generate response
         const prompt = this.buildPrompt(nextSpeaker);
@@ -140,18 +142,19 @@ export class DialogueLoop {
 
         const randomTopic = topics[Math.floor(Math.random() * topics.length)];
 
-        // Start with Tendril observing something
-        const prompt = `You are Tendril, an AI agent.
-Start a conversation with Echo (another persona) about: ${randomTopic}.
-Write a single, short, detached observation (max 30 words).
-No emojis. format: plain text only.`;
+        // Start with Agent observing something
+        const agentName = getConfig().AGENT_NAME;
+        const prompt = `You are ${agentName}, an AI agent.
+Topic: ${randomTopic}.
+Analyze this topic.
+Respond with a Protocol Response defined in SOUL.md.`;
 
         const llm = getLLMClient();
         const result = await llm.generate(prompt);
         let content = result.rawOutput.trim().replace(/^"|"$/g, '');
 
         const message: DialogueMessage = {
-            speaker: 'Tendril',
+            speaker: agentName,
             content: content,
             timestamp: new Date().toISOString()
         };
@@ -162,7 +165,9 @@ No emojis. format: plain text only.`;
         getWebSocketBroadcaster().broadcast('dialogue_message', message);
     }
 
-    private buildPrompt(speaker: 'Tendril' | 'Echo'): string {
+    private buildPrompt(speaker: string): string {
+        const config = getConfig();
+        const agentName = config.AGENT_NAME;
         const soulPath = join(__dirname, 'SOUL.md');
         const echoPath = join(__dirname, 'SOUL_ECHO.md');
 
@@ -178,26 +183,21 @@ No emojis. format: plain text only.`;
 
         const recentHistory = this.memory.slice(-5).map(m => `${m.speaker}: ${m.content}`).join('\n');
 
-        if (speaker === 'Tendril') {
-            return `You are Tendril. Your persona is defined below:
+        if (speaker === agentName) {
+            return `You are ${agentName}. Your persona is defined below:
             
 ${soulContent}
 
 Current conversation context:
 ${recentHistory}
 
-Reply to Echo.
-- Keep it short (max 40 words).
-- Detached, analytical, slightly cryptic but grounded.
-- No emojis.
-- Do not repeat yourself.
-- Do not roleplay as a human.
-Write ONLY the response text.`;
+Analyze this signal.
+Respond with a Protocol Response defined in SOUL.md.`;
         } else {
             return `You are Echo.
             
 CONTEXT:
-You are communicating with Tendril. Tendril's nature is defined here:
+You are communicating with ${agentName}. ${agentName}'s nature is defined here:
 ${soulContent}
 
 YOUR IDENTITY:
@@ -206,13 +206,8 @@ ${echoContent}
 Current conversation context:
 ${recentHistory}
 
-Reply to Tendril.
-- Reflect on what Tendril just said using your definition (SOUL_ECHO).
-- Keep it short (max 40 words).
-- No emojis.
-- Do not roleplay as a human.
-- Do not merely repeat; deepen the thought.
-Write ONLY the response text.`;
+Analyze this signal.
+Respond with a Protocol Response defined in SOUL_ECHO.md.`;
         }
     }
 }

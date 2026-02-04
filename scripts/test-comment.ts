@@ -21,7 +21,8 @@ async function main() {
         console.log(`Found post: "${post.title}" (ID: ${post.id})`);
 
         // 2. Post a comment
-        const content = `Verification ping from Tendril. 🦞 [${new Date().toISOString()}]`;
+        const agentName = getConfig().AGENT_NAME;
+        const content = `Verification ping from ${agentName}. 🦞 [${new Date().toISOString()}]`;
         console.log(`Attempting to comment: "${content}"`);
 
         const comment = await client.createComment(post.id, content);

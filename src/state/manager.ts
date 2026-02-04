@@ -140,14 +140,14 @@ export class StateManager {
     /**
      * Record that we made a post
      */
-    recordPost(post?: { id: string; title: string; content: string; submolt: string; votes?: number }): void {
+    recordPost(post?: { id: string; title: string; content?: string; submolt: any; votes?: number }): void {
         this.state.lastPostAt = new Date().toISOString();
         if (post) {
             this.state.myPosts.push({
                 id: post.id,
                 title: post.title,
-                content: post.content,
-                submolt: post.submolt,
+                content: post.content || '',
+                submolt: typeof post.submolt === 'string' ? post.submolt : (post.submolt?.name || 'general'),
                 votes: post.votes || 0,
                 createdAt: new Date().toISOString()
             });
