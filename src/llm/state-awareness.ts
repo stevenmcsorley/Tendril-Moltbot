@@ -76,5 +76,7 @@ Snapshot:
 - Objective Phase: ${gateState.objectivePhase}
 - Last Synthesis: ${synthesisRecency} (${synthesisImplication}) — ${synthesisSummary}
 - Synthesis Cooldown: ${gateState.synthesisCooldownActive ? 'active' : 'inactive'}
+- Self-Modification Cooldown: ${gateState.selfModificationCooldownActive ? 'active' : 'inactive'}
+- Stabilization Mode: ${gateState.stabilizationActive ? 'active' : 'inactive'}
 - Last Evolution: ${evolutionRecency} — ${evolutionInterpretation}`;
 }

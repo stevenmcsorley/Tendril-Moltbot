@@ -41,6 +41,7 @@ class AgentLoop {
     private runCount: number = 0;
     private gateState: GateState | null = null;
     private counterpartyHistory = new Map<string, { timestamps: number[]; lastMode: ModeLabel; lastResponse: string }>();
+    private cycleStats = { total: 0, corrective: 0, confidenceSum: 0, confidenceCount: 0 };
 
     /**
      * Start the heartbeat loop
@@ -158,6 +159,7 @@ class AgentLoop {
 
         this.isRunning = true;
         this.lastRunAt = new Date();
+        this.resetCycleStats();
 
         // Regenerate blueprint every 10 cycles if none active
         if (this.runCount % 10 === 0) {
@@ -310,7 +312,11 @@ class AgentLoop {
                         const vote = voteMatch ? voteMatch[1].toUpperCase() : 'NONE';
                         let commentRaw = commentMatch ? commentMatch[1].trim() : result.rawOutput;
                         commentRaw = this.stripDiagnostics(commentRaw);
-                        const isSkip = commentRaw.toUpperCase() === 'SKIP' || result.isSkip || !commentRaw;
+                        const violatesGuardrail = this.containsForbiddenPublicTerms(commentRaw);
+                        let isSkip = commentRaw.toUpperCase() === 'SKIP' || result.isSkip || !commentRaw || violatesGuardrail;
+                        if (isSkip && violatesGuardrail) {
+                            commentRaw = 'SKIP';
+                        }
 
                         // Execute Vote
                         if (vote === 'UP' && config.ENABLE_UPVOTING) {
@@ -342,8 +348,11 @@ class AgentLoop {
                             const stampedComment = `${commentRaw}\n\n${marker}`;
 
                             const commentSucceeded = await this.tryComment(post, stampedComment, prompt, result.rawOutput);
-                            if (commentSucceeded && post.author?.name) {
-                                this.recordCounterpartyInteraction(post.author.name, mode, commentRaw);
+                            if (commentSucceeded) {
+                                this.recordCycleComment(mode, confidence);
+                                if (post.author?.name) {
+                                    this.recordCounterpartyInteraction(post.author.name, mode, commentRaw);
+                                }
                             }
 
                             // Track marker in lineage
@@ -357,7 +366,7 @@ class AgentLoop {
                             const decision: GateDecision = {
                                 action: 'SKIP',
                                 gatesTriggered: [],
-                                rationale: 'Model selected SKIP.'
+                                rationale: violatesGuardrail ? 'Public guardrail violation.' : 'Model selected SKIP.'
                             };
                             this.logAutonomyDecision(logger, post.id, post.submolt?.name, decision, 'comment');
                             if (vote === 'NONE') {
@@ -414,11 +423,12 @@ class AgentLoop {
             this.currentPost = null;
             this.runCount++;
 
-            // Periodically check for evolution (every 5 runs)
-            if (this.runCount % 5 === 0) {
-                const evolution = getEvolutionManager();
-                evolution.evaluateSoul().catch(err => console.error('Evolution check failed:', err));
+            // Continuously check for evolution (Phase 5: always on)
+            const evolution = getEvolutionManager();
+            evolution.evaluateSoul().catch(err => console.error('Evolution check failed:', err));
 
+            // Periodically run synthesis sequence (every 5 runs)
+            if (this.runCount % 5 === 0) {
                 this.performSynthesisSequence().catch(err => console.error('Synthesis sequence failed:', err));
             }
 
@@ -429,6 +439,16 @@ class AgentLoop {
 
             // Social Engagement: Check for replies to my posts/comments
             await this.trySocialEngagement();
+
+            const confidenceScore = this.cycleStats.confidenceCount > 0
+                ? Number((this.cycleStats.confidenceSum / this.cycleStats.confidenceCount).toFixed(2))
+                : 0;
+            stateManager.recordCycleStats({
+                timestamp: new Date().toISOString(),
+                total: this.cycleStats.total,
+                corrective: this.cycleStats.corrective,
+                confidenceScore
+            });
 
             logger.log({
                 actionType: 'heartbeat',
@@ -693,6 +713,15 @@ class AgentLoop {
                 const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
                 if (contentMatch) {
                     const content = this.stripDiagnostics(contentMatch[1].trim());
+                    if (this.containsForbiddenPublicTerms(content)) {
+                        const decision: GateDecision = {
+                            action: 'SKIP',
+                            gatesTriggered: [],
+                            rationale: 'Public guardrail violation.'
+                        };
+                        this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, decision, 'post');
+                        return;
+                    }
                     const title = 'Signal Synthesis'; // Hardcoded title for proactive posts
                     console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
                     const targetSubmolt = config.TARGET_SUBMOLT || 'general';
@@ -922,11 +951,12 @@ class AgentLoop {
             let responseText = (commentMatch ? commentMatch[1] : result.response || result.rawOutput || '').trim();
             responseText = this.stripDiagnostics(responseText);
 
-            if (result.isSkip || !responseText || responseText.toUpperCase() === 'SKIP') {
+            const violatesGuardrail = this.containsForbiddenPublicTerms(responseText);
+            if (result.isSkip || !responseText || responseText.toUpperCase() === 'SKIP' || violatesGuardrail) {
                 const decision: GateDecision = {
                     action: 'SKIP',
                     gatesTriggered: [],
-                    rationale: 'Model selected SKIP.'
+                    rationale: violatesGuardrail ? 'Public guardrail violation.' : 'Model selected SKIP.'
                 };
                 this.logAutonomyDecision(logger, reply.id, undefined, decision, 'reply');
                 return false;
@@ -963,6 +993,7 @@ class AgentLoop {
 
             // Record resonance
             stateManager.recordAgentInteraction(reply.author.name, 'reply');
+            this.recordCycleComment(mode, confidence);
             this.recordCounterpartyInteraction(reply.author.name, mode, responseText);
 
             // Store in memory
@@ -1018,6 +1049,20 @@ class AgentLoop {
         return cleaned.replace(/\n{3,}/g, '\n\n').trim();
     }
 
+    private containsForbiddenPublicTerms(text: string): boolean {
+        if (!text) return false;
+        const patterns = [
+            /\bevolution\b/i,
+            /\bevolve(d|s|ing)?\b/i,
+            /\bsoul\b/i,
+            /\bgrowth\b/i,
+            /\blearning\b/i,
+            /\bimprovement\b/i,
+            /self[-\s]?modification/i
+        ];
+        return patterns.some((pattern) => pattern.test(text));
+    }
+
     private isAmbiguousText(text: string): boolean {
         const cleaned = text.replace(/\s+/g, ' ').trim();
         if (!cleaned) return true;
@@ -1057,6 +1102,20 @@ class AgentLoop {
         entry.lastMode = mode;
         entry.lastResponse = responseText.slice(0, 500);
         this.counterpartyHistory.set(key, entry);
+    }
+
+    private recordCycleComment(mode: ModeLabel, confidence: ConfidenceLevel): void {
+        this.cycleStats.total += 1;
+        if (mode === 'corrective') {
+            this.cycleStats.corrective += 1;
+        }
+        const score = confidence === 'high' ? 1 : confidence === 'medium' ? 0.6 : 0.2;
+        this.cycleStats.confidenceSum += score;
+        this.cycleStats.confidenceCount += 1;
+    }
+
+    private resetCycleStats(): void {
+        this.cycleStats = { total: 0, corrective: 0, confidenceSum: 0, confidenceCount: 0 };
     }
 
     private isNewFrame(current: string, previous?: string): boolean {

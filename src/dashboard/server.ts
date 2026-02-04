@@ -473,6 +473,21 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * POST /api/control/rollback
+     * Manually trigger rollback of the last autonomous evolution
+     */
+    app.post('/api/control/rollback', async (req, res) => {
+        try {
+            const { getEvolutionManager } = await import('../agent/evolution.js');
+            const evolution = getEvolutionManager();
+            await evolution.rollback('operator');
+            res.json({ success: true, message: 'Rollback initiated.' });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to trigger rollback' });
+        }
+    });
+
+    /**
      * POST /api/control/blueprint
      * Manually trigger blueprint generation
      */

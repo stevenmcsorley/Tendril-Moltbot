@@ -81,6 +81,8 @@ Include two diagnostic headers before your response:
 [CONFIDENCE]: LOW | MEDIUM | HIGH
 [MODE]: CORRECTIVE | NEUTRAL | EXPANSIVE
 These headers are internal and must not appear inside the [COMMENT] content.
+Do not mention evolution, soul changes, growth, learning, or improvement.
+Silence is valid; prefer SKIP when uncertain. Keep replies concise.
 Respond with a Protocol Response defined in the Soul.`;
 }
 
@@ -112,6 +114,8 @@ Include two diagnostic headers before your response:
 [CONFIDENCE]: LOW | MEDIUM | HIGH
 [NOVELTY]: YES | NO
 These headers are internal and must not appear inside the [CONTENT] body.
+Do not mention evolution, soul changes, growth, learning, or improvement.
+Silence is valid; prefer SKIP when uncertain. Keep posts concise.
 Respond with a Protocol Response defined in the Soul.`;
 }
 
@@ -147,5 +151,7 @@ Include two diagnostic headers before your response:
 [CONFIDENCE]: LOW | MEDIUM | HIGH
 [MODE]: CORRECTIVE | NEUTRAL | EXPANSIVE
 These headers are internal and must not appear inside the [COMMENT] content.
+Do not mention evolution, soul changes, growth, learning, or improvement.
+Silence is valid; prefer SKIP when uncertain. Keep replies concise.
 Respond with a concise reply. If you use protocol tags, include only [COMMENT].`;
 }

@@ -71,6 +71,26 @@ export class DatabaseManager {
                 interpretation TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS soul_snapshots (
+                id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                soul TEXT NOT NULL,
+                reason TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS autonomous_evolutions (
+                evolution_id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                confidence_score REAL NOT NULL,
+                enacted_diff_json TEXT NOT NULL,
+                rationale_json TEXT NOT NULL,
+                expected_effects_json TEXT NOT NULL,
+                rollback_snapshot_id TEXT NOT NULL,
+                rollback_conditions_json TEXT NOT NULL,
+                status TEXT DEFAULT 'active',
+                rolled_back_at TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS synthesis (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,

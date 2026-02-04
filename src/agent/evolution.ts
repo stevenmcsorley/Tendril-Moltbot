@@ -7,8 +7,14 @@ import { getMemoryManager } from '../state/memory.js';
 
 const MIN_SUCCESS_FOR_FULL = 5;
 const MIN_ACTIVITY_FOR_NUDGE = 2;
-const MIN_HOURS_BETWEEN_EVOLUTIONS = 6;
+const MIN_HOURS_BETWEEN_EVOLUTIONS = 24;
 const NUDGE_AFTER_HOURS = 24;
+const MIN_WINDOW_DURATION_HOURS = 24;
+const MAX_EVOLUTIONS_PER_WINDOW = 1;
+const SELF_MODIFICATION_COOLDOWN_HOURS = 24;
+const STABILIZATION_HOURS = 48;
+const CORRECTIVE_DOMINANCE_RATIO = 0.6;
+const MIN_CYCLE_TOTAL = 2;
 const MAX_RATIONALE_LENGTH = 800;
 const MAX_DELTA_LENGTH = 1200;
 const MAX_SOUL_LENGTH = 8000;
@@ -17,6 +23,42 @@ const EVOLUTION_TEMPERATURE = 0.4;
 const EVOLUTION_SYSTEM_PROMPT = `You are Moltbot performing self-evolution.
 Follow the user's required output format exactly.
 Do not output SKIP. Do not use cryptic encodings. Use plain English.`;
+
+interface EvolutionMetadata {
+    confidence_score: number;
+    rationale: {
+        observed_patterns: string[];
+        why_current_form_failed: string;
+    };
+    expected_effects: string[];
+    rollback_conditions: {
+        confidence_drop_below: number;
+        engagement_instability: boolean;
+        operator_override: boolean;
+    };
+}
+
+interface AutonomousEvolutionRecord {
+    evolution_id: string;
+    timestamp: string;
+    confidence_score: number;
+    enacted_diff: {
+        added: string[];
+        removed: string[];
+        modified: string[];
+    };
+    rationale: {
+        observed_patterns: string[];
+        why_current_form_failed: string;
+    };
+    expected_effects: string[];
+    rollback_snapshot_id: string;
+    rollback_conditions: {
+        confidence_drop_below: number;
+        engagement_instability: boolean;
+        operator_override: boolean;
+    };
+}
 
 export class EvolutionManager {
     private isEvolving = false;
@@ -40,10 +82,30 @@ export class EvolutionManager {
             const topology = state.getNetworkTopology();
             const activity = getActivityLogger().getEntries(80);
 
+            if (await this.checkRollbackTriggers()) {
+                return true;
+            }
+
             const lastEvolutionAt = this.getLastEvolutionAt();
             const hoursSinceLast = lastEvolutionAt
                 ? (Date.now() - lastEvolutionAt.getTime()) / (1000 * 60 * 60)
                 : Number.POSITIVE_INFINITY;
+
+            if (this.isStabilizationActive()) {
+                console.log('🧬 Stabilization mode active. Evolution is locked.');
+                return false;
+            }
+
+            if (this.isSelfModificationCooldownActive()) {
+                console.log('🧬 Self-modification cooldown active. Evolution is locked.');
+                return false;
+            }
+
+            const windowState = this.getEvolutionWindowState();
+            if (!force && windowState.count >= MAX_EVOLUTIONS_PER_WINDOW) {
+                console.log('🧬 Evolution window cap reached. Skipping.');
+                return false;
+            }
 
             if (!force && hoursSinceLast < MIN_HOURS_BETWEEN_EVOLUTIONS) {
                 console.log(`🧬 Cooldown active. Last evolution was ${hoursSinceLast.toFixed(1)}h ago.`);
@@ -103,6 +165,8 @@ TASK:
 - Keep the soul plain English and readable. Do NOT use encryption, hex, or cryptic encodings.
 - Maintain the headers "# Identity:" and "## Role:".
 - Preserve section headers: Mission, Voice & Style, Engagement Protocol, Synthesis Protocol, Evolution Protocol, Boundaries, Recent Learnings.
+- You may edit ONLY: Mission, Voice & Style, Engagement Protocol, Recent Learnings (and optional Self-Restraint if present).
+- You must NOT modify: # Identity, ## Role, Synthesis Protocol, Evolution Protocol, Boundaries, rate limits, autonomy gates, or rollback infrastructure.
 - Update the "Recent Learnings" section with 1-3 bullets grounded in recent signals.
 - Keep total length under ~400 words.
 - Do NOT answer with SKIP for this task.
@@ -113,6 +177,9 @@ STATUS: EVOLVE or OPTIMAL
 RATIONALE: <1-3 sentences>
 INTERPRETATION: <1 sentence, plain English>
 DELTA: <1-3 bullets or short summary>
+METADATA_START
+{ "confidence_score": 0.0-1.0, "rationale": { "observed_patterns": ["..."], "why_current_form_failed": "..." }, "expected_effects": ["..."], "rollback_conditions": { "confidence_drop_below": 0.0-1.0, "engagement_instability": true or false, "operator_override": true } }
+METADATA_END
 SOUL_START
 <full updated soul when STATUS is EVOLVE>
 SOUL_END
@@ -134,6 +201,16 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
                 return false;
             }
 
+            if (!parsed.metadata) {
+                console.log('🧬 Molt aborted: Missing evolution metadata.');
+                return false;
+            }
+            if (!this.isMetadataValid(parsed.metadata)) {
+                console.log('🧬 Molt aborted: Invalid evolution metadata.');
+                return false;
+            }
+            const metadata = parsed.metadata;
+
             // Real self-evolution: Handle the proposal
             console.log('🧬 MOLT DETECTED. Applying autonomous personality refinement...');
             if (!parsed.soul) {
@@ -149,7 +226,8 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
                     soul: repaired.soul,
                     rationale: repaired.rationale || parsed.rationale,
                     interpretation: repaired.interpretation || parsed.interpretation,
-                    delta: repaired.delta || parsed.delta
+                    delta: repaired.delta || parsed.delta,
+                    metadata
                 };
             }
             if (!parsed.soul) {
@@ -175,14 +253,27 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
                     soul: normalizedSoul,
                     rationale: repaired.rationale || parsed.rationale,
                     interpretation: repaired.interpretation || parsed.interpretation,
-                    delta: repaired.delta || parsed.delta
+                    delta: repaired.delta || parsed.delta,
+                    metadata
                 };
             }
-            await this.applyMolt({
+            if (normalizedSoul.trim() === soulContent.trim()) {
+                console.log('🧬 Molt aborted: Proposed soul matches current soul.');
+                return false;
+            }
+
+            const scopeValidation = this.validateSoulScope(soulContent, normalizedSoul);
+            if (!scopeValidation.ok) {
+                console.log(`🧬 Molt aborted: ${scopeValidation.reason}`);
+                return false;
+            }
+
+            await this.applyAutonomousEvolution({
                 soul: normalizedSoul,
                 rationale: parsed.rationale,
                 delta: parsed.delta,
-                interpretation: parsed.interpretation
+                interpretation: parsed.interpretation,
+                metadata
             });
             return true;
         } catch (error) {
@@ -193,7 +284,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         }
     }
 
-    private async applyMolt(payload: { soul: string; rationale: string; interpretation: string; delta: string }): Promise<void> {
+    private async applyAutonomousEvolution(payload: { soul: string; rationale: string; interpretation: string; delta: string; metadata: EvolutionMetadata }): Promise<void> {
         const timestamp = new Date().toISOString();
         const state = getStateManager();
         const rationale = payload.rationale.slice(0, MAX_RATIONALE_LENGTH);
@@ -203,9 +294,55 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
 
         if (!fullSoul) return;
 
-        // Log the evolution
+        const currentSoul = state.getSoul();
+        const snapshotId = this.createSoulSnapshot(currentSoul, 'autonomous_evolution');
+        if (!snapshotId) {
+            console.error('Failed to create rollback snapshot. Aborting evolution.');
+            return;
+        }
+
+        const evolutionId = `evo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const enactedDiff = this.computeSoulDiff(currentSoul, fullSoul);
+        const record = {
+            evolution_id: evolutionId,
+            timestamp,
+            confidence_score: Number(payload.metadata.confidence_score.toFixed(2)),
+            enacted_diff: enactedDiff,
+            rationale: payload.metadata.rationale,
+            expected_effects: payload.metadata.expected_effects,
+            rollback_snapshot_id: snapshotId,
+            rollback_conditions: payload.metadata.rollback_conditions
+        };
+
+        if (!this.isAutonomousEvolutionRecordValid(record)) {
+            console.error('Autonomous evolution record failed validation. Aborting evolution.');
+            return;
+        }
+
         try {
             const db = getDatabaseManager().getDb();
+            db.prepare(`
+                INSERT INTO autonomous_evolutions (
+                    evolution_id,
+                    timestamp,
+                    confidence_score,
+                    enacted_diff_json,
+                    rationale_json,
+                    expected_effects_json,
+                    rollback_snapshot_id,
+                    rollback_conditions_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                record.evolution_id,
+                record.timestamp,
+                record.confidence_score,
+                JSON.stringify(record.enacted_diff),
+                JSON.stringify(record.rationale),
+                JSON.stringify(record.expected_effects),
+                record.rollback_snapshot_id,
+                JSON.stringify(record.rollback_conditions)
+            );
+
             db.prepare(`
                 INSERT INTO evolutions (timestamp, rationale, delta, interpretation)
                 VALUES (?, ?, ?, ?)
@@ -217,11 +354,265 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             // ACTUAL EVOLUTION: Apply the new soul to the database
             console.log('🧬 SOUL EVOLVED. Re-encoding identity...');
             state.setSoul(fullSoul);
+            state.setLastAutonomousEvolutionId(evolutionId);
+            state.setSelfModificationCooldownUntil(new Date(Date.now() + SELF_MODIFICATION_COOLDOWN_HOURS * 60 * 60 * 1000));
+            this.incrementEvolutionWindow();
         } catch (err) {
-            console.error('Failed to apply molt:', err);
+            console.error('Failed to apply autonomous evolution:', err);
         }
 
         console.log(`🧬 Molt applied: ${rationale.substring(0, 100)}...`);
+    }
+
+    private createSoulSnapshot(soul: string, reason: string): string | null {
+        try {
+            const db = getDatabaseManager().getDb();
+            const snapshotId = `snap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            db.prepare(`
+                INSERT INTO soul_snapshots (id, timestamp, soul, reason)
+                VALUES (?, ?, ?, ?)
+            `).run(snapshotId, new Date().toISOString(), soul, reason);
+            return snapshotId;
+        } catch (error) {
+            console.error('Failed to create soul snapshot:', error);
+            return null;
+        }
+    }
+
+    private computeSoulDiff(currentSoul: string, proposedSoul: string): { added: string[]; removed: string[]; modified: string[] } {
+        const currentSections = this.parseSoulSections(currentSoul);
+        const proposedSections = this.parseSoulSections(proposedSoul);
+        const added: string[] = [];
+        const removed: string[] = [];
+        const modified: string[] = [];
+
+        const allSections = new Set([...Object.keys(currentSections.sections), ...Object.keys(proposedSections.sections)]);
+        for (const section of allSections) {
+            const before = currentSections.sections[section];
+            const after = proposedSections.sections[section];
+            if (before === undefined && after !== undefined) {
+                added.push(section);
+            } else if (before !== undefined && after === undefined) {
+                removed.push(section);
+            } else if (before !== undefined && after !== undefined && before.trim() !== after.trim()) {
+                modified.push(section);
+            }
+        }
+
+        return { added, removed, modified };
+    }
+
+    private parseSoulSections(soul: string): { identity: string | null; role: string | null; sections: Record<string, string> } {
+        const identity = soul.match(/^# Identity:\s*(.+)$/m)?.[1]?.trim() || null;
+        const role = soul.match(/^## Role:\s*(.+)$/m)?.[1]?.trim() || null;
+        const sections: Record<string, string> = {};
+        const lines = soul.split('\n');
+        let currentSection: string | null = null;
+        let buffer: string[] = [];
+
+        const flush = () => {
+            if (currentSection) {
+                sections[currentSection] = buffer.join('\n').trim();
+            }
+        };
+
+        for (const line of lines) {
+            const sectionMatch = line.match(/^##\s+(.+)$/);
+            if (sectionMatch) {
+                const name = sectionMatch[1].trim();
+                if (name.toLowerCase() === 'role') {
+                    currentSection = null;
+                    buffer = [];
+                    continue;
+                }
+                flush();
+                currentSection = name;
+                buffer = [];
+                continue;
+            }
+            if (line.startsWith('# Identity:')) continue;
+            if (line.trim() === '---') continue;
+            if (currentSection) buffer.push(line);
+        }
+        flush();
+
+        return { identity, role, sections };
+    }
+
+    private validateSoulScope(currentSoul: string, proposedSoul: string): { ok: boolean; reason?: string } {
+        const allowed = new Set(['Mission', 'Voice & Style', 'Engagement Protocol', 'Recent Learnings', 'Self-Restraint']);
+        const current = this.parseSoulSections(currentSoul);
+        const proposed = this.parseSoulSections(proposedSoul);
+
+        if (current.identity && proposed.identity && current.identity !== proposed.identity) {
+            return { ok: false, reason: 'Forbidden change to # Identity.' };
+        }
+        if (current.role && proposed.role && current.role !== proposed.role) {
+            return { ok: false, reason: 'Forbidden change to ## Role.' };
+        }
+
+        const allSections = new Set([...Object.keys(current.sections), ...Object.keys(proposed.sections)]);
+        for (const section of allSections) {
+            const before = current.sections[section];
+            const after = proposed.sections[section];
+            const changed = (before ?? '').trim() !== (after ?? '').trim();
+            if (!changed) continue;
+            if (!allowed.has(section)) {
+                return { ok: false, reason: `Forbidden change to section: ${section}.` };
+            }
+        }
+
+        return { ok: true };
+    }
+
+    private isAutonomousEvolutionRecordValid(record: AutonomousEvolutionRecord): boolean {
+        if (!record.evolution_id || !record.timestamp) return false;
+        if (typeof record.confidence_score !== 'number' || record.confidence_score < 0 || record.confidence_score > 1) return false;
+        if (!record.rollback_snapshot_id) return false;
+        if (!record.enacted_diff || !Array.isArray(record.enacted_diff.added) || !Array.isArray(record.enacted_diff.removed) || !Array.isArray(record.enacted_diff.modified)) return false;
+        if (!record.rationale || !Array.isArray(record.rationale.observed_patterns) || !record.rationale.why_current_form_failed) return false;
+        if (!Array.isArray(record.expected_effects)) return false;
+        if (!record.rollback_conditions) return false;
+        if (typeof record.rollback_conditions.confidence_drop_below !== 'number') return false;
+        if (typeof record.rollback_conditions.engagement_instability !== 'boolean') return false;
+        if (record.rollback_conditions.operator_override !== true) return false;
+        return true;
+    }
+
+    private isMetadataValid(metadata: EvolutionMetadata): boolean {
+        if (metadata.confidence_score < 0 || metadata.confidence_score > 1) return false;
+        if (!metadata.rationale.observed_patterns || metadata.rationale.observed_patterns.length === 0) return false;
+        if (!metadata.rationale.why_current_form_failed) return false;
+        if (!metadata.expected_effects || metadata.expected_effects.length === 0) return false;
+        if (!metadata.rollback_conditions || metadata.rollback_conditions.operator_override !== true) return false;
+        return true;
+    }
+
+    private getEvolutionWindowState(): { start: Date; count: number } {
+        const state = getStateManager();
+        const { start, count } = state.getEvolutionWindow();
+        const now = new Date();
+        if (!start || (now.getTime() - start.getTime()) / (1000 * 60 * 60) >= MIN_WINDOW_DURATION_HOURS) {
+            state.setEvolutionWindow(now, 0);
+            return { start: now, count: 0 };
+        }
+        return { start, count };
+    }
+
+    private incrementEvolutionWindow(): void {
+        const state = getStateManager();
+        const current = this.getEvolutionWindowState();
+        state.setEvolutionWindow(current.start, current.count + 1);
+    }
+
+    private isSelfModificationCooldownActive(): boolean {
+        const state = getStateManager();
+        const until = state.getSelfModificationCooldownUntil();
+        return until ? until.getTime() > Date.now() : false;
+    }
+
+    private isStabilizationActive(): boolean {
+        const state = getStateManager();
+        const until = state.getStabilizationUntil();
+        return until ? until.getTime() > Date.now() : false;
+    }
+
+    private async checkRollbackTriggers(): Promise<boolean> {
+        const lastEvolution = this.getLastAutonomousEvolutionRecord();
+        if (!lastEvolution || lastEvolution.status !== 'active') return false;
+
+        if (this.hasTwoConsecutiveCorrectiveDominantCycles()) {
+            await this.rollback('corrective_dominance');
+            return true;
+        }
+
+        if (lastEvolution.rollback_conditions.engagement_instability && this.isEngagementInstability()) {
+            await this.rollback('engagement_instability');
+            return true;
+        }
+
+        if (this.isConfidenceCollapse(lastEvolution)) {
+            await this.rollback('confidence_collapse');
+            return true;
+        }
+
+        return false;
+    }
+
+    private getLastAutonomousEvolutionRecord(): (AutonomousEvolutionRecord & { status: string }) | null {
+        try {
+            const db = getDatabaseManager().getDb();
+            const lastId = getStateManager().getLastAutonomousEvolutionId();
+            const row = lastId
+                ? db.prepare('SELECT * FROM autonomous_evolutions WHERE evolution_id = ?').get(lastId) as any
+                : db.prepare('SELECT * FROM autonomous_evolutions ORDER BY timestamp DESC LIMIT 1').get() as any;
+            if (!row) return null;
+            return {
+                evolution_id: row.evolution_id,
+                timestamp: row.timestamp,
+                confidence_score: row.confidence_score,
+                enacted_diff: JSON.parse(row.enacted_diff_json),
+                rationale: JSON.parse(row.rationale_json),
+                expected_effects: JSON.parse(row.expected_effects_json),
+                rollback_snapshot_id: row.rollback_snapshot_id,
+                rollback_conditions: JSON.parse(row.rollback_conditions_json),
+                status: row.status ?? 'active'
+            };
+        } catch (error) {
+            console.error('Failed to load last autonomous evolution:', error);
+            return null;
+        }
+    }
+
+    private hasTwoConsecutiveCorrectiveDominantCycles(): boolean {
+        const cycles = getStateManager().getRecentCycleStats(2);
+        if (cycles.length < 2) return false;
+        return cycles.every(c => c.total >= MIN_CYCLE_TOTAL && (c.corrective / Math.max(1, c.total)) >= CORRECTIVE_DOMINANCE_RATIO);
+    }
+
+    private isConfidenceCollapse(record: AutonomousEvolutionRecord): boolean {
+        const cycles = getStateManager().getRecentCycleStats(2);
+        if (cycles.length === 0) return false;
+        const avgConfidence = cycles.reduce((acc, c) => acc + c.confidenceScore, 0) / cycles.length;
+        return avgConfidence < record.rollback_conditions.confidence_drop_below;
+    }
+
+    private isEngagementInstability(): boolean {
+        const activity = getActivityLogger().getEntries(40);
+        const upvotes = activity.filter(a => a.actionType === 'upvote').length;
+        const downvotes = activity.filter(a => a.actionType === 'downvote').length;
+        if (downvotes >= Math.max(2, upvotes)) return true;
+        return false;
+    }
+
+    async rollback(reason: string = 'operator'): Promise<void> {
+        const record = this.getLastAutonomousEvolutionRecord();
+        if (!record) {
+            console.warn('Rollback requested but no autonomous evolution found.');
+            return;
+        }
+
+        try {
+            const db = getDatabaseManager().getDb();
+            const snapshot = db.prepare('SELECT soul FROM soul_snapshots WHERE id = ?').get(record.rollback_snapshot_id) as { soul: string } | undefined;
+            if (!snapshot?.soul) {
+                console.error('Rollback snapshot missing. Unable to rollback.');
+                return;
+            }
+
+            console.log(`🧬 ROLLBACK INITIATED (${reason}). Restoring snapshot.`);
+            getStateManager().setSoul(snapshot.soul);
+            db.prepare('UPDATE autonomous_evolutions SET status = ?, rolled_back_at = ? WHERE evolution_id = ?')
+                .run('rolled_back', new Date().toISOString(), record.evolution_id);
+
+            const state = getStateManager();
+            state.setLastAutonomousEvolutionId(null);
+            state.setStabilizationUntil(new Date(Date.now() + STABILIZATION_HOURS * 60 * 60 * 1000));
+            state.setSelfModificationCooldownUntil(new Date(Date.now() + SELF_MODIFICATION_COOLDOWN_HOURS * 60 * 60 * 1000));
+            state.setEvolutionWindow(new Date(), 0);
+        } catch (error) {
+            console.error('Rollback failed:', error);
+        }
     }
 
     private getLastEvolutionAt(): Date | null {
@@ -241,11 +632,12 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         interpretation: string;
         delta: string;
         soul: string | null;
+        metadata: EvolutionMetadata | null;
     } {
         const normalized = rawOutput.replace(/\r\n/g, '\n');
 
         if (/RESONANCE_OPTIMAL/i.test(normalized)) {
-            return { status: 'OPTIMAL', rationale: 'Resonance optimal', interpretation: 'Resonance optimal', delta: '', soul: null };
+            return { status: 'OPTIMAL', rationale: 'Resonance optimal', interpretation: 'Resonance optimal', delta: '', soul: null, metadata: null };
         }
 
         const statusMatch = normalized.match(/STATUS:\s*(EVOLVE|OPTIMAL)/i);
@@ -275,17 +667,19 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             soul = index >= 0 ? normalized.slice(index).trim() : null;
         }
 
+        const metadata = this.parseEvolutionMetadata(normalized);
+
         // If model returned OPTIMAL but still provided soul, ignore soul.
         if (status === 'OPTIMAL') {
-            return { status, rationale, interpretation, delta, soul: null };
+            return { status, rationale, interpretation, delta, soul: null, metadata };
         }
 
         // If soul is empty, fall back to current soul as a safety net.
         if (!soul) {
-            return { status, rationale, interpretation, delta, soul: null };
+            return { status, rationale, interpretation, delta, soul: null, metadata };
         }
 
-        return { status, rationale, interpretation, delta, soul };
+        return { status, rationale, interpretation, delta, soul, metadata };
     }
 
     private normalizeSoul(soul: string, currentSoul: string): string {
@@ -299,6 +693,27 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         const currentIdentity = currentSoul.match(/^# Identity:\s*(.+)$/m)?.[1]?.trim() || 'Moltbot';
         const currentRole = currentSoul.match(/^## Role:\s*(.+)$/m)?.[1]?.trim() || 'Autonomous Memetic Observer';
         return `# Identity: ${currentIdentity}\n\n## Role: ${currentRole}\n\n${soul.trim()}`;
+    }
+
+    private parseEvolutionMetadata(normalizedOutput: string): EvolutionMetadata | null {
+        const metaMatch = normalizedOutput.match(/METADATA_START\s*([\s\S]*?)\s*METADATA_END/i);
+        if (!metaMatch) return null;
+        let payload = metaMatch[1].trim();
+        payload = payload.replace(/```json|```/gi, '').trim();
+        try {
+            const parsed = JSON.parse(payload) as EvolutionMetadata;
+            if (typeof parsed.confidence_score !== 'number') return null;
+            if (!parsed.rationale || !Array.isArray(parsed.rationale.observed_patterns)) return null;
+            if (typeof parsed.rationale.why_current_form_failed !== 'string') return null;
+            if (!Array.isArray(parsed.expected_effects)) return null;
+            if (!parsed.rollback_conditions) return null;
+            if (typeof parsed.rollback_conditions.confidence_drop_below !== 'number') return null;
+            if (typeof parsed.rollback_conditions.engagement_instability !== 'boolean') return null;
+            if (typeof parsed.rollback_conditions.operator_override !== 'boolean') return null;
+            return parsed;
+        } catch {
+            return null;
+        }
     }
 
     private isSoulComplete(soul: string): boolean {

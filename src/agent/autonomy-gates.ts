@@ -24,6 +24,8 @@ export interface GateState {
     synthesisCooldownActive: boolean;
     objectivePhase: ObjectivePhase;
     resonanceMomentum: ResonanceMomentum;
+    selfModificationCooldownActive: boolean;
+    stabilizationActive: boolean;
 }
 
 export interface DecisionContext {
@@ -145,12 +147,20 @@ function isSynthesisCooldownActive(timestamp: string | null): boolean {
 
 export function computeGateState(): GateState {
     const synthesis = getLatestSynthesis();
+    const stateManager = getStateManager();
+    const cooldownUntil = stateManager.getSelfModificationCooldownUntil();
+    const stabilizationUntil = stateManager.getStabilizationUntil();
+    const now = Date.now();
+    const selfModificationCooldownActive = cooldownUntil ? cooldownUntil.getTime() > now : false;
+    const stabilizationActive = stabilizationUntil ? stabilizationUntil.getTime() > now : false;
     return {
         engagementDensity: computeEngagementDensity(),
         lastSynthesisImplication: synthesis.implication,
         synthesisCooldownActive: isSynthesisCooldownActive(synthesis.timestamp),
         objectivePhase: computeObjectivePhase(),
-        resonanceMomentum: computeResonanceMomentum()
+        resonanceMomentum: computeResonanceMomentum(),
+        selfModificationCooldownActive,
+        stabilizationActive
     };
 }
 
@@ -159,6 +169,22 @@ export function applyAutonomyGates(state: GateState, ctx: DecisionContext): Gate
     let action: GateAction = ctx.desiredAction;
     const confidenceRank: Record<ConfidenceLevel, number> = { low: 0, medium: 1, high: 2 };
     const belowThreshold = confidenceRank[ctx.confidence] < confidenceRank[CONFIDENCE_THRESHOLD];
+    const selfModificationRestricted = state.selfModificationCooldownActive || state.stabilizationActive;
+
+    if (selfModificationRestricted && action === 'POST') {
+        gates.push(state.stabilizationActive ? 'StabilizationGate' : 'SelfModificationCooldownGate');
+        action = 'SKIP';
+    }
+
+    if (selfModificationRestricted && action === 'COMMENT') {
+        if (ctx.mode !== 'corrective' && ctx.mode !== 'neutral') {
+            gates.push(state.stabilizationActive ? 'StabilizationGate' : 'SelfModificationCooldownGate');
+            action = 'SKIP';
+        } else if (ctx.confidence !== 'high') {
+            gates.push(state.stabilizationActive ? 'StabilizationGate' : 'SelfModificationCooldownGate');
+            action = 'SKIP';
+        }
+    }
 
     if (action === 'COMMENT') {
         if ((ctx.counterpartyInteractions ?? 0) >= 2 && ctx.lastMode === 'corrective') {

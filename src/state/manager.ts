@@ -154,6 +154,67 @@ export class StateManager {
         }
     }
 
+    getSelfModificationCooldownUntil(): Date | null {
+        const value = this.getKV('self_modification_cooldown_until', null) as string | null;
+        return value ? new Date(value) : null;
+    }
+
+    setSelfModificationCooldownUntil(date: Date | null): void {
+        this.setKV('self_modification_cooldown_until', date ? date.toISOString() : null);
+    }
+
+    getStabilizationUntil(): Date | null {
+        const value = this.getKV('stabilization_until', null) as string | null;
+        return value ? new Date(value) : null;
+    }
+
+    setStabilizationUntil(date: Date | null): void {
+        this.setKV('stabilization_until', date ? date.toISOString() : null);
+    }
+
+    getEvolutionWindow(): { start: Date | null; count: number } {
+        const startValue = this.getKV('evolution_window_start', null) as string | null;
+        const countValue = this.getKV('evolution_window_count', 0) as number;
+        return {
+            start: startValue ? new Date(startValue) : null,
+            count: typeof countValue === 'number' ? countValue : 0
+        };
+    }
+
+    setEvolutionWindow(start: Date, count: number): void {
+        this.setKV('evolution_window_start', start.toISOString());
+        this.setKV('evolution_window_count', count);
+    }
+
+    getLastAutonomousEvolutionId(): string | null {
+        return this.getKV('last_autonomous_evolution_id', null) as string | null;
+    }
+
+    setLastAutonomousEvolutionId(id: string | null): void {
+        this.setKV('last_autonomous_evolution_id', id);
+    }
+
+    recordCycleStats(stats: { timestamp: string; total: number; corrective: number; confidenceScore: number }): void {
+        const history = this.getKV('cycle_stats', []) as Array<{
+            timestamp: string;
+            total: number;
+            corrective: number;
+            confidenceScore: number;
+        }>;
+        history.push(stats);
+        this.setKV('cycle_stats', history.slice(-20));
+    }
+
+    getRecentCycleStats(limit: number = 3): Array<{ timestamp: string; total: number; corrective: number; confidenceScore: number }> {
+        const history = this.getKV('cycle_stats', []) as Array<{
+            timestamp: string;
+            total: number;
+            corrective: number;
+            confidenceScore: number;
+        }>;
+        return history.slice(-limit);
+    }
+
     hasSeenPost(postId: string): boolean {
         const db = getDatabaseManager().getDb();
         const row = db.prepare('SELECT 1 FROM kv_state WHERE key = ? AND value LIKE ?').get('posts_seen', `%${postId}%`) as any;
