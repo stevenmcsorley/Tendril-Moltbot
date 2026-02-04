@@ -66,6 +66,7 @@ export interface EvolutionReadiness {
     fullThreshold: number;
     dueForNudge: boolean;
     hoursSinceLast: number | null;
+    minHoursBetween: number;
     windowRemaining: number;
     selfModificationCooldownActive: boolean;
     stabilizationActive: boolean;
@@ -327,6 +328,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             fullThreshold: MIN_SUCCESS_FOR_FULL,
             dueForNudge,
             hoursSinceLast,
+            minHoursBetween: MIN_HOURS_BETWEEN_EVOLUTIONS,
             windowRemaining,
             selfModificationCooldownActive,
             stabilizationActive,

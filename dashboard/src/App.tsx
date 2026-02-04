@@ -66,6 +66,7 @@ interface Status {
             fullThreshold: number;
             dueForNudge: boolean;
             hoursSinceLast: number | null;
+            minHoursBetween: number;
             windowRemaining: number;
             selfModificationCooldownActive: boolean;
             stabilizationActive: boolean;
@@ -137,6 +138,7 @@ interface AutonomyState {
         fullThreshold: number;
         dueForNudge: boolean;
         hoursSinceLast: number | null;
+        minHoursBetween: number;
         windowRemaining: number;
         selfModificationCooldownActive: boolean;
         stabilizationActive: boolean;
@@ -650,6 +652,19 @@ function AutonomyTimeline({ state }: { state: AutonomyState | null }) {
     const activityWeight = readiness?.activityWeight ?? 0;
     const progress = Math.min(1, activityWeight / Math.max(1, fullThreshold));
     const nudgeMarker = Math.min(100, (nudgeThreshold / Math.max(1, fullThreshold)) * 100);
+    const blockers: string[] = [];
+    if (readiness) {
+        if (readiness.selfModificationCooldownActive) blockers.push('Self‑modification cooldown');
+        if (readiness.stabilizationActive) blockers.push('Stabilization mode');
+        if (readiness.windowRemaining === 0) blockers.push('Evolution window cap reached');
+        if (readiness.hoursSinceLast !== null && readiness.hoursSinceLast < readiness.minHoursBetween) {
+            const remaining = Math.max(0, readiness.minHoursBetween - readiness.hoursSinceLast);
+            blockers.push(`Min interval (${remaining.toFixed(1)}h remaining)`);
+        }
+        if (activityWeight < readiness.nudgeThreshold && !readiness.dueForNudge) {
+            blockers.push('Activity threshold not met');
+        }
+    }
 
     return (
         <div className="card">
@@ -707,7 +722,9 @@ function AutonomyTimeline({ state }: { state: AutonomyState | null }) {
                 </div>
                 {readiness && (
                     <div style={{ marginTop: 6, fontSize: 12, color: readiness.eligible ? 'var(--success)' : 'var(--text-secondary)' }}>
-                        {readiness.eligible ? 'Eligible for evolution window.' : 'Not eligible yet.'}
+                        {readiness.eligible
+                            ? 'Eligible for evolution window.'
+                            : `Not eligible: ${blockers.length > 0 ? blockers.join(' · ') : 'Conditions not met.'}`}
                     </div>
                 )}
             </div>
