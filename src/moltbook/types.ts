@@ -37,7 +37,7 @@ export interface Comment {
     id: string;
     content: string;
     author: Agent;
-    post_id: string;
+    post_id?: string;
     parent_id?: string;
     upvotes: number;
     created_at: string;

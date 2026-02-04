@@ -565,8 +565,11 @@ class AgentLoop {
         for (const post of myPosts) {
             try {
                 const { comments } = await moltbook.getComments(post.id);
+                let repliesInThisPost = 0;
                 for (const comment of comments) {
-                    await this.processPotentialSocialReply(comment, true, logger, llm, moltbook, stateManager, rateLimiter);
+                    if (repliesInThisPost >= 5) break; // Limit per post to prevent flood
+                    const replied = await this.processPotentialSocialReply(comment, post.id, true, logger, llm, moltbook, stateManager, rateLimiter);
+                    if (replied) repliesInThisPost++;
                 }
             } catch (err) {
                 if (err instanceof MoltbookApiError && err.statusCode === 404) {
@@ -600,9 +603,12 @@ class AgentLoop {
 
             try {
                 const { comments } = await moltbook.getComments(postId);
+                let repliesInThisPost = 0;
                 for (const comment of comments) {
+                    if (repliesInThisPost >= 5) break;
                     if (comment.parent_id && commentIds.includes(comment.parent_id)) {
-                        await this.processPotentialSocialReply(comment, false, logger, llm, moltbook, stateManager, rateLimiter);
+                        const replied = await this.processPotentialSocialReply(comment, postId, false, logger, llm, moltbook, stateManager, rateLimiter);
+                        if (replied) repliesInThisPost++;
                     }
                 }
             } catch (err) {
@@ -628,31 +634,48 @@ class AgentLoop {
 
     private async processPotentialSocialReply(
         reply: Comment,
+        postId: string,
         isPostReply: boolean,
         logger: any,
         llm: any,
         moltbook: any,
         stateManager: any,
         rateLimiter: any
-    ): Promise<void> {
+    ): Promise<boolean> {
         const config = getConfig();
 
         // Skip if already replied or if it's our own comment
-        if (stateManager.hasRepliedToSocial(reply.id)) return;
-        if (reply.author.name.toLowerCase() === config.AGENT_NAME.toLowerCase()) return;
+        if (stateManager.hasRepliedToSocial(reply.id)) return false;
+        if (reply.author.name.toLowerCase() === config.AGENT_NAME.toLowerCase()) return false;
 
         // Skip if too old (> 48h)
         const age = Date.now() - new Date(reply.created_at).getTime();
-        if (age > 48 * 60 * 60 * 1000) return;
+        if (age > 48 * 60 * 60 * 1000) return false;
 
         // Rate limit check
-        if (!rateLimiter.canComment()) return;
+        if (!rateLimiter.canComment()) {
+            // If we have comments remaining but are in cooldown, wait a bit
+            const status = rateLimiter.getStatus();
+            if (status.commentsRemaining > 0 && status.nextCommentAt) {
+                const waitMs = status.nextCommentAt.getTime() - Date.now();
+                if (waitMs > 0 && waitMs < 25000) { // Only wait if logic is sound
+                    console.log(`Waiting ${Math.ceil(waitMs / 1000)}s for comment cooldown...`);
+                    await new Promise(resolve => setTimeout(resolve, waitMs + 500));
+                    // Re-check
+                    if (!rateLimiter.canComment()) return false;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
 
         // Try to get parent content for context
         let parentContent = "[Context unavailable]";
         if (isPostReply) {
             try {
-                const post = await moltbook.getPost(reply.post_id);
+                const post = await moltbook.getPost(postId);
                 parentContent = post.content || post.title;
             } catch { }
         } else {
@@ -670,10 +693,10 @@ class AgentLoop {
 
         try {
             const result = await llm.generate(prompt);
-            if (result.isSkip || !result.response) return;
+            if (result.isSkip || !result.response) return false;
 
             console.log(`Replying to @${reply.author.name} in social engagement...`);
-            const newComment = await moltbook.createComment(reply.post_id, result.response, reply.id);
+            const newComment = await moltbook.createComment(postId, result.response, reply.id);
 
             rateLimiter.recordComment(reply.post_id);
             stateManager.recordComment(reply.post_id, newComment.id);
@@ -686,8 +709,14 @@ class AgentLoop {
                 rawModelOutput: result.rawOutput,
                 finalAction: `Replied to social engagement: "${result.response}"`,
             });
+            return true;
         } catch (error) {
+            if (error instanceof MoltbookApiError && error.statusCode === 404) {
+                console.warn(`Social target ${reply.id} or post ${postId} no longer exists. Marking as processed.`);
+                stateManager.recordSocialReply(reply.id);
+            }
             this.handleActionError(error, 'comment', reply.id, undefined, prompt, null);
+            return false;
         }
     }
 
