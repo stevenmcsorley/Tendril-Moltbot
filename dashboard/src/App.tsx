@@ -11,13 +11,15 @@ import SovereigntyPanel from './components/SovereigntyPanel';
 import SynthesisHistory from './components/SynthesisHistory';
 import SoulPanel from './components/SoulPanel';
 import Tooltip from './components/Tooltip';
+import RelativeTime from './components/RelativeTime';
 import {
     Activity,
     Zap,
     ListFilter,
     Layers,
     FileText,
-    Cpu
+    Cpu,
+    ShieldAlert
 } from 'lucide-react';
 
 interface Status {
@@ -111,6 +113,14 @@ interface EvolutionEntry {
     interpretation?: string;
 }
 
+interface AutonomyState {
+    selfModificationCooldownUntil: string | null;
+    stabilizationUntil: string | null;
+    evolutionWindowStart: string | null;
+    evolutionWindowCount: number;
+    lastAutonomousEvolutionId: string | null;
+}
+
 interface StrategicObjective {
     id: string;
     description: string;
@@ -145,6 +155,7 @@ export default function App() {
     const [topologyTotal, setTopologyTotal] = useState(0);
     const topologyLimit = 10;
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
+    const [autonomyState, setAutonomyState] = useState<AutonomyState | null>(null);
     const [synthesisHistory, setSynthesisHistory] = useState<any[]>([]);
     const [sovereignty, setSovereignty] = useState<{
         blueprint: StrategicObjective | null;
@@ -179,6 +190,7 @@ export default function App() {
             if (!res.ok) throw new Error('Failed to fetch status');
             const data = await res.json();
             setStatus(data);
+            setAutonomyState(data.evolution ?? null);
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unknown error');
@@ -577,6 +589,7 @@ export default function App() {
                                 onPageChange={(p) => fetchTopology(p)}
                             />
                             <SynthesisHistory history={synthesisHistory} />
+                            <AutonomyTimeline state={autonomyState} />
                             <EvolutionHistory history={evolutionHistory} />
                             <SovereigntyPanel data={sovereignty} />
                         </div>
@@ -584,6 +597,52 @@ export default function App() {
                         <SoulPanel refreshToken={soulRefreshToken} />
                     )}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+function AutonomyTimeline({ state }: { state: AutonomyState | null }) {
+    const format = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—');
+    const isActive = (iso: string | null) => !!iso && new Date(iso).getTime() > Date.now();
+
+    return (
+        <div className="card">
+            <h2><ShieldAlert size={16} /> Autonomy Timeline</h2>
+            <div className="panel-subtitle">
+                Live autonomy gates, cooldowns, and rollback state.
+            </div>
+
+            <div className="status-row">
+                <span className="status-label">Self-Modification Cooldown</span>
+                <span className={`status-value ${isActive(state?.selfModificationCooldownUntil ?? null) ? 'warning' : ''}`} title={format(state?.selfModificationCooldownUntil ?? null)}>
+                    {isActive(state?.selfModificationCooldownUntil ?? null)
+                        ? <RelativeTime value={state?.selfModificationCooldownUntil ?? null} />
+                        : 'Inactive'}
+                </span>
+            </div>
+
+            <div className="status-row">
+                <span className="status-label">Stabilization Mode</span>
+                <span className={`status-value ${isActive(state?.stabilizationUntil ?? null) ? 'warning' : ''}`} title={format(state?.stabilizationUntil ?? null)}>
+                    {isActive(state?.stabilizationUntil ?? null)
+                        ? <RelativeTime value={state?.stabilizationUntil ?? null} />
+                        : 'Inactive'}
+                </span>
+            </div>
+
+            <div className="status-row">
+                <span className="status-label">Evolution Window</span>
+                <span className="status-value">
+                    {state ? `${state.evolutionWindowCount} / 1` : '—'}
+                </span>
+            </div>
+
+            <div className="status-row">
+                <span className="status-label">Last Evolution ID</span>
+                <span className="status-value" title={state?.lastAutonomousEvolutionId ?? '—'}>
+                    {state?.lastAutonomousEvolutionId ? state.lastAutonomousEvolutionId.slice(0, 10) : '—'}
+                </span>
             </div>
         </div>
     );

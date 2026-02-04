@@ -70,6 +70,21 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
                     >
                         Engagements
                     </button>
+                    <button
+                        onClick={() => onFilterChange('decision')}
+                        disabled={currentFilter === 'decision'}
+                        style={{
+                            padding: '4px 8px',
+                            fontSize: 12,
+                            background: currentFilter === 'decision' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                            color: currentFilter === 'decision' ? 'white' : 'var(--text-secondary)',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Decisions
+                    </button>
                 </div>
             </div>
 
