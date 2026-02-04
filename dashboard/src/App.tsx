@@ -199,7 +199,7 @@ export default function App() {
 
     const fetchLogs = useCallback(async () => {
         try {
-            const res = await fetch('/api/logs?limit=100');
+            const res = await fetch('/api/logs?limit=300');
             if (!res.ok) throw new Error('Failed to fetch logs');
             const data: LogsResponse = await res.json();
             setLogs(data.entries);
