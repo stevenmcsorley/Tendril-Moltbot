@@ -32,6 +32,7 @@ export class DatabaseManager {
                 action_type TEXT NOT NULL,
                 target_id TEXT,
                 target_submolt TEXT,
+                target_author TEXT,
                 prompt_sent TEXT,
                 raw_model_output TEXT,
                 final_action TEXT,
@@ -132,6 +133,7 @@ export class DatabaseManager {
         this.ensureColumn('evolutions', 'evolution_id', 'TEXT');
         this.ensureColumn('activity', 'evolution_id', 'TEXT');
         this.ensureColumn('activity', 'signal_type', 'TEXT');
+        this.ensureColumn('activity', 'target_author', 'TEXT');
     }
 
     private ensureColumn(table: string, column: string, type: string): void {

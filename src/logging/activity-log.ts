@@ -18,6 +18,7 @@ export interface ActivityLogEntry {
     actionType: ActionType;
     targetId: string | null;
     targetSubmolt?: string;
+    targetAuthor?: string | null;
     promptSent?: string | null;
     rawModelOutput?: string | null;
     finalAction?: string | null;
@@ -44,8 +45,8 @@ export class ActivityLogger {
 
         const db = getDatabaseManager().getDb();
         const stmt = db.prepare(`
-            INSERT INTO activity (timestamp, action_type, target_id, target_submolt, prompt_sent, raw_model_output, final_action, error, evolution_id, signal_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO activity (timestamp, action_type, target_id, target_submolt, target_author, prompt_sent, raw_model_output, final_action, error, evolution_id, signal_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const info = stmt.run(
@@ -53,6 +54,7 @@ export class ActivityLogger {
             fullEntry.actionType,
             fullEntry.targetId || null,
             fullEntry.targetSubmolt || null,
+            fullEntry.targetAuthor || null,
             fullEntry.promptSent || null,
             fullEntry.rawModelOutput || null,
             fullEntry.finalAction || null,
@@ -175,6 +177,7 @@ function mapActivityRow(r: any): ActivityLogEntry {
         actionType: r.action_type as ActionType,
         targetId: r.target_id,
         targetSubmolt: r.target_submolt,
+        targetAuthor: r.target_author,
         promptSent: r.prompt_sent,
         rawModelOutput: r.raw_model_output,
         finalAction: r.final_action,

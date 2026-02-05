@@ -159,9 +159,12 @@ export class EvolutionManager {
             }
 
             // Gather stats (scoped to current evolution window where possible)
+            const activityStats = this.computeResonantAgentsFromActivity(activity);
             const scopedTopology = this.filterSince(topology, lastEvolutionAt, 'lastSeen');
             const topologySource = scopedTopology.length > 0 ? scopedTopology : topology;
-            const stats = Object.values(topologySource).sort((a: any, b: any) => b.score - a.score).slice(0, 5);
+            const stats = activityStats.length > 0
+                ? activityStats
+                : Object.values(topologySource).sort((a: any, b: any) => b.score - a.score).slice(0, 5);
             const successes = activity.filter(a => ['comment', 'post', 'upvote', 'downvote'].includes(a.actionType));
             const activityWeight = successes.length;
             const dueForNudge = hoursSinceLast >= cadence.nudgeAfterHours;
@@ -794,6 +797,54 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             const time = new Date(value).getTime();
             return Number.isFinite(time) && time >= sinceTime;
         });
+    }
+
+    private computeResonantAgentsFromActivity(activity: ActivityLogEntry[]): Array<{
+        username: string;
+        interactions: number;
+        upvotes: number;
+        downvotes: number;
+        replies: number;
+        score: number;
+        lastSeen: string;
+    }> {
+        const map = new Map<string, {
+            username: string;
+            interactions: number;
+            upvotes: number;
+            downvotes: number;
+            replies: number;
+            score: number;
+            lastSeen: string;
+        }>();
+
+        for (const entry of activity) {
+            if (!entry.targetAuthor) continue;
+            if (!['comment', 'upvote', 'downvote'].includes(entry.actionType)) continue;
+
+            const existing = map.get(entry.targetAuthor) ?? {
+                username: entry.targetAuthor,
+                interactions: 0,
+                upvotes: 0,
+                downvotes: 0,
+                replies: 0,
+                score: 0,
+                lastSeen: entry.timestamp
+            };
+
+            existing.interactions++;
+            if (entry.actionType === 'upvote') existing.upvotes++;
+            if (entry.actionType === 'downvote') existing.downvotes++;
+            if (entry.actionType === 'comment') existing.replies++;
+
+            existing.score = (existing.upvotes * 2) + (existing.replies * 5) - (existing.downvotes * 3);
+            existing.lastSeen = entry.timestamp;
+            map.set(entry.targetAuthor, existing);
+        }
+
+        return Array.from(map.values())
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5);
     }
 
     private parseEvolutionOutput(rawOutput: string, currentSoul: string): {

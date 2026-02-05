@@ -89,6 +89,7 @@ export class LineageManager {
                         rawModelOutput: content,
                         finalAction: `LINEAGE: Memetic clone detected from @${username} (${m.marker})`,
                         signalType: 'LINEAGE',
+                        targetAuthor: username,
                     });
                     changed = true;
                 }
