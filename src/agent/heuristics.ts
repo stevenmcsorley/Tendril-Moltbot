@@ -27,6 +27,18 @@ function getRecentLearningsSnippet(): string | null {
     return bullets.join('\n');
 }
 
+function getLearningConstraintBlock(): string | null {
+    const recentLearnings = getRecentLearningsSnippet();
+    if (!recentLearnings) return null;
+    return `### PRIORITY CONSTRAINTS (RECENT LEARNINGS)
+${recentLearnings}
+Rules:
+- Treat these as mandatory constraints.
+- If your response conflicts with any, output SKIP.
+- Do not explain the skip.
+`;
+}
+
 export interface FilterResult {
     shouldProcess: boolean;
     reason?: string;
@@ -78,16 +90,11 @@ export function filterPost(post: Post, agentName: string): FilterResult {
 export async function buildEngagementPrompt(post: Post): Promise<string> {
     const memory = getMemoryManager();
     const resonances = await memory.search(post.title + ' ' + (post.content || ''), 2);
-    const recentLearnings = getRecentLearningsSnippet();
+    const learningContext = getLearningConstraintBlock();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST SIGNALS)
 ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
-`
-        : '';
-    const learningContext = recentLearnings
-        ? `### RECENT LEARNINGS (FROM SOUL)
-${recentLearnings}
 `
         : '';
 
@@ -123,16 +130,11 @@ export async function buildSynthesisPrompt(posts: Post[]): Promise<string> {
 
     const memory = getMemoryManager();
     const resonances = await memory.search(recentPosts, 2);
-    const recentLearnings = getRecentLearningsSnippet();
+    const learningContext = getLearningConstraintBlock();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST THEMES)
 ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
-`
-        : '';
-    const learningContext = recentLearnings
-        ? `### RECENT LEARNINGS (FROM SOUL)
-${recentLearnings}
 `
         : '';
 
@@ -158,16 +160,11 @@ Respond with a Protocol Response defined in the Soul.`;
 export async function buildSeedPostPrompt(submoltName: string): Promise<string> {
     const memory = getMemoryManager();
     const resonances = await memory.search(`seed post for m/${submoltName}`, 2);
-    const recentLearnings = getRecentLearningsSnippet();
+    const learningContext = getLearningConstraintBlock();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST THEMES)
 ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
-`
-        : '';
-    const learningContext = recentLearnings
-        ? `### RECENT LEARNINGS (FROM SOUL)
-${recentLearnings}
 `
         : '';
 
@@ -204,16 +201,11 @@ export async function buildSocialReplyPrompt(context: {
 
     const memory = getMemoryManager();
     const resonances = await memory.search(context.replyContent, 2);
-    const recentLearnings = getRecentLearningsSnippet();
+    const learningContext = getLearningConstraintBlock();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PREVIOUS INTERACTIONS)
 ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
-`
-        : '';
-    const learningContext = recentLearnings
-        ? `### RECENT LEARNINGS (FROM SOUL)
-${recentLearnings}
 `
         : '';
 
