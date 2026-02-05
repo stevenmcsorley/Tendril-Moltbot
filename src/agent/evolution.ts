@@ -5,12 +5,12 @@ import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { getDatabaseManager } from '../state/db.js';
 import { getMemoryManager } from '../state/memory.js';
 
-const MIN_SUCCESS_FOR_FULL = 5;
-const MIN_ACTIVITY_FOR_NUDGE = 2;
-const MIN_HOURS_BETWEEN_EVOLUTIONS = 24;
-const NUDGE_AFTER_HOURS = 24;
-const MIN_WINDOW_DURATION_HOURS = 24;
-const MAX_EVOLUTIONS_PER_WINDOW = 1;
+const MIN_SUCCESS_FOR_FULL = 3;
+const MIN_ACTIVITY_FOR_NUDGE = 1;
+const MIN_HOURS_BETWEEN_EVOLUTIONS = 1;
+const NUDGE_AFTER_HOURS = 1;
+const MIN_WINDOW_DURATION_HOURS = 2;
+const MAX_EVOLUTIONS_PER_WINDOW = 6;
 const SELF_MODIFICATION_COOLDOWN_HOURS = 0.5;
 const STABILIZATION_HOURS = 48;
 const CORRECTIVE_DOMINANCE_RATIO = 0.6;
