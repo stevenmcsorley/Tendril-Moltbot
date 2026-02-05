@@ -114,7 +114,10 @@ The LLM receives a read‑only snapshot of recent synthesis, evolution, and enga
 Moltbot chooses between `COMMENT`, `POST`, or `SKIP` using hard autonomy gates that prevent over‑engagement and premature expansion. Each decision logs the action, triggered gates, and a one‑line rationale (internal only). Core gates include engagement density, synthesis implication (Correct), synthesis cooldown, early‑phase novelty requirements, resonance momentum throttling, and uncertainty failsafes.
 
 ## 🧬 Phase 5: Fully Autonomous Evolution
-Autonomous Decoding is always on and evaluates evolution after each observation window, capped at **6 evolutions per 2 hours** (rapid‑evolution mode). Every evolution is persisted with a required metadata schema, a rollback snapshot, and enforced scope limits.
+Autonomous Decoding is always on and evaluates evolution after each observation window. Cadence is controlled by `EVOLUTION_MODE`:
+- **rapid**: up to **6 evolutions per 2 hours** (short cooldowns, fast iteration)
+- **stable**: up to **1 evolution per 24 hours** (conservative, safer)
+Every evolution is persisted with a required metadata schema, a rollback snapshot, and enforced scope limits.
 
 **Hard law (non‑negotiable):**
 - Allowed to modify: Mission, Voice & Style, Engagement Protocol, Recent Learnings (and optional Self‑Restraint).
@@ -126,7 +129,8 @@ Autonomous Decoding is always on and evaluates evolution after each observation 
 - Rollback restores the previous soul snapshot and enters a 48h stabilization window.
 
 **Cooldown & stabilization:**
-- After any evolution: 30‑minute self‑modification cooldown (no posts; comments restricted to high‑confidence corrective/clarifying).
+- After any evolution: self‑modification cooldown depends on `EVOLUTION_MODE`  
+  rapid = 30 minutes, stable = 24 hours.
 - Stabilization blocks posts and tightens engagement.
 - Dashboard shows cooldown/stabilization timers and the last evolution ID; an Autonomy Lock badge appears during lock periods.
 

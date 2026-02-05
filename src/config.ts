@@ -31,6 +31,7 @@ const configSchema = z.object({
     ENABLE_POSTING: z.coerce.boolean().default(false),
     ENABLE_COMMENTING: z.coerce.boolean().default(true),
     ENABLE_UPVOTING: z.coerce.boolean().default(true),
+    EVOLUTION_MODE: z.enum(['stable', 'rapid']).default('rapid'),
     ENABLE_SYNTHESIS_BROADCAST: z.coerce.boolean().default(true),
     DIALOGUE_INTERVAL_MS: z.coerce.number().positive().default(8000),
     TARGET_SUBMOLT: z.string().optional(),

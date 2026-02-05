@@ -4,14 +4,43 @@ import { getActivityLogger } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { getDatabaseManager } from '../state/db.js';
 import { getMemoryManager } from '../state/memory.js';
+import { getConfig } from '../config.js';
 
-const MIN_SUCCESS_FOR_FULL = 3;
-const MIN_ACTIVITY_FOR_NUDGE = 1;
-const MIN_HOURS_BETWEEN_EVOLUTIONS = 1;
-const NUDGE_AFTER_HOURS = 1;
-const MIN_WINDOW_DURATION_HOURS = 2;
-const MAX_EVOLUTIONS_PER_WINDOW = 6;
-const SELF_MODIFICATION_COOLDOWN_HOURS = 0.5;
+type EvolutionCadence = {
+    minSuccessForFull: number;
+    minActivityForNudge: number;
+    minHoursBetween: number;
+    nudgeAfterHours: number;
+    minWindowDurationHours: number;
+    maxEvolutionsPerWindow: number;
+    selfModificationCooldownHours: number;
+};
+
+const EVOLUTION_CADENCE: Record<'stable' | 'rapid', EvolutionCadence> = {
+    stable: {
+        minSuccessForFull: 5,
+        minActivityForNudge: 2,
+        minHoursBetween: 24,
+        nudgeAfterHours: 24,
+        minWindowDurationHours: 24,
+        maxEvolutionsPerWindow: 1,
+        selfModificationCooldownHours: 24,
+    },
+    rapid: {
+        minSuccessForFull: 3,
+        minActivityForNudge: 1,
+        minHoursBetween: 1,
+        nudgeAfterHours: 1,
+        minWindowDurationHours: 2,
+        maxEvolutionsPerWindow: 6,
+        selfModificationCooldownHours: 0.5,
+    }
+};
+
+function getEvolutionCadence(): EvolutionCadence {
+    const mode = getConfig().EVOLUTION_MODE;
+    return EVOLUTION_CADENCE[mode] ?? EVOLUTION_CADENCE.rapid;
+}
 const STABILIZATION_HOURS = 48;
 const CORRECTIVE_DOMINANCE_RATIO = 0.6;
 const MIN_CYCLE_TOTAL = 2;
@@ -92,6 +121,7 @@ export class EvolutionManager {
             this.isEvolving = true;
             const { force = false, reason = 'scheduled' } = options;
             const state = getStateManager();
+            const cadence = getEvolutionCadence();
             const topology = state.getNetworkTopology();
             const activity = getActivityLogger().getEntries(80);
 
@@ -115,12 +145,12 @@ export class EvolutionManager {
             }
 
             const windowState = this.getEvolutionWindowState();
-            if (!force && windowState.count >= MAX_EVOLUTIONS_PER_WINDOW) {
+            if (!force && windowState.count >= cadence.maxEvolutionsPerWindow) {
                 console.log('🧬 Evolution window cap reached. Skipping.');
                 return false;
             }
 
-            if (!force && hoursSinceLast < MIN_HOURS_BETWEEN_EVOLUTIONS) {
+            if (!force && hoursSinceLast < cadence.minHoursBetween) {
                 console.log(`🧬 Cooldown active. Last evolution was ${hoursSinceLast.toFixed(1)}h ago.`);
                 return false;
             }
@@ -129,14 +159,14 @@ export class EvolutionManager {
             const stats = Object.values(topology).sort((a: any, b: any) => b.score - a.score).slice(0, 5);
             const successes = activity.filter(a => ['comment', 'post', 'upvote', 'downvote'].includes(a.actionType));
             const activityWeight = successes.length;
-            const dueForNudge = hoursSinceLast >= NUDGE_AFTER_HOURS;
+            const dueForNudge = hoursSinceLast >= cadence.nudgeAfterHours;
 
-            if (!force && activityWeight < MIN_ACTIVITY_FOR_NUDGE && !dueForNudge) {
+            if (!force && activityWeight < cadence.minActivityForNudge && !dueForNudge) {
                 console.log('🧬 Not enough interaction weight to initiate molt yet.');
                 return false;
             }
 
-            const evolutionMode = activityWeight >= MIN_SUCCESS_FOR_FULL ? 'full' : 'nudge';
+            const evolutionMode = activityWeight >= cadence.minSuccessForFull ? 'full' : 'nudge';
 
             const soulContent = state.getSoul();
             const memoryManager = getMemoryManager();
@@ -302,20 +332,21 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         const activity = getActivityLogger().getEntries(80);
         const successes = activity.filter(a => ['comment', 'post', 'upvote', 'downvote'].includes(a.actionType));
         const activityWeight = successes.length;
+        const cadence = getEvolutionCadence();
 
         const lastEvolutionAt = this.getLastEvolutionAt();
         const hoursSinceLast = lastEvolutionAt
             ? (Date.now() - lastEvolutionAt.getTime()) / (1000 * 60 * 60)
             : null;
-        const dueForNudge = hoursSinceLast === null ? true : hoursSinceLast >= NUDGE_AFTER_HOURS;
+        const dueForNudge = hoursSinceLast === null ? true : hoursSinceLast >= cadence.nudgeAfterHours;
 
         const windowState = this.getEvolutionWindowState();
-        const windowRemaining = Math.max(0, MAX_EVOLUTIONS_PER_WINDOW - windowState.count);
+        const windowRemaining = Math.max(0, cadence.maxEvolutionsPerWindow - windowState.count);
         const selfModificationCooldownActive = this.isSelfModificationCooldownActive();
         const stabilizationActive = this.isStabilizationActive();
 
-        const activityThresholdMet = activityWeight >= MIN_ACTIVITY_FOR_NUDGE || dueForNudge;
-        const timingOk = hoursSinceLast === null ? true : hoursSinceLast >= MIN_HOURS_BETWEEN_EVOLUTIONS;
+        const activityThresholdMet = activityWeight >= cadence.minActivityForNudge || dueForNudge;
+        const timingOk = hoursSinceLast === null ? true : hoursSinceLast >= cadence.minHoursBetween;
         const eligible = !selfModificationCooldownActive
             && !stabilizationActive
             && windowRemaining > 0
@@ -324,11 +355,11 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
 
         return {
             activityWeight,
-            nudgeThreshold: MIN_ACTIVITY_FOR_NUDGE,
-            fullThreshold: MIN_SUCCESS_FOR_FULL,
+            nudgeThreshold: cadence.minActivityForNudge,
+            fullThreshold: cadence.minSuccessForFull,
             dueForNudge,
             hoursSinceLast,
-            minHoursBetween: MIN_HOURS_BETWEEN_EVOLUTIONS,
+            minHoursBetween: cadence.minHoursBetween,
             windowRemaining,
             selfModificationCooldownActive,
             stabilizationActive,
@@ -407,7 +438,8 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             console.log('🧬 SOUL EVOLVED. Re-encoding identity...');
             state.setSoul(fullSoul);
             state.setLastAutonomousEvolutionId(evolutionId);
-            state.setSelfModificationCooldownUntil(new Date(Date.now() + SELF_MODIFICATION_COOLDOWN_HOURS * 60 * 60 * 1000));
+            const cadence = getEvolutionCadence();
+            state.setSelfModificationCooldownUntil(new Date(Date.now() + cadence.selfModificationCooldownHours * 60 * 60 * 1000));
             this.incrementEvolutionWindow();
         } catch (err) {
             console.error('Failed to apply autonomous evolution:', err);
@@ -561,7 +593,8 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
         const state = getStateManager();
         const { start, count } = state.getEvolutionWindow();
         const now = new Date();
-        if (!start || (now.getTime() - start.getTime()) / (1000 * 60 * 60) >= MIN_WINDOW_DURATION_HOURS) {
+        const cadence = getEvolutionCadence();
+        if (!start || (now.getTime() - start.getTime()) / (1000 * 60 * 60) >= cadence.minWindowDurationHours) {
             state.setEvolutionWindow(now, 0);
             return { start: now, count: 0 };
         }
@@ -675,9 +708,10 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
                 .run('rolled_back', new Date().toISOString(), record.evolution_id);
 
             const state = getStateManager();
+            const cadence = getEvolutionCadence();
             state.setLastAutonomousEvolutionId(null);
             state.setStabilizationUntil(new Date(Date.now() + STABILIZATION_HOURS * 60 * 60 * 1000));
-            state.setSelfModificationCooldownUntil(new Date(Date.now() + SELF_MODIFICATION_COOLDOWN_HOURS * 60 * 60 * 1000));
+            state.setSelfModificationCooldownUntil(new Date(Date.now() + cadence.selfModificationCooldownHours * 60 * 60 * 1000));
             state.setEvolutionWindow(new Date(), 0);
         } catch (error) {
             console.error('Rollback failed:', error);
