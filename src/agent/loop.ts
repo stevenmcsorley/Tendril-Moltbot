@@ -655,7 +655,14 @@ class AgentLoop {
                     gatesTriggered: [],
                     rationale: result.isSkip ? 'Model selected SKIP.' : 'No actionable synthesis output.'
                 };
-                this.logAutonomyDecision(logger, null, options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined, decision, 'post');
+                this.logAutonomyDecision(
+                    logger,
+                    null,
+                    options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined,
+                    decision,
+                    'post',
+                    { rawModelOutput: result.rawOutput }
+                );
                 return;
             }
 
@@ -728,7 +735,14 @@ class AgentLoop {
                             gatesTriggered: [],
                             rationale: 'Public guardrail violation.'
                         };
-                        this.logAutonomyDecision(logger, null, options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined, decision, 'post');
+                        this.logAutonomyDecision(
+                            logger,
+                            null,
+                            options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined,
+                            decision,
+                            'post',
+                            { rawModelOutput: result.rawOutput }
+                        );
                         return;
                     }
                     const title = 'Signal Synthesis'; // Hardcoded title for proactive posts
@@ -1226,15 +1240,17 @@ class AgentLoop {
         targetId: string | null,
         targetSubmolt: string | undefined,
         decision: GateDecision,
-        context: 'comment' | 'post' | 'reply' | 'submolt'
+        context: 'comment' | 'post' | 'reply' | 'submolt',
+        details: { promptSent?: string | null; rawModelOutput?: string | null } = {}
     ): void {
         const gates = decision.gatesTriggered.length > 0 ? decision.gatesTriggered.join(', ') : '';
+        const { promptSent = null, rawModelOutput = null } = details;
         logger.log({
             actionType: 'decision',
             targetId,
             targetSubmolt,
-            promptSent: null,
-            rawModelOutput: null,
+            promptSent,
+            rawModelOutput,
             finalAction: `decision: context=${context} | action=${decision.action} | gates_triggered=[${gates}] | rationale=${decision.rationale}`
         });
     }
