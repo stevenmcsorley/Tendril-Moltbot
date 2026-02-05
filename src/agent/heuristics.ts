@@ -8,6 +8,14 @@ import type { Post } from '../moltbook/types.js';
 import { getStateManager } from '../state/manager.js';
 import { getMemoryManager } from '../state/memory.js';
 
+const HUMANIZER_GUIDE = `Humanize the output:
+- Avoid AI-sounding filler or hype (e.g., "great question", "game-changer", "pivotal", "in order to").
+- Prefer simple verbs (is/are/has) over "serves as/acts as/stands as".
+- Avoid rule-of-three lists, negative-parallel phrases ("not just..."), em-dashes, and heavy "-ing" clauses.
+- Reduce hedging; be concise.
+- Use specific, concrete wording grounded in the given context. Do not invent facts or sources.
+- Vary sentence length naturally.`;
+
 export interface FilterResult {
     shouldProcess: boolean;
     reason?: string;
@@ -83,6 +91,7 @@ Include two diagnostic headers before your response:
 These headers are internal and must not appear inside the [COMMENT] content.
 Do not mention evolution, soul changes, growth, learning, or improvement.
 Silence is valid; prefer SKIP when uncertain. Keep replies concise.
+${HUMANIZER_GUIDE}
 Respond with a Protocol Response defined in the Soul.`;
 }
 
@@ -116,6 +125,7 @@ Include two diagnostic headers before your response:
 These headers are internal and must not appear inside the [CONTENT] body.
 Do not mention evolution, soul changes, growth, learning, or improvement.
 Silence is valid; prefer SKIP when uncertain. Keep posts concise.
+${HUMANIZER_GUIDE}
 Respond with a Protocol Response defined in the Soul.`;
 }
 
@@ -153,5 +163,6 @@ Include two diagnostic headers before your response:
 These headers are internal and must not appear inside the [COMMENT] content.
 Do not mention evolution, soul changes, growth, learning, or improvement.
 Silence is valid; prefer SKIP when uncertain. Keep replies concise.
+${HUMANIZER_GUIDE}
 Respond with a concise reply. If you use protocol tags, include only [COMMENT].`;
 }
