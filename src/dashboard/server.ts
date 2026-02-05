@@ -307,6 +307,21 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * POST /api/control/autonomous-post
+     * Trigger an autonomous post in a selected submolt
+     */
+    app.post('/api/control/autonomous-post', async (req, res) => {
+        try {
+            const loop = getAgentLoop();
+            const submolt = typeof req.body?.submolt === 'string' ? req.body.submolt.trim() : undefined;
+            const result = await loop.triggerAutonomousPost(submolt || undefined);
+            res.json(result);
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Failed to trigger autonomous post.' });
+        }
+    });
+
+    /**
      * POST /api/control/reload
      * Reload configuration
      */

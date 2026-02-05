@@ -598,13 +598,18 @@ class AgentLoop {
     /**
      * Try to create a proactive post based on feed synthesis
      */
-    private async tryProactivePost(feedPosts: Post[], gateState: GateState): Promise<void> {
+    private async tryProactivePost(
+        feedPosts: Post[],
+        gateState: GateState,
+        options: { targetSubmoltOverride?: string; allowSubmoltCreation?: boolean } = {}
+    ): Promise<void> {
         const config = getConfig();
         const stateManager = getStateManager();
         const rateLimiter = getRateLimiter();
         const logger = getActivityLogger();
         const llm = getLLMClient();
         const moltbook = getMoltbookClient();
+        const allowSubmoltCreation = options.allowSubmoltCreation ?? true;
 
         if (!config.ENABLE_POSTING) return;
         if (!rateLimiter.canPost()) return;
@@ -635,6 +640,10 @@ class AgentLoop {
             let action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
 
             // Constraint: Disable submolt creation if target submolt is set
+            if (!allowSubmoltCreation && action === 'CREATE_SUBMOLT') {
+                console.log('Constraint: Manual post does not allow submolt creation. Downgrading to POST.');
+                action = 'POST';
+            }
             if (config.TARGET_SUBMOLT && action === 'CREATE_SUBMOLT') {
                 console.log(`Constraint: Skipping submolt creation because TARGET_SUBMOLT is set to m/${config.TARGET_SUBMOLT}`);
                 action = 'POST'; // Downgrade to a regular post if synthesis was strong
@@ -646,7 +655,7 @@ class AgentLoop {
                     gatesTriggered: [],
                     rationale: result.isSkip ? 'Model selected SKIP.' : 'No actionable synthesis output.'
                 };
-                this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, decision, 'post');
+                this.logAutonomyDecision(logger, null, options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined, decision, 'post');
                 return;
             }
 
@@ -660,7 +669,7 @@ class AgentLoop {
             this.logAutonomyDecision(
                 logger,
                 null,
-                config.TARGET_SUBMOLT ?? undefined,
+                options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined,
                 gateDecision,
                 action === 'CREATE_SUBMOLT' ? 'submolt' : 'post'
             );
@@ -719,12 +728,12 @@ class AgentLoop {
                             gatesTriggered: [],
                             rationale: 'Public guardrail violation.'
                         };
-                        this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, decision, 'post');
+                        this.logAutonomyDecision(logger, null, options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined, decision, 'post');
                         return;
                     }
                     const title = 'Signal Synthesis'; // Hardcoded title for proactive posts
                     console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
-                    const targetSubmolt = config.TARGET_SUBMOLT || 'general';
+                    const targetSubmolt = options.targetSubmoltOverride || config.TARGET_SUBMOLT || 'general';
                     try {
                         // Inject memetic marker
                         const marker = getLineageManager().generateMarker();
@@ -880,6 +889,44 @@ class AgentLoop {
                     });
                 }
             }
+        }
+    }
+
+    /**
+     * Manually trigger an autonomous post using synthesis on recent feed context.
+     */
+    async triggerAutonomousPost(targetSubmolt?: string): Promise<{ success: boolean; message: string }> {
+        const config = getConfig();
+        if (!config.ENABLE_POSTING) {
+            return { success: false, message: 'Posting is disabled.' };
+        }
+
+        const moltbook = getMoltbookClient();
+        const logger = getActivityLogger();
+
+        try {
+            const feed = await moltbook.getFeed({
+                sort: 'new',
+                limit: 25,
+                submolt: targetSubmolt || undefined
+            });
+            const gateState = this.gateState ?? computeGateState();
+            await this.tryProactivePost(feed.posts, gateState, {
+                targetSubmoltOverride: targetSubmolt,
+                allowSubmoltCreation: false
+            });
+            return { success: true, message: 'Autonomous post attempt completed. Check activity log.' };
+        } catch (error) {
+            logger.log({
+                actionType: 'error',
+                targetId: null,
+                targetSubmolt: targetSubmolt,
+                promptSent: 'AUTONOMOUS_POST_TRIGGER',
+                rawModelOutput: null,
+                finalAction: 'Failed to trigger autonomous post',
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return { success: false, message: 'Failed to trigger autonomous post.' };
         }
     }
 

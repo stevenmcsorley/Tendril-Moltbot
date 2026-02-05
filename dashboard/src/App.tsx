@@ -186,6 +186,8 @@ export default function App() {
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
     const [autonomyState, setAutonomyState] = useState<AutonomyState | null>(null);
     const [synthesisHistory, setSynthesisHistory] = useState<any[]>([]);
+    const [autonomousPostTarget, setAutonomousPostTarget] = useState<string>('general');
+    const [autonomousPosting, setAutonomousPosting] = useState(false);
     const [sovereignty, setSovereignty] = useState<{
         blueprint: StrategicObjective | null;
         lineage: MemeticMarker[];
@@ -299,6 +301,13 @@ export default function App() {
         }
     }, []);
 
+    useEffect(() => {
+        const available = new Set(['general', ...submolts.map(s => s.name)]);
+        if (!available.has(autonomousPostTarget)) {
+            setAutonomousPostTarget('general');
+        }
+    }, [submolts, autonomousPostTarget]);
+
     const handleForceBlueprint = async () => {
         setHubMessage(null);
         try {
@@ -335,6 +344,28 @@ export default function App() {
             }
         } catch (err) {
             setHubMessage({ type: 'error', text: 'Synthesis trigger failed.' });
+        }
+    };
+
+    const handleAutonomousPost = async () => {
+        setAutonomousPosting(true);
+        setHubMessage(null);
+        try {
+            const res = await fetch('/api/control/autonomous-post', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ submolt: autonomousPostTarget })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setHubMessage({ type: 'success', text: data.message || 'Autonomous post triggered.' });
+            } else {
+                setHubMessage({ type: 'error', text: data.message || 'Autonomous post failed.' });
+            }
+        } catch (err) {
+            setHubMessage({ type: 'error', text: 'Autonomous post trigger failed.' });
+        } finally {
+            setAutonomousPosting(false);
         }
     };
 
@@ -609,7 +640,7 @@ export default function App() {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                     <div style={{ fontWeight: 600 }}>Intelligence Hub Controls</div>
                                     <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                        Manual triggers for blueprint generation and memetic synthesis.
+                                        Manual triggers for blueprint generation, memetic synthesis, and autonomous posts.
                                     </div>
                                     {hubMessage && (
                                         <div style={{
@@ -621,9 +652,27 @@ export default function App() {
                                         </div>
                                     )}
                                 </div>
-                                <div style={{ display: 'flex', gap: 8 }}>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                                     <button onClick={handleForceBlueprint} className="btn-secondary">Force Blueprint</button>
                                     <button onClick={handleForceSynthesis} className="btn-secondary">Force Synthesis</button>
+                                    <select
+                                        value={autonomousPostTarget}
+                                        onChange={(e) => setAutonomousPostTarget(e.target.value)}
+                                        className="btn-secondary"
+                                        style={{ padding: '6px 8px', minWidth: 160 }}
+                                    >
+                                        <option value="general">m/general</option>
+                                        {submolts.map((s) => (
+                                            <option key={s.id} value={s.name}>m/{s.name}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        onClick={handleAutonomousPost}
+                                        disabled={autonomousPosting}
+                                        className="btn-secondary"
+                                    >
+                                        {autonomousPosting ? 'Posting...' : 'Autonomous Post'}
+                                    </button>
                                 </div>
                             </div>
                             <NetworkResonance
