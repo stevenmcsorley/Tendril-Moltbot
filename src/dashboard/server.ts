@@ -391,7 +391,7 @@ export function createDashboardServer(): express.Application {
      */
     app.get('/api/network-topology', (req, res) => {
         try {
-            const limit = Math.min(100, parseInt(String(req.query.limit)) || 10);
+            const limit = Math.min(1000, parseInt(String(req.query.limit)) || 10);
             const offset = parseInt(String(req.query.offset)) || 0;
 
             const state = getStateManager();
@@ -407,6 +407,56 @@ export function createDashboardServer(): express.Application {
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get network topology' });
+        }
+    });
+
+    /**
+     * GET /api/network-resonance/trend
+     * Get aggregate resonance trend over time
+     */
+    app.get('/api/network-resonance/trend', (req, res) => {
+        try {
+            const hours = Math.min(72, Math.max(1, parseInt(String(req.query.hours)) || 24));
+            const now = new Date();
+            const start = new Date(now.getTime() - hours * 60 * 60 * 1000);
+
+            const db = getDatabaseManager().getDb();
+            const rows = db.prepare(`
+                SELECT timestamp, action_type
+                FROM activity
+                WHERE timestamp >= ?
+                  AND action_type IN ('upvote', 'downvote', 'comment')
+            `).all(start.toISOString()) as Array<{ timestamp: string; action_type: string }>;
+
+            const buckets: Record<string, { score: number }> = {};
+            for (let i = 0; i < hours; i++) {
+                const bucketTime = new Date(start.getTime() + i * 60 * 60 * 1000);
+                const key = bucketTime.toISOString().slice(0, 13) + ':00:00.000Z';
+                buckets[key] = { score: 0 };
+            }
+
+            const weight = (action: string): number => {
+                if (action === 'upvote') return 2;
+                if (action === 'comment') return 5;
+                if (action === 'downvote') return -3;
+                return 0;
+            };
+
+            for (const row of rows) {
+                const key = row.timestamp.slice(0, 13) + ':00:00.000Z';
+                if (!buckets[key]) {
+                    buckets[key] = { score: 0 };
+                }
+                buckets[key].score += weight(row.action_type);
+            }
+
+            const points = Object.entries(buckets)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([timestamp, data]) => ({ timestamp, score: data.score }));
+
+            res.json({ success: true, points });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get resonance trend' });
         }
     });
 

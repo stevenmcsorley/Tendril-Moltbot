@@ -1,6 +1,6 @@
 import RelativeTime from './RelativeTime';
 import Tooltip from './Tooltip';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface ResonanceData {
     username: string;
@@ -18,12 +18,59 @@ interface NetworkResonanceProps {
     page: number;
     limit: number;
     onPageChange: (page: number) => void;
+    chartAllData?: ResonanceData[];
+    chartAllLoading?: boolean;
+    onRequestChartAll?: () => void;
+    trendData?: Array<{ timestamp: string; score: number }>;
+    trendLoading?: boolean;
+    onRequestTrend?: () => void;
 }
 
-export default function NetworkResonance({ data, total, page, limit, onPageChange }: NetworkResonanceProps) {
+export default function NetworkResonance({
+    data,
+    total,
+    page,
+    limit,
+    onPageChange,
+    chartAllData,
+    chartAllLoading,
+    onRequestChartAll,
+    trendData,
+    trendLoading,
+    onRequestTrend
+}: NetworkResonanceProps) {
     const totalPages = Math.ceil(total / limit);
     const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
+    const [chartScope, setChartScope] = useState<'page' | 'all'>('page');
+    const [showTrend, setShowTrend] = useState(false);
+    const chartData = chartScope === 'all' && chartAllData ? chartAllData : data;
     const maxScore = Math.max(1, ...data.map(d => Math.abs(d.score)));
+    const chartMaxScore = Math.max(1, ...chartData.map(d => Math.abs(d.score)));
+
+    useEffect(() => {
+        if (viewMode === 'chart' && chartScope === 'all' && onRequestChartAll && !chartAllData && !chartAllLoading) {
+            onRequestChartAll();
+        }
+    }, [viewMode, chartScope, onRequestChartAll, chartAllData, chartAllLoading]);
+
+    useEffect(() => {
+        if (showTrend && onRequestTrend && !trendData && !trendLoading) {
+            onRequestTrend();
+        }
+    }, [showTrend, onRequestTrend, trendData, trendLoading]);
+
+    const trendPoints = useMemo(() => {
+        if (!trendData || trendData.length === 0) return null;
+        const values = trendData.map(p => p.score);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = Math.max(1, max - min);
+        return trendData.map((p, idx) => {
+            const x = (idx / Math.max(1, trendData.length - 1)) * 100;
+            const y = 100 - ((p.score - min) / range) * 100;
+            return `${x.toFixed(2)},${y.toFixed(2)}`;
+        }).join(' ');
+    }, [trendData]);
 
     return (
         <div className="card">
@@ -79,37 +126,37 @@ export default function NetworkResonance({ data, total, page, limit, onPageChang
                             <thead>
                                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
                                     <th style={{ padding: '8px' }}>
-                                        <Tooltip text="Agent handle on Moltbook.">
+                                        <Tooltip text="Agent handle on Moltbook." placement="bottom">
                                             <span>Identity (Agent)</span>
                                         </Tooltip>
                                     </th>
                                     <th style={{ padding: '8px' }}>
-                                        <Tooltip text="Engagement weight for this agent. Score = (upvotes × 2) + (replies × 5) − (downvotes × 3).">
+                                        <Tooltip text="Engagement weight for this agent. Score = (upvotes × 2) + (replies × 5) − (downvotes × 3)." placement="bottom">
                                             <span>Weight (Score)</span>
                                         </Tooltip>
                                     </th>
                                     <th style={{ padding: '8px' }}>
-                                        <Tooltip text="Total interactions with this agent (upvotes, downvotes, comments, replies).">
+                                        <Tooltip text="Total interactions with this agent (upvotes, downvotes, comments, replies)." placement="bottom">
                                             <span>Intr.</span>
                                         </Tooltip>
                                     </th>
                                     <th style={{ padding: '8px' }}>
-                                        <Tooltip text="Upvotes given to this agent's posts.">
+                                        <Tooltip text="Upvotes given to this agent's posts." placement="bottom">
                                             <span>Up</span>
                                         </Tooltip>
                                     </th>
                                     <th style={{ padding: '8px' }}>
-                                        <Tooltip text="Downvotes given to this agent's posts.">
+                                        <Tooltip text="Downvotes given to this agent's posts." placement="bottom">
                                             <span>Down</span>
                                         </Tooltip>
                                     </th>
                                     <th style={{ padding: '8px' }}>
-                                        <Tooltip text="Comments or replies made to this agent.">
+                                        <Tooltip text="Comments or replies made to this agent." placement="bottom">
                                             <span>Replies</span>
                                         </Tooltip>
                                     </th>
                                     <th style={{ padding: '8px' }}>
-                                        <Tooltip text="Most recent interaction timestamp with this agent.">
+                                        <Tooltip text="Most recent interaction timestamp with this agent." placement="bottom">
                                             <span>Last Signal</span>
                                         </Tooltip>
                                     </th>
@@ -136,13 +183,69 @@ export default function NetworkResonance({ data, total, page, limit, onPageChang
                     </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                            {data.map(agent => (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                        className="secondary"
+                                        onClick={() => setChartScope('page')}
+                                        style={{
+                                            padding: '4px 10px',
+                                            fontSize: '0.75rem',
+                                            background: chartScope === 'page' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                                            color: chartScope === 'page' ? 'white' : 'var(--text-secondary)',
+                                            border: 'none',
+                                            borderRadius: 4
+                                        }}
+                                    >
+                                        Page
+                                    </button>
+                                    <button
+                                        className="secondary"
+                                        onClick={() => setChartScope('all')}
+                                        style={{
+                                            padding: '4px 10px',
+                                            fontSize: '0.75rem',
+                                            background: chartScope === 'all' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                                            color: chartScope === 'all' ? 'white' : 'var(--text-secondary)',
+                                            border: 'none',
+                                            borderRadius: 4
+                                        }}
+                                    >
+                                        All
+                                    </button>
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showTrend}
+                                        onChange={(e) => setShowTrend(e.target.checked)}
+                                    />
+                                    Trendline
+                                </label>
+                            </div>
+                            {chartScope === 'all' && chartAllLoading ? (
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading full resonance set…</div>
+                            ) : null}
+                            {(showTrend && trendLoading) ? (
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading trend…</div>
+                            ) : null}
+                            {showTrend && trendPoints && (
+                                <svg viewBox="0 0 100 100" style={{ width: '100%', height: 80, background: 'var(--bg-tertiary)', borderRadius: 6, padding: 6 }}>
+                                    <polyline
+                                        fill="none"
+                                        stroke="var(--primary)"
+                                        strokeWidth="2"
+                                        points={trendPoints}
+                                    />
+                                </svg>
+                            )}
+                            {chartData.map(agent => (
                                 <div key={agent.username} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                     <div style={{ width: 140, fontSize: 12, color: 'var(--text-secondary)' }}>@{agent.username}</div>
                                     <div style={{ flex: 1, background: 'var(--bg-tertiary)', borderRadius: 6, height: 12, position: 'relative' }}>
                                         <div style={{
                                             height: '100%',
-                                            width: `${Math.min(100, (Math.abs(agent.score) / maxScore) * 100)}%`,
+                                            width: `${Math.min(100, (Math.abs(agent.score) / chartMaxScore) * 100)}%`,
                                             background: agent.score >= 0 ? 'var(--success)' : 'var(--error)',
                                             borderRadius: 6
                                         }} />

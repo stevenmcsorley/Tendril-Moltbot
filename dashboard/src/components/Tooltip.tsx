@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 interface TooltipProps {
     text: string;
     children: React.ReactNode;
+    placement?: 'top' | 'bottom';
 }
 
-export default function Tooltip({ text, children }: TooltipProps) {
+export default function Tooltip({ text, children, placement = 'top' }: TooltipProps) {
     const [isVisible, setIsVisible] = useState(false);
 
     return (
@@ -17,7 +18,7 @@ export default function Tooltip({ text, children }: TooltipProps) {
         >
             {children}
             {isVisible && (
-                <div className="tooltip-box">
+                <div className={`tooltip-box ${placement}`}>
                     {text}
                 </div>
             )}

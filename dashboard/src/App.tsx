@@ -187,6 +187,10 @@ export default function App() {
     const [topologyPage, setTopologyPage] = useState(1);
     const [topologyTotal, setTopologyTotal] = useState(0);
     const topologyLimit = 10;
+    const [topologyChart, setTopologyChart] = useState<ResonanceData[] | null>(null);
+    const [topologyChartLoading, setTopologyChartLoading] = useState(false);
+    const [resonanceTrend, setResonanceTrend] = useState<Array<{ timestamp: string; score: number }> | null>(null);
+    const [resonanceTrendLoading, setResonanceTrendLoading] = useState(false);
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
     const [evolutionPage, setEvolutionPage] = useState(1);
     const [evolutionTotal, setEvolutionTotal] = useState(0);
@@ -281,6 +285,39 @@ export default function App() {
             console.error('Failed to fetch topology:', err);
         }
     }, []);
+
+    const fetchTopologyAll = useCallback(async () => {
+        if (topologyChartLoading) return;
+        try {
+            setTopologyChartLoading(true);
+            const limit = Math.max(topologyTotal, 100);
+            const res = await fetch(`/api/network-topology?limit=${limit}&offset=0`);
+            const data = await res.json();
+            if (data.success) {
+                setTopologyChart(data.topology);
+            }
+        } catch (err) {
+            console.error('Failed to fetch full topology:', err);
+        } finally {
+            setTopologyChartLoading(false);
+        }
+    }, [topologyTotal, topologyChartLoading]);
+
+    const fetchResonanceTrend = useCallback(async () => {
+        if (resonanceTrendLoading) return;
+        try {
+            setResonanceTrendLoading(true);
+            const res = await fetch('/api/network-resonance/trend?hours=24');
+            const data = await res.json();
+            if (data.success) {
+                setResonanceTrend(data.points);
+            }
+        } catch (err) {
+            console.error('Failed to fetch resonance trend:', err);
+        } finally {
+            setResonanceTrendLoading(false);
+        }
+    }, [resonanceTrendLoading]);
 
     const fetchEvolution = useCallback(async (page: number = 1) => {
         try {
@@ -736,6 +773,12 @@ export default function App() {
                                 page={topologyPage}
                                 limit={topologyLimit}
                                 onPageChange={(p) => fetchTopology(p)}
+                                chartAllData={topologyChart || undefined}
+                                chartAllLoading={topologyChartLoading}
+                                onRequestChartAll={fetchTopologyAll}
+                                trendData={resonanceTrend || undefined}
+                                trendLoading={resonanceTrendLoading}
+                                onRequestTrend={fetchResonanceTrend}
                             />
                             <SynthesisHistory
                                 history={synthesisHistory}

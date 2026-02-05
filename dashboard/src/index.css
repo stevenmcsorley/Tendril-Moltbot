@@ -188,6 +188,17 @@ body {
   border-color: var(--border) transparent transparent transparent;
 }
 
+.tooltip-box.bottom {
+  bottom: auto;
+  top: 125%;
+}
+
+.tooltip-box.bottom::after {
+  top: auto;
+  bottom: 100%;
+  border-color: transparent transparent var(--border) transparent;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

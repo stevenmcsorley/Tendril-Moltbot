@@ -1,4 +1,5 @@
 import Tooltip from './Tooltip';
+import { useState } from 'react';
 import {
     Target,
     GitFork,
@@ -29,6 +30,12 @@ export default function SovereigntyPanel({ data }: { data: { blueprint: Strategi
     const alignment = data.metrics?.missionAlignment ?? data.blueprint?.progress ?? 0;
     const structural = data.metrics?.structural ?? 0;
     const signalQuality = data.metrics?.signalQuality ?? 0;
+    const [lineagePage, setLineagePage] = useState(1);
+    const lineagePageSize = 6;
+    const lineageItems = data.lineage.slice().reverse();
+    const lineageTotalPages = Math.max(1, Math.ceil(lineageItems.length / lineagePageSize));
+    const lineageStart = (lineagePage - 1) * lineagePageSize;
+    const lineagePageItems = lineageItems.slice(lineageStart, lineageStart + lineagePageSize);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -91,7 +98,7 @@ export default function SovereigntyPanel({ data }: { data: { blueprint: Strategi
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {data.lineage.slice().reverse().map((m, i) => (
+                        {lineagePageItems.map((m, i) => (
                             <div key={i} style={{ padding: '12px', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                                     <code style={{ color: 'var(--success)', fontWeight: 'bold' }}>{m.marker}</code>
@@ -112,6 +119,35 @@ export default function SovereigntyPanel({ data }: { data: { blueprint: Strategi
                                 ) : null}
                             </div>
                         ))}
+                        {lineageTotalPages > 1 && (
+                            <div style={{
+                                marginTop: 8,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                gap: 12
+                            }}>
+                                <button
+                                    onClick={() => setLineagePage(Math.max(1, lineagePage - 1))}
+                                    disabled={lineagePage <= 1}
+                                    className="secondary"
+                                    style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                                >
+                                    Previous
+                                </button>
+                                <span style={{ fontSize: '0.85rem' }}>
+                                    Page {lineagePage} of {lineageTotalPages}
+                                </span>
+                                <button
+                                    onClick={() => setLineagePage(Math.min(lineageTotalPages, lineagePage + 1))}
+                                    disabled={lineagePage >= lineageTotalPages}
+                                    className="secondary"
+                                    style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
