@@ -504,6 +504,20 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * POST /api/control/clear-stabilization
+     * Clear stabilization lock (operator override)
+     */
+    app.post('/api/control/clear-stabilization', (req, res) => {
+        try {
+            const state = getStateManager();
+            state.setStabilizationUntil(null);
+            res.json({ success: true, message: 'Stabilization cleared.' });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to clear stabilization' });
+        }
+    });
+
+    /**
      * POST /api/control/blueprint
      * Manually trigger blueprint generation
      */
@@ -562,6 +576,7 @@ export function createDashboardServer(): express.Application {
                     'POST /api/control/resume',
                     'POST /api/control/run-once',
                     'POST /api/control/reload',
+                    'POST /api/control/clear-stabilization',
                 ],
                 dashboardNote: 'Build the dashboard with: cd dashboard && npm run build',
             });

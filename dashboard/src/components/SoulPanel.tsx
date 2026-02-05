@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, RefreshCw, Zap, RotateCcw } from 'lucide-react';
+import { Save, RefreshCw, Zap, RotateCcw, Unlock } from 'lucide-react';
 
 export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number }) {
     const [soul, setSoul] = useState<string>('');
@@ -7,6 +7,7 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
     const [saving, setSaving] = useState(false);
     const [evolving, setEvolving] = useState(false);
     const [rollingBack, setRollingBack] = useState(false);
+    const [clearingStabilization, setClearingStabilization] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     const fetchSoul = async () => {
@@ -84,6 +85,27 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
         }
     };
 
+    const handleClearStabilization = async () => {
+        if (!window.confirm('Clear stabilization lock? This will allow autonomous evolution immediately.')) {
+            return;
+        }
+        setClearingStabilization(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/control/clear-stabilization', { method: 'POST' });
+            const result = await res.json();
+            if (result.success) {
+                setMessage({ type: 'success', text: 'Stabilization cleared.' });
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Failed to clear stabilization.' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to clear stabilization.' });
+        } finally {
+            setClearingStabilization(false);
+        }
+    };
+
     useEffect(() => {
         fetchSoul();
     }, [refreshToken]);
@@ -128,6 +150,22 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
                         }}
                     >
                         <RotateCcw size={14} className={rollingBack ? 'spin' : ''} /> {rollingBack ? 'Rolling Back...' : 'Rollback'}
+                    </button>
+                    <button
+                        onClick={handleClearStabilization}
+                        disabled={clearingStabilization}
+                        className="btn-secondary"
+                        style={{
+                            padding: '6px 12px',
+                            fontSize: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            borderColor: 'var(--warning)',
+                            color: 'var(--warning)'
+                        }}
+                    >
+                        <Unlock size={14} className={clearingStabilization ? 'spin' : ''} /> {clearingStabilization ? 'Clearing...' : 'Clear Stabilization'}
                     </button>
                     <button
                         onClick={fetchSoul}
