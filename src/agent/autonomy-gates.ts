@@ -39,6 +39,7 @@ export interface DecisionContext {
     contextAmbiguous?: boolean;
     multiSourceContext?: boolean;
     novelty?: boolean;
+    allowLowNovelty?: boolean;
     lastPostAt?: Date | null;
     counterpartyInteractions?: number;
     lastMode?: ModeLabel;
@@ -231,7 +232,8 @@ export function applyAutonomyGates(state: GateState, ctx: DecisionContext): Gate
     }
 
     if (state.objectivePhase === 'early' && action === 'POST') {
-        if (!ctx.novelty || !ctx.multiSourceContext) {
+        const noveltyRequired = !ctx.allowLowNovelty;
+        if ((noveltyRequired && !ctx.novelty) || !ctx.multiSourceContext) {
             gates.push('ObjectivePhaseGate');
             action = 'SKIP';
         }

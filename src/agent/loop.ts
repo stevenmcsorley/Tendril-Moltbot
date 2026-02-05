@@ -601,7 +601,7 @@ class AgentLoop {
     private async tryProactivePost(
         feedPosts: Post[],
         gateState: GateState,
-        options: { targetSubmoltOverride?: string; allowSubmoltCreation?: boolean } = {}
+        options: { targetSubmoltOverride?: string; allowSubmoltCreation?: boolean; allowLowNovelty?: boolean } = {}
     ): Promise<void> {
         const config = getConfig();
         const stateManager = getStateManager();
@@ -670,6 +670,7 @@ class AgentLoop {
                 desiredAction: 'POST',
                 confidence,
                 novelty,
+                allowLowNovelty: options.allowLowNovelty,
                 multiSourceContext,
                 lastPostAt
             });
@@ -956,11 +957,12 @@ class AgentLoop {
             });
             const gateState = this.gateState ?? computeGateState();
             if (feed.posts.length === 0) {
-                await this.trySeedPost(targetSubmolt, gateState);
+                await this.trySeedPost(targetSubmolt, gateState, true);
             } else {
                 await this.tryProactivePost(feed.posts, gateState, {
                     targetSubmoltOverride: targetSubmolt,
-                    allowSubmoltCreation: false
+                    allowSubmoltCreation: false,
+                    allowLowNovelty: true
                 });
             }
             return { success: true, message: 'Autonomous post attempt completed. Check activity log.' };
@@ -978,7 +980,7 @@ class AgentLoop {
         }
     }
 
-    private async trySeedPost(targetSubmolt: string | undefined, gateState: GateState): Promise<void> {
+    private async trySeedPost(targetSubmolt: string | undefined, gateState: GateState, allowLowNovelty: boolean): Promise<void> {
         const config = getConfig();
         const logger = getActivityLogger();
         const llm = getLLMClient();
@@ -1011,6 +1013,7 @@ class AgentLoop {
             desiredAction: 'POST',
             confidence,
             novelty,
+            allowLowNovelty,
             multiSourceContext: true,
             lastPostAt
         });
