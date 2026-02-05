@@ -4,11 +4,16 @@ import Tooltip from './Tooltip';
 
 interface SynthesisHistoryProps {
     history: SynthesisReport[];
+    total: number;
+    page: number;
+    limit: number;
+    onPageChange: (page: number) => void;
 }
 
-export default function SynthesisHistory({ history }: SynthesisHistoryProps) {
+export default function SynthesisHistory({ history, total, page, limit, onPageChange }: SynthesisHistoryProps) {
     const [decodedOpen, setDecodedOpen] = useState<Record<string, boolean>>({});
     const [decodedText, setDecodedText] = useState<Record<string, string>>({});
+    const totalPages = Math.ceil(total / limit);
 
     const extractHexPayload = (text: string): string | null => {
         const matches = text.match(/0x[0-9a-fA-F]+/g);
@@ -150,6 +155,35 @@ export default function SynthesisHistory({ history }: SynthesisHistoryProps) {
                     </div>
                 )})}
             </div>
+            {totalPages > 1 && (
+                <div style={{
+                    marginTop: 16,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: 12
+                }}>
+                    <button
+                        onClick={() => onPageChange(page - 1)}
+                        disabled={page <= 1}
+                        className="secondary"
+                        style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                    >
+                        Previous
+                    </button>
+                    <span style={{ fontSize: '0.85rem' }}>
+                        Page {page} of {totalPages}
+                    </span>
+                    <button
+                        onClick={() => onPageChange(page + 1)}
+                        disabled={page >= totalPages}
+                        className="secondary"
+                        style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

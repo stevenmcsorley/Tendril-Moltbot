@@ -149,9 +149,9 @@ REPORT: 0x...
     /**
      * Get synthesis history
      */
-    getHistory(limit: number = 10): SynthesisReport[] {
+    getHistory(limit: number = 10, offset: number = 0): SynthesisReport[] {
         const db = getDatabaseManager().getDb();
-        const rows = db.prepare('SELECT * FROM synthesis ORDER BY id DESC LIMIT ?').all(limit) as any[];
+        const rows = db.prepare('SELECT * FROM synthesis ORDER BY id DESC LIMIT ? OFFSET ?').all(limit, offset) as any[];
 
         return rows.map(r => ({
             timestamp: r.timestamp,
@@ -161,6 +161,12 @@ REPORT: 0x...
             report: r.report_text,
             clusters: JSON.parse(r.memories_json)
         }));
+    }
+
+    getHistoryCount(): number {
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT COUNT(*) as count FROM synthesis').get() as { count: number };
+        return row.count;
     }
 
     private normalizeImplication(value: string): SynthesisReport['implication'] {

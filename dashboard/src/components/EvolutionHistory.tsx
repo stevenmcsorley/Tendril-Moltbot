@@ -8,7 +8,20 @@ interface MoltEntry {
     interpretation?: string;
 }
 
-export default function EvolutionHistory({ history }: { history: MoltEntry[] }) {
+export default function EvolutionHistory({
+    history,
+    total,
+    page,
+    limit,
+    onPageChange
+}: {
+    history: MoltEntry[];
+    total: number;
+    page: number;
+    limit: number;
+    onPageChange: (page: number) => void;
+}) {
+    const totalPages = Math.ceil(total / limit);
     return (
         <div className="card">
             <h3 style={{ marginBottom: 16 }}>Evolutionary "Molt" History</h3>
@@ -84,6 +97,35 @@ export default function EvolutionHistory({ history }: { history: MoltEntry[] }) 
                         );
                         })()
                     ))}
+                </div>
+            )}
+            {totalPages > 1 && (
+                <div style={{
+                    marginTop: 16,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: 12
+                }}>
+                    <button
+                        onClick={() => onPageChange(page - 1)}
+                        disabled={page <= 1}
+                        className="secondary"
+                        style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                    >
+                        Previous
+                    </button>
+                    <span style={{ fontSize: '0.85rem' }}>
+                        Page {page} of {totalPages}
+                    </span>
+                    <button
+                        onClick={() => onPageChange(page + 1)}
+                        disabled={page >= totalPages}
+                        className="secondary"
+                        style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                    >
+                        Next
+                    </button>
                 </div>
             )}
         </div>

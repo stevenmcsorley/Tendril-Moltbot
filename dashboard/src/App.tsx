@@ -188,8 +188,14 @@ export default function App() {
     const [topologyTotal, setTopologyTotal] = useState(0);
     const topologyLimit = 10;
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
+    const [evolutionPage, setEvolutionPage] = useState(1);
+    const [evolutionTotal, setEvolutionTotal] = useState(0);
+    const evolutionLimit = 6;
     const [autonomyState, setAutonomyState] = useState<AutonomyState | null>(null);
     const [synthesisHistory, setSynthesisHistory] = useState<any[]>([]);
+    const [synthesisPage, setSynthesisPage] = useState(1);
+    const [synthesisTotal, setSynthesisTotal] = useState(0);
+    const synthesisLimit = 4;
     const [autonomousPostTarget, setAutonomousPostTarget] = useState<string>('general');
     const [autonomousPosting, setAutonomousPosting] = useState(false);
     const [forceAutonomousPost, setForceAutonomousPost] = useState(false);
@@ -218,8 +224,10 @@ export default function App() {
     const [soulRefreshToken, setSoulRefreshToken] = useState(0);
     const [hubMessage, setHubMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-    // WebSocket reference
+    // WebSocket reference + pagination refs
     const wsRef = useRef<WebSocket | null>(null);
+    const evolutionPageRef = useRef(1);
+    const synthesisPageRef = useRef(1);
 
     const fetchStatus = useCallback(async () => {
         try {
@@ -274,24 +282,32 @@ export default function App() {
         }
     }, []);
 
-    const fetchEvolution = useCallback(async () => {
+    const fetchEvolution = useCallback(async (page: number = 1) => {
         try {
-            const res = await fetch('/api/evolution/history');
+            const offset = (page - 1) * evolutionLimit;
+            const res = await fetch(`/api/evolution/history?limit=${evolutionLimit}&offset=${offset}`);
             const data = await res.json();
             if (data.success) {
                 setEvolutionHistory(data.history);
+                setEvolutionTotal(data.total ?? data.history?.length ?? 0);
+                setEvolutionPage(page);
+                evolutionPageRef.current = page;
             }
         } catch (err) {
             console.error('Failed to fetch evolution:', err);
         }
     }, []);
 
-    const fetchSynthesis = useCallback(async () => {
+    const fetchSynthesis = useCallback(async (page: number = 1) => {
         try {
-            const res = await fetch('/api/synthesis/history');
+            const offset = (page - 1) * synthesisLimit;
+            const res = await fetch(`/api/synthesis/history?limit=${synthesisLimit}&offset=${offset}`);
             const data = await res.json();
             if (data.success) {
                 setSynthesisHistory(data.history);
+                setSynthesisTotal(data.total ?? data.history?.length ?? 0);
+                setSynthesisPage(page);
+                synthesisPageRef.current = page;
             }
         } catch (err) {
             console.error('Failed to fetch synthesis:', err);
@@ -347,7 +363,7 @@ export default function App() {
                 } else {
                     setHubMessage({ type: 'success', text: 'Synthesis report generated.' });
                 }
-                fetchSynthesis();
+                fetchSynthesis(synthesisPageRef.current);
             } else {
                 setHubMessage({ type: 'error', text: data.error || 'Failed to run synthesis.' });
             }
@@ -389,8 +405,8 @@ export default function App() {
             logFetch,
             fetchSubmolts(),
             fetchTopology(),
-            fetchEvolution(),
-            fetchSynthesis(),
+            fetchEvolution(evolutionPageRef.current),
+            fetchSynthesis(synthesisPageRef.current),
             fetchSovereignty()
         ]);
         setLastRefresh(new Date());
@@ -401,8 +417,8 @@ export default function App() {
             fetchStatus(),
             fetchSubmolts(),
             fetchTopology(),
-            fetchEvolution(),
-            fetchSynthesis(),
+            fetchEvolution(evolutionPageRef.current),
+            fetchSynthesis(synthesisPageRef.current),
             fetchSovereignty()
         ]);
         setLastRefresh(new Date());
@@ -491,11 +507,11 @@ export default function App() {
                             break;
 
                         case 'evolution_update':
-                            setEvolutionHistory(prev => [msg.payload, ...prev].slice(0, 10));
+                            fetchEvolution(evolutionPageRef.current);
                             break;
 
                         case 'synthesis_update':
-                            setSynthesisHistory(prev => [msg.payload, ...prev].slice(0, 10));
+                            fetchSynthesis(synthesisPageRef.current);
                             break;
 
                         case 'sovereignty_update':
@@ -721,9 +737,21 @@ export default function App() {
                                 limit={topologyLimit}
                                 onPageChange={(p) => fetchTopology(p)}
                             />
-                            <SynthesisHistory history={synthesisHistory} />
+                            <SynthesisHistory
+                                history={synthesisHistory}
+                                total={synthesisTotal}
+                                page={synthesisPage}
+                                limit={synthesisLimit}
+                                onPageChange={(p) => fetchSynthesis(p)}
+                            />
                             <AutonomyTimeline state={autonomyState} />
-                            <EvolutionHistory history={evolutionHistory} />
+                            <EvolutionHistory
+                                history={evolutionHistory}
+                                total={evolutionTotal}
+                                page={evolutionPage}
+                                limit={evolutionLimit}
+                                onPageChange={(p) => fetchEvolution(p)}
+                            />
                             <SovereigntyPanel data={sovereignty} />
                         </div>
                     ) : (

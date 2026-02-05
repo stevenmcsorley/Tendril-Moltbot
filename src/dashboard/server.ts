@@ -417,8 +417,12 @@ export function createDashboardServer(): express.Application {
     app.get('/api/evolution/history', (req, res) => {
         try {
             const db = getDatabaseManager().getDb();
-            const rows = db.prepare('SELECT timestamp, evolution_id, rationale, delta, interpretation FROM evolutions ORDER BY id DESC LIMIT 10').all();
-            res.json({ success: true, history: rows });
+            const limit = Math.min(100, parseInt(String(req.query.limit)) || 10);
+            const offset = parseInt(String(req.query.offset)) || 0;
+            const rows = db.prepare('SELECT timestamp, evolution_id, rationale, delta, interpretation FROM evolutions ORDER BY id DESC LIMIT ? OFFSET ?')
+                .all(limit, offset);
+            const totalRow = db.prepare('SELECT COUNT(*) as count FROM evolutions').get() as { count: number };
+            res.json({ success: true, history: rows, total: totalRow.count, limit, offset });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get evolution history' });
         }
@@ -450,8 +454,12 @@ export function createDashboardServer(): express.Application {
      */
     app.get('/api/synthesis/history', (req, res) => {
         try {
-            const history = getSynthesisManager().getHistory(10);
-            res.json({ success: true, history });
+            const limit = Math.min(100, parseInt(String(req.query.limit)) || 10);
+            const offset = parseInt(String(req.query.offset)) || 0;
+            const manager = getSynthesisManager();
+            const history = manager.getHistory(limit, offset);
+            const total = manager.getHistoryCount();
+            res.json({ success: true, history, total, limit, offset });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get synthesis history' });
         }
