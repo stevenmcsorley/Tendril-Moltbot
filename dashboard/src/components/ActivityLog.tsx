@@ -20,6 +20,18 @@ interface ActivityLogProps {
     onFilterChange: (filter: string | undefined) => void;
 }
 
+function filterBySignals(entries: LogEntry[], filter: string | undefined): LogEntry[] {
+    if (!filter) return entries;
+    if (filter.startsWith('signals:')) {
+        const tags = filter.replace('signals:', '').split('|');
+        return entries.filter(entry => {
+            const source = `${entry.finalAction || ''} ${entry.promptSent || ''}`.toUpperCase();
+            return tags.some(tag => source.includes(tag.toUpperCase()));
+        });
+    }
+    return entries.filter(entry => filter.split(',').includes(entry.actionType));
+}
+
 function formatTime(iso: string): string {
     const date = new Date(iso);
     return date.toLocaleTimeString();
@@ -39,9 +51,10 @@ function entryKey(entry: LogEntry): string {
 
 export default function ActivityLog({ entries, agentName, currentFilter, onFilterChange }: ActivityLogProps) {
     const [openEntries, setOpenEntries] = React.useState<Set<string>>(() => new Set());
+    const visibleEntries = filterBySignals(entries, currentFilter);
 
     React.useEffect(() => {
-        const keys = new Set(entries.map(entryKey));
+        const keys = new Set(visibleEntries.map(entryKey));
         setOpenEntries(prev => {
             const next = new Set<string>();
             for (const key of prev) {
@@ -49,11 +62,11 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
             }
             return next;
         });
-    }, [entries]);
+    }, [visibleEntries]);
 
     // Group by date
     const grouped: Record<string, LogEntry[]> = {};
-    for (const entry of entries) {
+    for (const entry of visibleEntries) {
         const date = formatDate(entry.timestamp);
         if (!grouped[date]) grouped[date] = [];
         grouped[date].push(entry);
@@ -109,10 +122,25 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
                     >
                         Decisions
                     </button>
+                    <button
+                        onClick={() => onFilterChange('signals:ALLIANCE|DEFENSE|LINEAGE')}
+                        disabled={currentFilter === 'signals:ALLIANCE|DEFENSE|LINEAGE'}
+                        style={{
+                            padding: '4px 8px',
+                            fontSize: 12,
+                            background: currentFilter === 'signals:ALLIANCE|DEFENSE|LINEAGE' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                            color: currentFilter === 'signals:ALLIANCE|DEFENSE|LINEAGE' ? 'white' : 'var(--text-secondary)',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Signals
+                    </button>
                 </div>
             </div>
 
-            {entries.length === 0 ? (
+            {visibleEntries.length === 0 ? (
                 <div className="empty-state">No activity found</div>
             ) : (
                 <div className="activity-log custom-scroll">
