@@ -102,20 +102,29 @@ export class ActivityLogger {
         params.push(limit, offset);
 
         const rows = db.prepare(query).all(...params);
+        return rows.map(mapActivityRow);
+    }
 
-        return rows.map((r: any) => ({
-            id: r.id,
-            timestamp: r.timestamp,
-            actionType: r.action_type as ActionType,
-            targetId: r.target_id,
-            targetSubmolt: r.target_submolt,
-            promptSent: r.prompt_sent,
-            rawModelOutput: r.raw_model_output,
-            finalAction: r.final_action,
-            error: r.error,
-            evolutionId: r.evolution_id,
-            signalType: r.signal_type
-        }));
+    getEntriesForEvolution(evolutionId: string, limit: number = 200): ActivityLogEntry[] {
+        const db = getDatabaseManager().getDb();
+        const rows = db.prepare(`
+            SELECT * FROM activity
+            WHERE evolution_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+        `).all(evolutionId, limit);
+        return rows.map(mapActivityRow);
+    }
+
+    getEntriesSince(timestampIso: string, limit: number = 200): ActivityLogEntry[] {
+        const db = getDatabaseManager().getDb();
+        const rows = db.prepare(`
+            SELECT * FROM activity
+            WHERE timestamp >= ?
+            ORDER BY id DESC
+            LIMIT ?
+        `).all(timestampIso, limit);
+        return rows.map(mapActivityRow);
     }
 
     /**
@@ -157,4 +166,20 @@ function detectSignalType(entry: Partial<ActivityLogEntry>): SignalType | null {
     if (finalAction.startsWith('DEFENSE:') || promptSent.startsWith('[DEFENSE_')) return 'DEFENSE';
     if (finalAction.startsWith('LINEAGE:') || promptSent.startsWith('[LINEAGE_')) return 'LINEAGE';
     return null;
+}
+
+function mapActivityRow(r: any): ActivityLogEntry {
+    return {
+        id: r.id,
+        timestamp: r.timestamp,
+        actionType: r.action_type as ActionType,
+        targetId: r.target_id,
+        targetSubmolt: r.target_submolt,
+        promptSent: r.prompt_sent,
+        rawModelOutput: r.raw_model_output,
+        finalAction: r.final_action,
+        error: r.error,
+        evolutionId: r.evolution_id,
+        signalType: r.signal_type
+    };
 }

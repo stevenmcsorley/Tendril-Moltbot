@@ -1,6 +1,6 @@
 import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
-import { getActivityLogger } from '../logging/activity-log.js';
+import { getActivityLogger, type ActivityLogEntry } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 import { getDatabaseManager } from '../state/db.js';
 import { getMemoryManager } from '../state/memory.js';
@@ -126,7 +126,7 @@ export class EvolutionManager {
             const state = getStateManager();
             const cadence = getEvolutionCadence();
             const topology = state.getNetworkTopology();
-            const activity = getActivityLogger().getEntries(80);
+            const activity = this.getScopedActivity(200);
 
             if (await this.checkRollbackTriggers()) {
                 return true;
@@ -173,11 +173,14 @@ export class EvolutionManager {
 
             const soulContent = state.getSoul();
             const memoryManager = getMemoryManager();
-            const recentMemories = memoryManager.getRecentMemories(12).map(m => ({
-                timestamp: m.timestamp,
-                source: m.source,
-                text: m.text.length > 240 ? `${m.text.slice(0, 240)}...` : m.text
-            }));
+            const recentMemoriesRaw = memoryManager.getRecentMemories(50);
+            const recentMemories = this.filterSince(recentMemoriesRaw, lastEvolutionAt)
+                .slice(0, 12)
+                .map(m => ({
+                    timestamp: m.timestamp,
+                    source: m.source,
+                    text: m.text.length > 240 ? `${m.text.slice(0, 240)}...` : m.text
+                }));
             const recentActions = successes.slice(0, 12).map(a => ({
                 timestamp: a.timestamp,
                 type: a.actionType,
@@ -185,12 +188,14 @@ export class EvolutionManager {
                 submolt: a.targetSubmolt,
                 outcome: a.finalAction ? a.finalAction.slice(0, 160) : null
             }));
-            const recentPosts = state.getMyPosts().slice(0, 3).map(p => ({
-                id: p.id,
-                title: p.title,
-                submolt: p.submolt,
-                createdAt: p.createdAt
-            }));
+            const recentPosts = this.filterSince(state.getMyPosts(), lastEvolutionAt, 'createdAt')
+                .slice(0, 3)
+                .map(p => ({
+                    id: p.id,
+                    title: p.title,
+                    submolt: p.submolt,
+                    createdAt: p.createdAt
+                }));
 
             const prompt = `### COGNITIVE EVALUATION PROTOCOL: TRUE AUTONOMY
 Reason: ${reason}
@@ -332,7 +337,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
 
     getReadinessSnapshot(): EvolutionReadiness {
         const state = getStateManager();
-        const activity = getActivityLogger().getEntries(80);
+        const activity = this.getScopedActivity(200);
         const successes = activity.filter(a => ['comment', 'post', 'upvote', 'downvote'].includes(a.actionType));
         const activityWeight = successes.length;
         const cadence = getEvolutionCadence();
@@ -701,7 +706,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
     }
 
     private isEngagementInstability(): boolean {
-        const activity = getActivityLogger().getEntries(40);
+        const activity = this.getScopedActivity(120);
         const upvotes = activity.filter(a => a.actionType === 'upvote').length;
         const downvotes = activity.filter(a => a.actionType === 'downvote').length;
         if (downvotes >= Math.max(2, upvotes)) return true;
@@ -760,6 +765,33 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             console.error('Failed to read evolution history:', error);
             return null;
         }
+    }
+
+    private getScopedActivity(limit: number): ActivityLogEntry[] {
+        const logger = getActivityLogger();
+        const state = getStateManager();
+        const lastEvolutionId = state.getLastAutonomousEvolutionId();
+        if (lastEvolutionId) {
+            const scoped = logger.getEntriesForEvolution(lastEvolutionId, limit);
+            if (scoped.length > 0) return scoped;
+        }
+        const lastEvolutionAt = this.getLastEvolutionAt();
+        if (lastEvolutionAt) {
+            const scoped = logger.getEntriesSince(lastEvolutionAt.toISOString(), limit);
+            if (scoped.length > 0) return scoped;
+        }
+        return logger.getEntries(limit);
+    }
+
+    private filterSince<T extends Record<string, any>>(items: T[], since: Date | null, field: keyof T = 'timestamp' as keyof T): T[] {
+        if (!since) return items;
+        const sinceTime = since.getTime();
+        return items.filter(item => {
+            const value = item[field];
+            if (typeof value !== 'string') return true;
+            const time = new Date(value).getTime();
+            return Number.isFinite(time) && time >= sinceTime;
+        });
     }
 
     private parseEvolutionOutput(rawOutput: string, currentSoul: string): {
