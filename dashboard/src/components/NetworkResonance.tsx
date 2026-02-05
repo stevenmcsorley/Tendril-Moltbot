@@ -24,6 +24,8 @@ interface NetworkResonanceProps {
     trendData?: Array<{ timestamp: string; score: number }>;
     trendLoading?: boolean;
     onRequestTrend?: () => void;
+    trendHours?: number;
+    onTrendHoursChange?: (hours: number) => void;
 }
 
 export default function NetworkResonance({
@@ -37,7 +39,9 @@ export default function NetworkResonance({
     onRequestChartAll,
     trendData,
     trendLoading,
-    onRequestTrend
+    onRequestTrend,
+    trendHours = 24,
+    onTrendHoursChange
 }: NetworkResonanceProps) {
     const totalPages = Math.ceil(total / limit);
     const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
@@ -229,15 +233,31 @@ export default function NetworkResonance({
                             {(showTrend && trendLoading) ? (
                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading trend…</div>
                             ) : null}
+                            {showTrend && (
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+                                    <select
+                                        value={trendHours}
+                                        onChange={(e) => onTrendHoursChange?.(parseInt(e.target.value, 10))}
+                                        className="btn-secondary"
+                                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                                    >
+                                        <option value={6}>Last 6h</option>
+                                        <option value={24}>Last 24h</option>
+                                        <option value={72}>Last 72h</option>
+                                    </select>
+                                </div>
+                            )}
                             {showTrend && trendPoints && (
-                                <svg viewBox="0 0 100 100" style={{ width: '100%', height: 80, background: 'var(--bg-tertiary)', borderRadius: 6, padding: 6 }}>
-                                    <polyline
-                                        fill="none"
-                                        stroke="var(--primary)"
-                                        strokeWidth="2"
-                                        points={trendPoints}
-                                    />
-                                </svg>
+                                <div style={{ background: 'var(--bg-tertiary)', borderRadius: 8, padding: '10px 12px' }}>
+                                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: 120 }}>
+                                        <polyline
+                                            fill="none"
+                                            stroke="var(--primary)"
+                                            strokeWidth="2"
+                                            points={trendPoints}
+                                        />
+                                    </svg>
+                                </div>
                             )}
                             {chartData.map(agent => (
                                 <div key={agent.username} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

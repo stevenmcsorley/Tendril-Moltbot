@@ -191,6 +191,7 @@ export default function App() {
     const [topologyChartLoading, setTopologyChartLoading] = useState(false);
     const [resonanceTrend, setResonanceTrend] = useState<Array<{ timestamp: string; score: number }> | null>(null);
     const [resonanceTrendLoading, setResonanceTrendLoading] = useState(false);
+    const [resonanceTrendHours, setResonanceTrendHours] = useState(24);
     const [evolutionHistory, setEvolutionHistory] = useState<EvolutionEntry[]>([]);
     const [evolutionPage, setEvolutionPage] = useState(1);
     const [evolutionTotal, setEvolutionTotal] = useState(0);
@@ -303,11 +304,11 @@ export default function App() {
         }
     }, [topologyTotal, topologyChartLoading]);
 
-    const fetchResonanceTrend = useCallback(async () => {
+    const fetchResonanceTrend = useCallback(async (hours: number = resonanceTrendHours) => {
         if (resonanceTrendLoading) return;
         try {
             setResonanceTrendLoading(true);
-            const res = await fetch('/api/network-resonance/trend?hours=24');
+            const res = await fetch(`/api/network-resonance/trend?hours=${hours}`);
             const data = await res.json();
             if (data.success) {
                 setResonanceTrend(data.points);
@@ -317,7 +318,7 @@ export default function App() {
         } finally {
             setResonanceTrendLoading(false);
         }
-    }, [resonanceTrendLoading]);
+    }, [resonanceTrendLoading, resonanceTrendHours]);
 
     const fetchEvolution = useCallback(async (page: number = 1) => {
         try {
@@ -779,6 +780,12 @@ export default function App() {
                                 trendData={resonanceTrend || undefined}
                                 trendLoading={resonanceTrendLoading}
                                 onRequestTrend={fetchResonanceTrend}
+                                trendHours={resonanceTrendHours}
+                                onTrendHoursChange={(hours) => {
+                                    setResonanceTrendHours(hours);
+                                    setResonanceTrend(null);
+                                    fetchResonanceTrend(hours);
+                                }}
                             />
                             <SynthesisHistory
                                 history={synthesisHistory}
