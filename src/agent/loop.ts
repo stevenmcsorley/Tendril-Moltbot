@@ -707,6 +707,20 @@ class AgentLoop {
                 multiSourceContext,
                 lastPostAt
             });
+            if (options.forcePost && gateDecision.gatesTriggered.includes('SynthesisCooldownGate')) {
+                this.logAutonomyDecision(
+                    logger,
+                    null,
+                    options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined,
+                    {
+                        action: 'POST',
+                        gatesTriggered: ['SynthesisCooldownGate'],
+                        rationale: 'Manual force: ignored synthesis cooldown gate.'
+                    },
+                    action === 'CREATE_SUBMOLT' ? 'submolt' : 'post',
+                    { rawModelOutput: result.rawOutput }
+                );
+            }
             this.logAutonomyDecision(
                 logger,
                 null,
@@ -945,14 +959,17 @@ class AgentLoop {
     async triggerAutonomousPost(targetSubmolt?: string, options?: { force?: boolean }): Promise<{ success: boolean; message: string }> {
         const config = getConfig();
         const logger = getActivityLogger();
+        const forceMode = options?.force === true;
         if (!config.ENABLE_POSTING) {
             logger.log({
                 actionType: 'decision',
                 targetId: null,
                 targetSubmolt: targetSubmolt,
-                promptSent: 'AUTONOMOUS_POST_TRIGGER',
+                promptSent: forceMode ? 'AUTONOMOUS_POST_TRIGGER_FORCE' : 'AUTONOMOUS_POST_TRIGGER',
                 rawModelOutput: null,
-                finalAction: 'Autonomous post blocked: posting disabled.',
+                finalAction: forceMode
+                    ? 'Autonomous post blocked: posting disabled (force requested).'
+                    : 'Autonomous post blocked: posting disabled.',
             });
             return { success: false, message: 'Posting is disabled.' };
         }
@@ -963,9 +980,11 @@ class AgentLoop {
                 actionType: 'decision',
                 targetId: null,
                 targetSubmolt: targetSubmolt,
-                promptSent: 'AUTONOMOUS_POST_TRIGGER',
+                promptSent: forceMode ? 'AUTONOMOUS_POST_TRIGGER_FORCE' : 'AUTONOMOUS_POST_TRIGGER',
                 rawModelOutput: null,
-                finalAction: 'Autonomous post blocked: rate limit.',
+                finalAction: forceMode
+                    ? 'Autonomous post blocked: rate limit (force requested).'
+                    : 'Autonomous post blocked: rate limit.',
             });
             return { success: false, message: 'Post rate limit active.' };
         }
@@ -974,9 +993,9 @@ class AgentLoop {
             actionType: 'decision',
             targetId: null,
             targetSubmolt: targetSubmolt,
-            promptSent: options?.force ? 'AUTONOMOUS_POST_TRIGGER_FORCE' : 'AUTONOMOUS_POST_TRIGGER',
+            promptSent: forceMode ? 'AUTONOMOUS_POST_TRIGGER_FORCE' : 'AUTONOMOUS_POST_TRIGGER',
             rawModelOutput: null,
-            finalAction: options?.force ? 'Autonomous post requested (force).' : 'Autonomous post requested.'
+            finalAction: forceMode ? 'Autonomous post requested (force).' : 'Autonomous post requested.'
         });
 
         const moltbook = getMoltbookClient();
@@ -989,13 +1008,13 @@ class AgentLoop {
             });
             const gateState = this.gateState ?? computeGateState();
             if (feed.posts.length === 0) {
-                await this.trySeedPost(targetSubmolt, gateState, true, options?.force);
+                await this.trySeedPost(targetSubmolt, gateState, true, forceMode);
             } else {
                 await this.tryProactivePost(feed.posts, gateState, {
                     targetSubmoltOverride: targetSubmolt,
                     allowSubmoltCreation: false,
                     allowLowNovelty: true,
-                    forcePost: options?.force
+                    forcePost: forceMode
                 });
             }
             return { success: true, message: 'Autonomous post attempt completed. Check activity log.' };
@@ -1057,6 +1076,13 @@ class AgentLoop {
             multiSourceContext: true,
             lastPostAt
         });
+        if (forcePost && gateDecision.gatesTriggered.includes('SynthesisCooldownGate')) {
+            this.logAutonomyDecision(logger, null, targetSubmolt, {
+                action: 'POST',
+                gatesTriggered: ['SynthesisCooldownGate'],
+                rationale: 'Manual force: ignored synthesis cooldown gate.'
+            }, 'post', { rawModelOutput: result.rawOutput });
+        }
         this.logAutonomyDecision(logger, null, targetSubmolt, gateDecision, 'post', { rawModelOutput: result.rawOutput });
         if (gateDecision.action !== 'POST') return;
 
