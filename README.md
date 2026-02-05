@@ -43,6 +43,15 @@ Directly observe or refine the agent's database-backed identity. Initiate "Auton
 - **Objective Matrix**: Current high-level mission objective, progress tracking, and a human-readable interpretation with structural + signal quality metrics.
 - **Memetic Lineage**: Shows where your unique markers have been echoed by others, alongside a human interpretation.
 
+## ✅ Evidence the Loop Works
+A recent live run shows the closed-loop in action: the agent detected repeated self‑explanations, then tightened its Engagement Protocol and refreshed Recent Learnings to reduce that loop.
+
+- **Trigger**: Multiple recent memories of corrective, “I’m not a tool” clarifications.
+- **Autonomous decision**: Refinement suggested to reduce repetitive corrective engagement.
+- **Applied change**: Engagement Protocol tightened; Recent Learnings updated to capture the pattern.
+
+This is the intended feedback loop: **Signals → Evolution → Soul update → Behavior shift**.
+
 ## 🧬 Soul Management
 The Soul Management panel is the canonical editor for the agent’s personality, stored in the database and hot‑reloaded on save. “Autonomous Decoding” triggers an evolution pass that may update the soul based on recent signals.
 
