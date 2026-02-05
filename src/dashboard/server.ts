@@ -217,6 +217,7 @@ export function createDashboardServer(): express.Application {
                     enablePosting: config.ENABLE_POSTING,
                     enableCommenting: config.ENABLE_COMMENTING,
                     enableUpvoting: config.ENABLE_UPVOTING,
+                    enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
                 },
                 evolution: {
                     selfModificationCooldownUntil: cooldownUntil?.toISOString() ?? null,

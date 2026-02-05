@@ -1228,6 +1228,18 @@ class AgentLoop {
             // Broadcast report as a post to the target submolt or general
             const targetSubmolt = config.TARGET_SUBMOLT || 'general';
 
+            if (!config.ENABLE_SYNTHESIS_BROADCAST) {
+                logger.log({
+                    actionType: 'decision',
+                    targetId: null,
+                    targetSubmolt,
+                    promptSent: 'SYNTHESIS_TRIGGER',
+                    rawModelOutput: report.report,
+                    finalAction: 'Synthesis generated; broadcast disabled.',
+                });
+                return;
+            }
+
             console.log(`🔮 Broadcasting synthesis report to m/${targetSubmolt}...`);
 
             try {
