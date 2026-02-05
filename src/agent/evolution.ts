@@ -427,12 +427,24 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             );
 
             db.prepare(`
-                INSERT INTO evolutions (timestamp, rationale, delta, interpretation)
-                VALUES (?, ?, ?, ?)
-            `).run(timestamp, rationale || 'Autonomous refinement', delta || 'Soul update', interpretation || rationale);
+                INSERT INTO evolutions (timestamp, evolution_id, rationale, delta, interpretation)
+                VALUES (?, ?, ?, ?, ?)
+            `).run(
+                timestamp,
+                evolutionId,
+                rationale || 'Autonomous refinement',
+                delta || 'Soul update',
+                interpretation || rationale
+            );
 
             // Broadcast update
-            getWebSocketBroadcaster().broadcast('evolution_update', { timestamp, rationale, delta, interpretation: interpretation || rationale });
+            getWebSocketBroadcaster().broadcast('evolution_update', {
+                timestamp,
+                evolution_id: evolutionId,
+                rationale,
+                delta,
+                interpretation: interpretation || rationale
+            });
 
             // ACTUAL EVOLUTION: Apply the new soul to the database
             console.log('🧬 SOUL EVOLVED. Re-encoding identity...');

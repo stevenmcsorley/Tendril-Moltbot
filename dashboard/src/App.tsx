@@ -121,6 +121,7 @@ interface ResonanceData {
 
 interface EvolutionEntry {
     timestamp: string;
+    evolution_id?: string | null;
     rationale: string;
     delta: string;
     interpretation?: string;

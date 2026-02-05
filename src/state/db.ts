@@ -67,6 +67,7 @@ export class DatabaseManager {
             CREATE TABLE IF NOT EXISTS evolutions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
+                evolution_id TEXT,
                 rationale TEXT NOT NULL,
                 delta TEXT NOT NULL,
                 interpretation TEXT
@@ -127,6 +128,7 @@ export class DatabaseManager {
         this.ensureColumn('synthesis', 'human_summary', 'TEXT');
         this.ensureColumn('synthesis', 'implication', 'TEXT');
         this.ensureColumn('evolutions', 'interpretation', 'TEXT');
+        this.ensureColumn('evolutions', 'evolution_id', 'TEXT');
         this.ensureColumn('activity', 'evolution_id', 'TEXT');
     }
 

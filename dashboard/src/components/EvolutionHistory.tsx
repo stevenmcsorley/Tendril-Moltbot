@@ -2,6 +2,7 @@ import RelativeTime from './RelativeTime';
 
 interface MoltEntry {
     timestamp: string;
+    evolution_id?: string | null;
     rationale: string;
     delta: string;
     interpretation?: string;
@@ -19,6 +20,10 @@ export default function EvolutionHistory({ history }: { history: MoltEntry[] }) 
             ) : (
                 <div className="timeline">
                     {history.map((entry, i) => (
+                        (() => {
+                            const evoLabel = entry.evolution_id ? `evo:${entry.evolution_id.split('_').pop()}` : 'evo:legacy';
+                            const evoTitle = entry.evolution_id ? `Evolution ID: ${entry.evolution_id}` : 'Evolution ID unavailable';
+                            return (
                         <div key={i} style={{
                             paddingLeft: '16px',
                             borderLeft: '2px solid var(--primary)',
@@ -35,8 +40,22 @@ export default function EvolutionHistory({ history }: { history: MoltEntry[] }) 
                                 backgroundColor: 'var(--bg)',
                                 border: '2px solid var(--primary)'
                             }}></div>
-                            <div style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: 4 }}>
+                            <div style={{ fontSize: '0.8em', opacity: 0.7, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <RelativeTime value={entry.timestamp} />
+                                <span
+                                    title={evoTitle}
+                                    style={{
+                                        padding: '2px 6px',
+                                        borderRadius: 4,
+                                        fontSize: 10,
+                                        fontWeight: 600,
+                                        background: 'rgba(var(--info-rgb), 0.15)',
+                                        color: 'var(--info)',
+                                        border: '1px solid rgba(var(--info-rgb), 0.4)'
+                                    }}
+                                >
+                                    {evoLabel}
+                                </span>
                             </div>
                             <div style={{ fontWeight: 'bold', marginBottom: 8, color: 'var(--primary)' }}>
                                 Protocol Refinement: {entry.rationale.split('.')[0]}
@@ -62,6 +81,8 @@ export default function EvolutionHistory({ history }: { history: MoltEntry[] }) 
                                 </pre>
                             )}
                         </div>
+                        );
+                        })()
                     ))}
                 </div>
             )}
