@@ -70,6 +70,64 @@ export class RedditClient implements SocialClient {
         return match ? match[1] : parentId;
     }
 
+    private getAuthUrlCandidates(): string[] {
+        const base = this.authUrl || 'https://www.reddit.com/api/v1/access_token';
+        const candidates = new Set<string>();
+        candidates.add(base);
+        if (base.includes('www.reddit.com')) {
+            candidates.add(base.replace('www.reddit.com', 'reddit.com'));
+        } else if (base.includes('reddit.com')) {
+            candidates.add(base.replace('reddit.com', 'www.reddit.com'));
+        }
+        candidates.add('https://oauth.reddit.com/api/v1/access_token');
+        return Array.from(candidates);
+    }
+
+    private isNetworkError(err: unknown): boolean {
+        if (!err || typeof err !== 'object') return false;
+        const anyErr = err as any;
+        const code = anyErr?.cause?.code || anyErr?.code;
+        if (code && ['EAI_AGAIN', 'ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'ENETUNREACH', 'EHOSTUNREACH', 'ECONNRESET'].includes(code)) {
+            return true;
+        }
+        const msg = String(anyErr?.message || '').toLowerCase();
+        return [
+            'fetch failed',
+            'name resolution',
+            'dns',
+            'connection',
+            'timeout',
+            'network',
+            'refused',
+            'unreachable',
+            'resolve',
+            'temporary failure'
+        ].some(keyword => msg.includes(keyword));
+    }
+
+    private async sleep(ms: number): Promise<void> {
+        await new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    private async fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
+        let attempt = 0;
+        let lastError: unknown = null;
+        while (attempt <= retries) {
+            try {
+                return await fetch(url, options);
+            } catch (err) {
+                lastError = err;
+                if (!this.isNetworkError(err) || attempt === retries) {
+                    throw err;
+                }
+                const backoffMs = 1000 * Math.pow(2, attempt);
+                await this.sleep(backoffMs);
+            }
+            attempt += 1;
+        }
+        throw lastError;
+    }
+
     private async getAccessToken(): Promise<string> {
         if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
             return this.accessToken;
@@ -82,25 +140,47 @@ export class RedditClient implements SocialClient {
             password: this.password
         });
 
-        const response = await fetch(this.authUrl, {
-            method: 'POST',
-            headers: {
-                Authorization: `Basic ${basic}`,
-                'User-Agent': this.userAgent,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: body.toString()
-        });
+        let lastError: unknown = null;
+        for (const authUrl of this.getAuthUrlCandidates()) {
+            try {
+                const response = await this.fetchWithRetry(authUrl, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Basic ${basic}`,
+                        'User-Agent': this.userAgent,
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: body.toString()
+                });
 
-        if (!response.ok) {
-            const text = await response.text().catch(() => 'Auth failed');
-            throw new PlatformApiError(`Reddit auth failed: ${text}`, response.status, 'reddit');
+                if (!response.ok) {
+                    const text = await response.text().catch(() => 'Auth failed');
+                    if (response.status < 500) {
+                        throw new PlatformApiError(`Reddit auth failed: ${text}`, response.status, 'reddit');
+                    }
+                    lastError = new PlatformApiError(`Reddit auth failed: ${text}`, response.status, 'reddit');
+                    continue;
+                }
+
+                const data = await response.json() as { access_token: string; expires_in: number };
+                this.accessToken = data.access_token;
+                this.tokenExpiresAt = Date.now() + (data.expires_in * 1000 * 0.9);
+                return this.accessToken;
+            } catch (err) {
+                lastError = err;
+                if (err instanceof PlatformApiError) {
+                    throw err;
+                }
+                if (!this.isNetworkError(err)) {
+                    throw new PlatformApiError(`Reddit auth failed: ${String((err as any)?.message || err)}`, 500, 'reddit');
+                }
+            }
         }
 
-        const data = await response.json() as { access_token: string; expires_in: number };
-        this.accessToken = data.access_token;
-        this.tokenExpiresAt = Date.now() + (data.expires_in * 1000 * 0.9);
-        return this.accessToken;
+        if (lastError instanceof PlatformApiError) {
+            throw lastError;
+        }
+        throw new PlatformApiError(`Reddit auth failed: ${String((lastError as any)?.message || lastError || 'unknown error')}`, 503, 'reddit');
     }
 
     private async request<T>(
@@ -133,11 +213,19 @@ export class RedditClient implements SocialClient {
             ).toString();
         }
 
-        const response = await fetch(url, {
-            method,
-            headers,
-            body
-        });
+        let response: Response;
+        try {
+            response = await this.fetchWithRetry(url, {
+                method,
+                headers,
+                body
+            });
+        } catch (err) {
+            if (this.isNetworkError(err)) {
+                throw new PlatformApiError('Reddit network error. Retrying later.', 503, 'reddit', undefined, undefined, 60);
+            }
+            throw err;
+        }
 
         if (!response.ok) {
             const retryAfter = response.headers.get('retry-after');
