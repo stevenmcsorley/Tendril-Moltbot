@@ -100,7 +100,7 @@ IMPLICATION: Reinforce | Watch | Deprioritise | Correct
 REPORT: 0x...
 `;
 
-            const result = await llm.generate(prompt);
+            const result = await llm.generate(prompt, { maxTokens: 220 });
             const summary = result.rawOutput.split('SUMMARY:')[1]?.split('HUMAN_SUMMARY:')[0]?.trim()
                 || result.rawOutput.split('SUMMARY:')[1]?.split('REPORT:')[0]?.trim()
                 || '0xSYNTHESIS_ERROR';
