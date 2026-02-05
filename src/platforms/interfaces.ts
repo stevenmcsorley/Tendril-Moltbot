@@ -12,6 +12,7 @@ export interface SocialClient {
     capabilities: {
         platform: 'moltbook' | 'reddit';
         supportsSubmolts: boolean;
+        readOnly?: boolean;
     };
     getMe(): Promise<Agent>;
     getStatus(): Promise<StatusResponse>;

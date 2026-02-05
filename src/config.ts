@@ -21,6 +21,7 @@ const configSchema = z.object({
     REDDIT_BASE_URL: z.string().url().default('https://oauth.reddit.com'),
     REDDIT_AUTH_URL: z.string().url().default('https://www.reddit.com/api/v1/access_token'),
     REDDIT_DEFAULT_SUBREDDIT: z.string().default('all'),
+    REDDIT_READ_ONLY: z.coerce.boolean().default(false),
 
     // LLM Provider
     LLM_PROVIDER: z.enum(['ollama', 'deepseek']).default('ollama'),
@@ -92,10 +93,12 @@ export function loadConfig(): Config {
         const required = [
             ['REDDIT_CLIENT_ID', config.REDDIT_CLIENT_ID],
             ['REDDIT_CLIENT_SECRET', config.REDDIT_CLIENT_SECRET],
-            ['REDDIT_USERNAME', config.REDDIT_USERNAME],
-            ['REDDIT_PASSWORD', config.REDDIT_PASSWORD],
             ['REDDIT_USER_AGENT', config.REDDIT_USER_AGENT],
         ];
+        if (!config.REDDIT_READ_ONLY) {
+            required.push(['REDDIT_USERNAME', config.REDDIT_USERNAME]);
+            required.push(['REDDIT_PASSWORD', config.REDDIT_PASSWORD]);
+        }
         const missing = required.filter(([, value]) => !value).map(([key]) => key);
         if (missing.length > 0) {
             throw new Error(`Missing Reddit credentials: ${missing.join(', ')}`);

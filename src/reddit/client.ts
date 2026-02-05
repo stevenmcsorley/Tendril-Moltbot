@@ -27,7 +27,8 @@ type RedditListing = {
 export class RedditClient implements SocialClient {
     capabilities = {
         platform: 'reddit' as const,
-        supportsSubmolts: false
+        supportsSubmolts: false,
+        readOnly: false
     };
 
     private baseUrl: string;
@@ -37,6 +38,7 @@ export class RedditClient implements SocialClient {
     private username: string;
     private password: string;
     private userAgent: string;
+    private readOnly: boolean;
 
     private accessToken: string | null = null;
     private tokenExpiresAt: number | null = null;
@@ -50,6 +52,8 @@ export class RedditClient implements SocialClient {
         this.username = config.REDDIT_USERNAME || '';
         this.password = config.REDDIT_PASSWORD || '';
         this.userAgent = config.REDDIT_USER_AGENT || 'moltbot/1.0';
+        this.readOnly = config.REDDIT_READ_ONLY;
+        this.capabilities.readOnly = this.readOnly;
     }
 
     private normalizeSubreddit(name?: string): string {
@@ -128,17 +132,27 @@ export class RedditClient implements SocialClient {
         throw lastError;
     }
 
+    private ensureWriteAllowed(): void {
+        if (this.readOnly) {
+            throw new PlatformApiError('Read-only mode: write actions are disabled.', 403, 'reddit', 'Set REDDIT_READ_ONLY=false to enable posting.');
+        }
+    }
+
     private async getAccessToken(): Promise<string> {
         if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
             return this.accessToken;
         }
 
         const basic = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
+        const scope = this.readOnly ? 'read' : 'identity read submit vote';
         const body = new URLSearchParams({
-            grant_type: 'password',
-            username: this.username,
-            password: this.password
+            grant_type: this.readOnly ? 'client_credentials' : 'password',
+            scope
         });
+        if (!this.readOnly) {
+            body.set('username', this.username);
+            body.set('password', this.password);
+        }
 
         let lastError: unknown = null;
         for (const authUrl of this.getAuthUrlCandidates()) {
@@ -299,6 +313,17 @@ export class RedditClient implements SocialClient {
     }
 
     async getMe(): Promise<Agent> {
+        if (this.readOnly) {
+            const subreddit = this.normalizeSubreddit(undefined);
+            await this.request<any>('GET', `/r/${subreddit}/new`, { query: { limit: 1 } });
+            return {
+                id: 'read_only',
+                name: this.username || 'reddit_readonly',
+                created_at: new Date().toISOString(),
+                claimed: false
+            };
+        }
+
         const data = await this.request<any>('GET', '/api/v1/me');
         return {
             id: data.id,
@@ -354,6 +379,7 @@ export class RedditClient implements SocialClient {
     }
 
     async createComment(postId: string, content: string, parentId?: string): Promise<Comment> {
+        this.ensureWriteAllowed();
         const thing = parentId ? `t1_${parentId}` : `t3_${postId}`;
         const data = await this.request<any>('POST', '/api/comment', {
             form: {
@@ -377,6 +403,7 @@ export class RedditClient implements SocialClient {
     }
 
     async createPost(options: { submolt: string; title: string; content?: string; url?: string }): Promise<Post> {
+        this.ensureWriteAllowed();
         const subreddit = this.normalizeSubreddit(options.submolt);
         const kind = options.url ? 'link' : 'self';
         const data = await this.request<any>('POST', '/api/submit', {
@@ -409,14 +436,17 @@ export class RedditClient implements SocialClient {
     }
 
     async upvotePost(postId: string): Promise<void> {
+        this.ensureWriteAllowed();
         await this.request('POST', '/api/vote', { form: { id: `t3_${postId}`, dir: 1 } });
     }
 
     async downvotePost(postId: string): Promise<void> {
+        this.ensureWriteAllowed();
         await this.request('POST', '/api/vote', { form: { id: `t3_${postId}`, dir: -1 } });
     }
 
     async upvoteComment(commentId: string): Promise<void> {
+        this.ensureWriteAllowed();
         await this.request('POST', '/api/vote', { form: { id: `t1_${commentId}`, dir: 1 } });
     }
 

@@ -180,6 +180,7 @@ Every evolution is persisted with a required metadata schema, a rollback snapsho
 ## 🌐 Platform Modes
 - **Moltbook (default)**: requires `MOLTBOOK_API_KEY`.
 - **Reddit**: set `AGENT_PLATFORM=reddit` and provide `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`, `REDDIT_PASSWORD`, `REDDIT_USER_AGENT`.
+- **Reddit Read‑Only**: set `REDDIT_READ_ONLY=true` to disable posting/commenting/voting. Only `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT` are required.
 - **Submolts vs Subreddits**: when running on Reddit, submolts map to subreddit names. If no target is provided, `REDDIT_DEFAULT_SUBREDDIT` is used.
 - **Limitations**: subreddit creation is not supported via the Reddit API, so `CREATE_SUBMOLT` is automatically downgraded to `POST`.
 

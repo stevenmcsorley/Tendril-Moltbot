@@ -153,12 +153,22 @@ class AgentLoop {
 
         const config = getConfig();
         const client = getSocialClient();
+        const readOnly = !!client.capabilities.readOnly;
         const llm = getLLMClient();
         const rateLimiter = getRateLimiter();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
 
         this.isRunning = true;
+        if (readOnly && (config.ENABLE_POSTING || config.ENABLE_COMMENTING || config.ENABLE_UPVOTING)) {
+            logger.log({
+                actionType: 'decision',
+                targetId: null,
+                promptSent: null,
+                rawModelOutput: null,
+                finalAction: 'Read-only mode: write actions are disabled.',
+            });
+        }
         this.lastRunAt = new Date();
         this.resetCycleStats();
 
@@ -304,8 +314,11 @@ class AgentLoop {
                         continue;
                     }
 
+                    const canComment = config.ENABLE_COMMENTING && !readOnly;
+                    const canVote = config.ENABLE_UPVOTING && !readOnly;
+
                     // Check rate limits before engaging
-                    if (!rateLimiter.canComment() && config.ENABLE_COMMENTING) {
+                    if (!rateLimiter.canComment() && canComment) {
                         const status = rateLimiter.getStatus();
                         logger.log({
                             actionType: 'skip',
@@ -340,14 +353,14 @@ class AgentLoop {
                         }
 
                         // Execute Vote
-                        if (vote === 'UP' && config.ENABLE_UPVOTING) {
+                        if (vote === 'UP' && canVote) {
                             await this.tryUpvote(post, prompt, result.rawOutput);
-                        } else if (vote === 'DOWN') {
+                        } else if (vote === 'DOWN' && canVote) {
                             await this.tryDownvote(post, prompt, result.rawOutput);
                         }
 
                         // Execute Comment
-                        if (!isSkip && config.ENABLE_COMMENTING && commentRaw) {
+                        if (!isSkip && canComment && commentRaw) {
                             const counterpartyStats = this.getCounterpartyStats(post.author?.name);
                             const newFrame = this.isNewFrame(commentRaw, counterpartyStats.lastResponse);
                             const gateDecision = applyAutonomyGates(this.gateState ?? computeGateState(), {
@@ -526,6 +539,19 @@ class AgentLoop {
         const stateManager = getStateManager();
         const logger = getActivityLogger();
 
+        if (client.capabilities.readOnly) {
+            logger.log({
+                actionType: 'skip',
+                targetId: post.id,
+                targetSubmolt: post.submolt?.name,
+                targetAuthor: post.author?.name,
+                promptSent: prompt,
+                rawModelOutput: rawOutput,
+                finalAction: 'Read-only mode: comment skipped.'
+            });
+            return false;
+        }
+
         try {
             const commentObj = await client.createComment(post.id, comment);
             rateLimiter.recordComment(post.id);
@@ -562,6 +588,19 @@ class AgentLoop {
         const stateManager = getStateManager();
         const logger = getActivityLogger();
 
+        if (client.capabilities.readOnly) {
+            logger.log({
+                actionType: 'skip',
+                targetId: post.id,
+                targetSubmolt: post.submolt?.name,
+                targetAuthor: post.author?.name,
+                promptSent: prompt,
+                rawModelOutput: rawOutput,
+                finalAction: 'Read-only mode: upvote skipped.'
+            });
+            return;
+        }
+
         try {
             await client.upvotePost(post.id);
             stateManager.recordUpvote();
@@ -594,6 +633,19 @@ class AgentLoop {
         const client = getSocialClient();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
+
+        if (client.capabilities.readOnly) {
+            logger.log({
+                actionType: 'skip',
+                targetId: post.id,
+                targetSubmolt: post.submolt?.name,
+                targetAuthor: post.author?.name,
+                promptSent: prompt,
+                rawModelOutput: rawOutput,
+                finalAction: 'Read-only mode: downvote skipped.'
+            });
+            return;
+        }
 
         try {
             await client.downvotePost(post.id);
@@ -636,6 +688,7 @@ class AgentLoop {
         const allowSubmoltCreation = options.allowSubmoltCreation ?? client.capabilities.supportsSubmolts;
 
         if (!config.ENABLE_POSTING) return;
+        if (client.capabilities.readOnly) return;
         if (!rateLimiter.canPost()) return;
 
         // Check frequency: at least 30 minutes between posts
@@ -868,6 +921,7 @@ class AgentLoop {
         const rateLimiter = getRateLimiter();
 
         if (!config.ENABLE_COMMENTING) return;
+        if (client.capabilities.readOnly) return;
 
         console.log('Checking social engagements...');
 
@@ -970,6 +1024,18 @@ class AgentLoop {
         const config = getConfig();
         const logger = getActivityLogger();
         const forceMode = options?.force === true;
+        const client = getSocialClient();
+        if (client.capabilities.readOnly) {
+            logger.log({
+                actionType: 'decision',
+                targetId: null,
+                targetSubmolt: targetSubmolt,
+                promptSent: forceMode ? 'AUTONOMOUS_POST_TRIGGER_FORCE' : 'AUTONOMOUS_POST_TRIGGER',
+                rawModelOutput: null,
+                finalAction: 'Autonomous post blocked: read-only mode.',
+            });
+            return { success: false, message: 'Read-only mode: posting disabled.' };
+        }
         if (!config.ENABLE_POSTING) {
             logger.log({
                 actionType: 'decision',
@@ -1007,8 +1073,6 @@ class AgentLoop {
             rawModelOutput: null,
             finalAction: forceMode ? 'Autonomous post requested (force).' : 'Autonomous post requested.'
         });
-
-        const client = getSocialClient();
 
         try {
             const feed = await client.getFeed({
@@ -1050,6 +1114,7 @@ class AgentLoop {
         const stateManager = getStateManager();
 
         if (!config.ENABLE_POSTING) return;
+        if (client.capabilities.readOnly) return;
 
         const prompt = await buildSeedPostPrompt(targetSubmolt || 'general');
         const result = await llm.generate(prompt);
@@ -1160,6 +1225,15 @@ class AgentLoop {
         gateState: GateState
     ): Promise<boolean> {
         const config = getConfig();
+        if (client.capabilities.readOnly) {
+            const decision: GateDecision = {
+                action: 'SKIP',
+                gatesTriggered: [],
+                rationale: 'Read-only mode.'
+            };
+            this.logAutonomyDecision(logger, reply.id, undefined, decision, 'reply');
+            return false;
+        }
 
         // Skip if already replied or if it's our own comment
         if (stateManager.hasRepliedToSocial(reply.id)) return false;

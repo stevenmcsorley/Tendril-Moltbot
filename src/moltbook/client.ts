@@ -52,7 +52,8 @@ export class MoltbookClient implements SocialClient {
     private apiKey: string;
     capabilities = {
         platform: 'moltbook' as const,
-        supportsSubmolts: true
+        supportsSubmolts: true,
+        readOnly: false
     };
 
     constructor() {
