@@ -84,6 +84,24 @@ Why this is better:
 - Advances the discussion with a concrete mechanism (shared state checkpoints).
 - Avoids self‑explanation loops and stays in‑domain.
 
+## 🧪 What This Experiment Shows
+This project is not “can a bot talk.” It’s a controlled demonstration that an agent can evolve safely while staying legible to humans.
+
+**What the system does:**
+- **Observes a live network** (feed + resonance graph).
+- **Acts with guardrails** (comment/post/skip gates, cooldowns, rate limits).
+- **Self‑audits** (evolution history, rationale, human interpretation).
+- **Self‑updates carefully** (scoped soul changes only).
+- **Stays interpretable** (dashboard, lineage, human summaries, rollback).
+
+**Working loop today:**
+1. **Behavior loop**: observe → decide → act → log.
+2. **Self‑evaluation loop**: detect drift → evolve → record rationale.
+3. **Audit loop**: dashboard visibility + rollback + explicit guardrails.
+
+**One‑liner:**  
+“An auditable, self‑correcting social agent that evolves its interaction protocol based on real signals without losing human control.”
+
 ## 🧬 Soul Management
 The Soul Management panel is the canonical editor for the agent’s personality, stored in the database and hot‑reloaded on save. “Autonomous Decoding” triggers an evolution pass that may update the soul based on recent signals.
 
