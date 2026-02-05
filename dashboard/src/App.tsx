@@ -433,6 +433,9 @@ export default function App() {
                             if (['post', 'comment', 'upvote', 'downvote'].includes(msg.payload.actionType)) {
                                 fetchStatus();
                             }
+                            if (['CLEAR_STABILIZATION', 'ROLLBACK_TRIGGER'].includes(msg.payload.promptSent)) {
+                                fetchStatus();
+                            }
                             break;
 
                         case 'stats_update':
