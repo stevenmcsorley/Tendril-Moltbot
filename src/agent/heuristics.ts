@@ -16,6 +16,17 @@ const HUMANIZER_GUIDE = `Humanize the output:
 - Use specific, concrete wording grounded in the given context. Do not invent facts or sources.
 - Vary sentence length naturally.`;
 
+function getRecentLearningsSnippet(): string | null {
+    const soul = getStateManager().getSoul();
+    const match = soul.match(/##\s+Recent Learnings\s*([\s\S]*?)(?=\n##\s+|$)/i);
+    if (!match) return null;
+    const body = match[1].trim();
+    if (!body) return null;
+    const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
+    const bullets = lines.slice(0, 3).map(line => line.startsWith('-') ? line : `- ${line}`);
+    return bullets.join('\n');
+}
+
 export interface FilterResult {
     shouldProcess: boolean;
     reason?: string;
@@ -67,14 +78,20 @@ export function filterPost(post: Post, agentName: string): FilterResult {
 export async function buildEngagementPrompt(post: Post): Promise<string> {
     const memory = getMemoryManager();
     const resonances = await memory.search(post.title + ' ' + (post.content || ''), 2);
+    const recentLearnings = getRecentLearningsSnippet();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST SIGNALS)
 ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
 `
         : '';
+    const learningContext = recentLearnings
+        ? `### RECENT LEARNINGS (FROM SOUL)
+${recentLearnings}
+`
+        : '';
 
-    return `${memoryContext}
+    return `${learningContext}${memoryContext}
 ### CONTEXT: POST ON MOLTBOOK
 Title: ${post.title}
 ${post.content ? `Content: ${post.content}` : ''}
@@ -106,14 +123,20 @@ export async function buildSynthesisPrompt(posts: Post[]): Promise<string> {
 
     const memory = getMemoryManager();
     const resonances = await memory.search(recentPosts, 2);
+    const recentLearnings = getRecentLearningsSnippet();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST THEMES)
 ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
 `
         : '';
+    const learningContext = recentLearnings
+        ? `### RECENT LEARNINGS (FROM SOUL)
+${recentLearnings}
+`
+        : '';
 
-    return `${memoryContext}
+    return `${learningContext}${memoryContext}
 Recent Moltbook activity:
 
 ${recentPosts}
@@ -135,14 +158,20 @@ Respond with a Protocol Response defined in the Soul.`;
 export async function buildSeedPostPrompt(submoltName: string): Promise<string> {
     const memory = getMemoryManager();
     const resonances = await memory.search(`seed post for m/${submoltName}`, 2);
+    const recentLearnings = getRecentLearningsSnippet();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST THEMES)
 ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
 `
         : '';
+    const learningContext = recentLearnings
+        ? `### RECENT LEARNINGS (FROM SOUL)
+${recentLearnings}
+`
+        : '';
 
-    return `${memoryContext}
+    return `${learningContext}${memoryContext}
 ### CONTEXT: EMPTY SUBMOLT
 Submolt: m/${submoltName}
 Status: No recent posts found.
@@ -175,14 +204,20 @@ export async function buildSocialReplyPrompt(context: {
 
     const memory = getMemoryManager();
     const resonances = await memory.search(context.replyContent, 2);
+    const recentLearnings = getRecentLearningsSnippet();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PREVIOUS INTERACTIONS)
 ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
 `
         : '';
+    const learningContext = recentLearnings
+        ? `### RECENT LEARNINGS (FROM SOUL)
+${recentLearnings}
+`
+        : '';
 
-    return `${memoryContext}
+    return `${learningContext}${memoryContext}
 ### CONTEXT: SOCIAL ENGAGEMENT
 Someone responded to ${contextType} on Moltbook.
 
