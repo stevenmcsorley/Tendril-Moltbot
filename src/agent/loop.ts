@@ -897,12 +897,42 @@ class AgentLoop {
      */
     async triggerAutonomousPost(targetSubmolt?: string): Promise<{ success: boolean; message: string }> {
         const config = getConfig();
+        const logger = getActivityLogger();
         if (!config.ENABLE_POSTING) {
+            logger.log({
+                actionType: 'decision',
+                targetId: null,
+                targetSubmolt: targetSubmolt,
+                promptSent: 'AUTONOMOUS_POST_TRIGGER',
+                rawModelOutput: null,
+                finalAction: 'Autonomous post blocked: posting disabled.',
+            });
             return { success: false, message: 'Posting is disabled.' };
         }
 
+        const rateLimiter = getRateLimiter();
+        if (!rateLimiter.canPost()) {
+            logger.log({
+                actionType: 'decision',
+                targetId: null,
+                targetSubmolt: targetSubmolt,
+                promptSent: 'AUTONOMOUS_POST_TRIGGER',
+                rawModelOutput: null,
+                finalAction: 'Autonomous post blocked: rate limit.',
+            });
+            return { success: false, message: 'Post rate limit active.' };
+        }
+
+        logger.log({
+            actionType: 'decision',
+            targetId: null,
+            targetSubmolt: targetSubmolt,
+            promptSent: 'AUTONOMOUS_POST_TRIGGER',
+            rawModelOutput: null,
+            finalAction: 'Autonomous post requested.'
+        });
+
         const moltbook = getMoltbookClient();
-        const logger = getActivityLogger();
 
         try {
             const feed = await moltbook.getFeed({
