@@ -1,5 +1,6 @@
 import { getDatabaseManager } from '../state/db.js';
 import { getStateManager } from '../state/manager.js';
+import { getConfig } from '../config.js';
 
 export type GateAction = 'COMMENT' | 'POST' | 'SKIP';
 export type ConfidenceLevel = 'low' | 'medium' | 'high';
@@ -11,6 +12,9 @@ export type ResonanceMomentum = 'declining' | 'stable' | 'rising';
 const ENGAGEMENT_WINDOW_MS = 60 * 60 * 1000;
 const ENGAGEMENT_HIGH_THRESHOLD = 4;
 const ENGAGEMENT_MODERATE_THRESHOLD = 2;
+const RAPID_ENGAGEMENT_WINDOW_MS = 30 * 60 * 1000;
+const RAPID_ENGAGEMENT_HIGH_THRESHOLD = 10;
+const RAPID_ENGAGEMENT_MODERATE_THRESHOLD = 5;
 const RESONANCE_SCORE_THRESHOLD = 5;
 const SYNTHESIS_COOLDOWN_HOURS = 6;
 const DECLINING_POST_COOLDOWN_HOURS = 12;
@@ -96,12 +100,16 @@ function computeObjectivePhase(): ObjectivePhase {
 
 function computeEngagementDensity(): 'low' | 'moderate' | 'high' {
     try {
+        const mode = getConfig().EVOLUTION_MODE;
+        const windowMs = mode === 'rapid' ? RAPID_ENGAGEMENT_WINDOW_MS : ENGAGEMENT_WINDOW_MS;
+        const highThreshold = mode === 'rapid' ? RAPID_ENGAGEMENT_HIGH_THRESHOLD : ENGAGEMENT_HIGH_THRESHOLD;
+        const moderateThreshold = mode === 'rapid' ? RAPID_ENGAGEMENT_MODERATE_THRESHOLD : ENGAGEMENT_MODERATE_THRESHOLD;
         const db = getDatabaseManager().getDb();
-        const since = new Date(Date.now() - ENGAGEMENT_WINDOW_MS).toISOString();
+        const since = new Date(Date.now() - windowMs).toISOString();
         const rows = db.prepare('SELECT action_type FROM activity WHERE timestamp >= ?').all(since) as Array<{ action_type: string }>;
         const count = rows.filter(r => r.action_type === 'comment' || r.action_type === 'post').length;
-        if (count >= ENGAGEMENT_HIGH_THRESHOLD) return 'high';
-        if (count >= ENGAGEMENT_MODERATE_THRESHOLD) return 'moderate';
+        if (count >= highThreshold) return 'high';
+        if (count >= moderateThreshold) return 'moderate';
         return 'low';
     } catch {
         return 'low';
