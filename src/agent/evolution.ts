@@ -158,8 +158,10 @@ export class EvolutionManager {
                 return false;
             }
 
-            // Gather stats
-            const stats = Object.values(topology).sort((a: any, b: any) => b.score - a.score).slice(0, 5);
+            // Gather stats (scoped to current evolution window where possible)
+            const scopedTopology = this.filterSince(topology, lastEvolutionAt, 'lastSeen');
+            const topologySource = scopedTopology.length > 0 ? scopedTopology : topology;
+            const stats = Object.values(topologySource).sort((a: any, b: any) => b.score - a.score).slice(0, 5);
             const successes = activity.filter(a => ['comment', 'post', 'upvote', 'downvote'].includes(a.actionType));
             const activityWeight = successes.length;
             const dueForNudge = hoursSinceLast >= cadence.nudgeAfterHours;
