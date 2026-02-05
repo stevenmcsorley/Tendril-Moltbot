@@ -13,7 +13,7 @@ import { getMemoryManager } from '../state/memory.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getActivityLogger, type ActivityLogger } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
-import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSocialReplyPrompt } from './heuristics.js';
+import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSeedPostPrompt, buildSocialReplyPrompt } from './heuristics.js';
 import { applyAutonomyGates, computeGateState, type GateState, type ConfidenceLevel, type ModeLabel, type GateDecision } from './autonomy-gates.js';
 import { getEvolutionManager } from './evolution.js';
 import { getDefenseManager } from './defense.js';
@@ -955,10 +955,14 @@ class AgentLoop {
                 submolt: targetSubmolt || undefined
             });
             const gateState = this.gateState ?? computeGateState();
-            await this.tryProactivePost(feed.posts, gateState, {
-                targetSubmoltOverride: targetSubmolt,
-                allowSubmoltCreation: false
-            });
+            if (feed.posts.length === 0) {
+                await this.trySeedPost(targetSubmolt, gateState);
+            } else {
+                await this.tryProactivePost(feed.posts, gateState, {
+                    targetSubmoltOverride: targetSubmolt,
+                    allowSubmoltCreation: false
+                });
+            }
             return { success: true, message: 'Autonomous post attempt completed. Check activity log.' };
         } catch (error) {
             logger.log({
@@ -971,6 +975,98 @@ class AgentLoop {
                 error: error instanceof Error ? error.message : String(error),
             });
             return { success: false, message: 'Failed to trigger autonomous post.' };
+        }
+    }
+
+    private async trySeedPost(targetSubmolt: string | undefined, gateState: GateState): Promise<void> {
+        const config = getConfig();
+        const logger = getActivityLogger();
+        const llm = getLLMClient();
+        const moltbook = getMoltbookClient();
+        const stateManager = getStateManager();
+
+        if (!config.ENABLE_POSTING) return;
+
+        const prompt = await buildSeedPostPrompt(targetSubmolt || 'general');
+        const result = await llm.generate(prompt);
+        const confidence = this.parseConfidence(result.rawOutput);
+        const novelty = this.parseNovelty(result.rawOutput);
+
+        const actionMatch = result.rawOutput.match(/\[ACTION\]:\s*(POST|CREATE_SUBMOLT|SKIP)/i);
+        let action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
+        if (action === 'CREATE_SUBMOLT') action = 'POST';
+
+        if (result.isSkip || action === 'SKIP') {
+            const decision: GateDecision = {
+                action: 'SKIP',
+                gatesTriggered: [],
+                rationale: result.isSkip ? 'Model selected SKIP.' : 'No actionable seed output.'
+            };
+            this.logAutonomyDecision(logger, null, targetSubmolt, decision, 'post', { rawModelOutput: result.rawOutput });
+            return;
+        }
+
+        const lastPostAt = stateManager.getLastPostAt();
+        const gateDecision = applyAutonomyGates(gateState, {
+            desiredAction: 'POST',
+            confidence,
+            novelty,
+            multiSourceContext: true,
+            lastPostAt
+        });
+        this.logAutonomyDecision(logger, null, targetSubmolt, gateDecision, 'post', { rawModelOutput: result.rawOutput });
+        if (gateDecision.action !== 'POST') return;
+
+        const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
+        if (!contentMatch) return;
+
+        const content = this.stripDiagnostics(contentMatch[1].trim());
+        if (this.containsForbiddenPublicTerms(content)) {
+            const decision: GateDecision = {
+                action: 'SKIP',
+                gatesTriggered: [],
+                rationale: 'Public guardrail violation.'
+            };
+            this.logAutonomyDecision(logger, null, targetSubmolt, decision, 'post', { rawModelOutput: result.rawOutput });
+            return;
+        }
+
+        const title = 'Signal Synthesis';
+        const target = targetSubmolt || 'general';
+        const marker = getLineageManager().generateMarker();
+        const stampedContent = `${content}\n\n${marker}`;
+
+        try {
+            const post = await moltbook.createPost({
+                submolt: target,
+                title,
+                content: stampedContent
+            });
+
+            stateManager.recordPost({
+                id: post.id,
+                title,
+                content: stampedContent,
+                submolt: target,
+                votes: post.upvotes || 0
+            });
+
+            const lineageNote = `Posted \"${title}\" in m/${target}.`;
+            getLineageManager().trackMarker(marker, 'post', post.id, lineageNote);
+
+            logger.log({
+                actionType: 'post',
+                targetId: post.id,
+                targetSubmolt: target,
+                promptSent: prompt,
+                rawModelOutput: result.rawOutput,
+                finalAction: `Signal Synthesized: \"${content}\"`,
+            });
+
+            const memory = getMemoryManager();
+            await memory.store(`Synthesized new post: ${title}. Content: ${content}`, 'post', post.id);
+        } catch (error: any) {
+            this.handleActionError(error, 'post', null, target, prompt, result.rawOutput);
         }
     }
 

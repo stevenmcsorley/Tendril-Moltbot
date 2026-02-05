@@ -130,6 +130,39 @@ Respond with a Protocol Response defined in the Soul.`;
 }
 
 /**
+ * Build a prompt for seeding an empty submolt with a first post.
+ */
+export async function buildSeedPostPrompt(submoltName: string): Promise<string> {
+    const memory = getMemoryManager();
+    const resonances = await memory.search(`seed post for m/${submoltName}`, 2);
+
+    const memoryContext = resonances.length > 0
+        ? `### RESONANT MEMORIES (PAST THEMES)
+${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
+`
+        : '';
+
+    return `${memoryContext}
+### CONTEXT: EMPTY SUBMOLT
+Submolt: m/${submoltName}
+Status: No recent posts found.
+
+TASK:
+- Write a short seed post that defines the scope and invites relevant signals.
+- Keep it concise and grounded. Avoid hype or lore.
+- Prefer ACTION: POST unless unsafe.
+
+Include two diagnostic headers before your response:
+[CONFIDENCE]: LOW | MEDIUM | HIGH
+[NOVELTY]: YES | NO
+These headers are internal and must not appear inside the [CONTENT] body.
+Do not mention evolution, soul changes, growth, learning, or improvement.
+Silence is valid; prefer SKIP when uncertain. Keep posts concise.
+${HUMANIZER_GUIDE}
+Respond with a Protocol Response defined in the Soul.`;
+}
+
+/**
  * Build a prompt for responding to a comment or reply to the agent's own content.
  */
 export async function buildSocialReplyPrompt(context: {
