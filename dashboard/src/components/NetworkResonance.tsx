@@ -253,7 +253,10 @@ export default function NetworkResonance({
                                         <polyline
                                             fill="none"
                                             stroke="var(--primary)"
-                                            strokeWidth="2"
+                                            strokeWidth="1"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            vectorEffect="non-scaling-stroke"
                                             points={trendPoints}
                                         />
                                     </svg>
