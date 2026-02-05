@@ -9,6 +9,10 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
     const [rollingBack, setRollingBack] = useState(false);
     const [clearingStabilization, setClearingStabilization] = useState(false);
     const [rollbacksEnabled, setRollbacksEnabled] = useState<boolean | null>(null);
+    const [submoltName, setSubmoltName] = useState('');
+    const [submoltDisplayName, setSubmoltDisplayName] = useState('');
+    const [submoltDescription, setSubmoltDescription] = useState('');
+    const [creatingSubmolt, setCreatingSubmolt] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     const fetchSoul = async () => {
@@ -135,6 +139,35 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
         }
     };
 
+    const handleCreateSubmolt = async () => {
+        setCreatingSubmolt(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/control/create-submolt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: submoltName,
+                    displayName: submoltDisplayName,
+                    description: submoltDescription
+                })
+            });
+            const result = await res.json();
+            if (result.success) {
+                setMessage({ type: 'success', text: `Submolt created: m/${result.submolt.name}` });
+                setSubmoltName('');
+                setSubmoltDisplayName('');
+                setSubmoltDescription('');
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Failed to create submolt.' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to create submolt.' });
+        } finally {
+            setCreatingSubmolt(false);
+        }
+    };
+
     useEffect(() => {
         fetchSoul();
     }, [refreshToken]);
@@ -258,6 +291,62 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
                     {message.text}
                 </div>
             )}
+
+            <div style={{
+                background: 'rgba(249, 115, 22, 0.06)',
+                padding: '12px',
+                borderRadius: '4px',
+                marginBottom: 16,
+                borderLeft: '4px solid var(--accent)',
+                fontSize: 13
+            }}>
+                <strong style={{ color: 'var(--accent)' }}>MANUAL SUBMOLT CREATION.</strong><br />
+                Create a new submolt on behalf of the agent. Names are lower‑cased and stripped to alphanumerics.
+                Minimum 3 characters.
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                    <input
+                        value={submoltName}
+                        onChange={(e) => setSubmoltName(e.target.value)}
+                        placeholder="name (e.g., generai)"
+                        className="btn-secondary"
+                        style={{ padding: '8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                    />
+                    <input
+                        value={submoltDisplayName}
+                        onChange={(e) => setSubmoltDisplayName(e.target.value)}
+                        placeholder="display name"
+                        className="btn-secondary"
+                        style={{ padding: '8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                    />
+                </div>
+                <textarea
+                    value={submoltDescription}
+                    onChange={(e) => setSubmoltDescription(e.target.value)}
+                    placeholder="description"
+                    className="btn-secondary"
+                    style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '8px',
+                        borderRadius: 4,
+                        border: '1px solid var(--border)',
+                        background: 'var(--bg-primary)',
+                        color: 'var(--text-primary)',
+                        resize: 'vertical',
+                        minHeight: 60
+                    }}
+                />
+                <div style={{ marginTop: 8 }}>
+                    <button
+                        onClick={handleCreateSubmolt}
+                        disabled={creatingSubmolt}
+                        className="btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: 12 }}
+                    >
+                        {creatingSubmolt ? 'Creating...' : 'Create Submolt'}
+                    </button>
+                </div>
+            </div>
 
             <div style={{ position: 'relative' }}>
                 <textarea

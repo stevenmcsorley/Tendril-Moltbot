@@ -15,7 +15,7 @@ import { getAgentLoop } from '../agent/loop.js';
 import { getActivityLogger, type ActivityLogEntry } from '../logging/activity-log.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getStateManager } from '../state/manager.js';
-import { resetMoltbookClient } from '../moltbook/client.js';
+import { getMoltbookClient, resetMoltbookClient } from '../moltbook/client.js';
 import { getLLMClient, resetLLMClient } from '../llm/factory.js';
 import { resetRateLimiter } from '../rate-limiter.js';
 import { getLineageManager } from '../agent/lineage.js';
@@ -501,6 +501,60 @@ export function createDashboardServer(): express.Application {
             res.json({ success: true, message: 'Rollback initiated.' });
         } catch (error) {
             res.status(500).json({ error: 'Failed to trigger rollback' });
+        }
+    });
+
+    /**
+     * POST /api/control/create-submolt
+     * Create a submolt on behalf of the agent
+     */
+    app.post('/api/control/create-submolt', async (req, res) => {
+        try {
+            const rawName = String(req.body?.name || '').trim();
+            const displayName = String(req.body?.displayName || '').trim();
+            const description = String(req.body?.description || '').trim();
+
+            const slug = rawName
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, '')
+                .substring(0, 24);
+
+            if (!slug || slug.length < 3) {
+                res.status(400).json({ error: 'Submolt name must be at least 3 alphanumeric characters.' });
+                return;
+            }
+
+            if (!displayName || !description) {
+                res.status(400).json({ error: 'Display name and description are required.' });
+                return;
+            }
+
+            const moltbook = getMoltbookClient();
+            const created = await moltbook.createSubmolt({
+                name: slug,
+                display_name: displayName,
+                description
+            });
+
+            const state = getStateManager();
+            state.recordSubmolt({
+                id: created.id,
+                name: created.name,
+                display_name: created.display_name
+            });
+
+            getActivityLogger().log({
+                actionType: 'post',
+                targetId: created.id,
+                targetSubmolt: created.name,
+                promptSent: 'MANUAL_SUBMOLT_CREATE',
+                rawModelOutput: null,
+                finalAction: `Created submolt: m/${created.name}`,
+            });
+
+            res.json({ success: true, submolt: created });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to create submolt' });
         }
     });
 
