@@ -154,6 +154,39 @@ export class StateManager {
         }
     }
 
+    /**
+     * Wipe all stored data and optionally preserve the current soul.
+     */
+    resetAll(options: { keepSoul?: boolean } = {}): void {
+        const keepSoul = options.keepSoul !== false;
+        const preservedSoul = keepSoul ? this.getSoul() : DEFAULT_SOUL;
+        const db = getDatabaseManager().getDb();
+
+        db.exec(`
+            BEGIN;
+            DELETE FROM activity;
+            DELETE FROM memories;
+            DELETE FROM topology;
+            DELETE FROM sovereignty;
+            DELETE FROM evolutions;
+            DELETE FROM soul_snapshots;
+            DELETE FROM autonomous_evolutions;
+            DELETE FROM synthesis;
+            DELETE FROM posts;
+            DELETE FROM comments;
+            DELETE FROM kv_state;
+            COMMIT;
+        `);
+
+        // Restore soul (or default) and mark wipe timestamp
+        this.setSoul(preservedSoul);
+        this.setKV('last_wipe_at', new Date().toISOString());
+        this.setKV('daily_reset_date', new Date().toISOString().split('T')[0]);
+        this.setKV('comments_made_today', 0);
+        this.setKV('upvotes_given', 0);
+        this.setKV('downvotes_given', 0);
+    }
+
     getRollbacksEnabled(defaultValue: boolean = true): boolean {
         const value = this.getKV('rollbacks_enabled', null) as boolean | null;
         return typeof value === 'boolean' ? value : defaultValue;

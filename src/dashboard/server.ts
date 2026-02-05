@@ -7,7 +7,7 @@
 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import express, { type Request, type Response, type NextFunction } from 'express';
 
 import { getConfig, reloadConfigSync } from '../config.js';
@@ -240,6 +240,40 @@ export function createDashboardServer(): express.Application {
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get status' });
+        }
+    });
+
+    /**
+     * GET /api/data-stats
+     * Get database counts and size for data management
+     */
+    app.get('/api/data-stats', (req, res) => {
+        try {
+            const db = getDatabaseManager().getDb();
+            const count = (table: string) => (db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as { count: number }).count;
+            const dbPath = join(__dirname, '../../data/moltbot.db');
+            const sizeBytes = existsSync(dbPath) ? statSync(dbPath).size : 0;
+            const wipeRow = db.prepare('SELECT value FROM kv_state WHERE key = ?').get('last_wipe_at') as { value: string } | undefined;
+
+            res.json({
+                counts: {
+                    activity: count('activity'),
+                    memories: count('memories'),
+                    topology: count('topology'),
+                    evolutions: count('evolutions'),
+                    autonomousEvolutions: count('autonomous_evolutions'),
+                    soulSnapshots: count('soul_snapshots'),
+                    synthesis: count('synthesis'),
+                    posts: count('posts'),
+                    comments: count('comments'),
+                    sovereignty: count('sovereignty'),
+                    kvState: count('kv_state'),
+                },
+                dbSizeBytes: sizeBytes,
+                lastWipeAt: wipeRow ? wipeRow.value : null,
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get data stats' });
         }
     });
 
@@ -666,6 +700,30 @@ export function createDashboardServer(): express.Application {
             res.json({ success: true, message: 'Stabilization cleared.' });
         } catch (error) {
             res.status(500).json({ error: 'Failed to clear stabilization' });
+        }
+    });
+
+    /**
+     * POST /api/control/wipe-data
+     * Wipe stored data (optionally preserve soul)
+     */
+    app.post('/api/control/wipe-data', (req, res) => {
+        try {
+            const keepSoul = req.body?.keepSoul !== false;
+            const state = getStateManager();
+            state.resetAll({ keepSoul });
+            getActivityLogger().log({
+                actionType: 'decision',
+                targetId: null,
+                promptSent: 'WIPE_DATA',
+                rawModelOutput: null,
+                finalAction: keepSoul
+                    ? 'Data wiped (soul preserved).'
+                    : 'Data wiped (soul reset).',
+            });
+            res.json({ success: true, keepSoul });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to wipe data' });
         }
     });
 

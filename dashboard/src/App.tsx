@@ -5,6 +5,7 @@ import Controls from './components/Controls';
 import SubmoltList from './components/SubmoltList';
 import SelfDialoguePanel, { TerminalLog } from './components/SelfDialoguePanel';
 import MyPosts from './components/MyPosts';
+import DataManagement from './components/DataManagement';
 import NetworkResonance from './components/NetworkResonance';
 import EvolutionHistory from './components/EvolutionHistory';
 import SovereigntyPanel from './components/SovereigntyPanel';
@@ -19,6 +20,7 @@ import {
     Layers,
     FileText,
     Cpu,
+    Database,
     ShieldAlert
 } from 'lucide-react';
 
@@ -109,6 +111,24 @@ interface SubmoltsResponse {
     submolts: Submolt[];
 }
 
+interface DataStats {
+    counts: {
+        activity: number;
+        memories: number;
+        topology: number;
+        evolutions: number;
+        autonomousEvolutions: number;
+        soulSnapshots: number;
+        synthesis: number;
+        posts: number;
+        comments: number;
+        sovereignty: number;
+        kvState: number;
+    };
+    dbSizeBytes: number;
+    lastWipeAt: string | null;
+}
+
 interface ResonanceData {
     username: string;
     interactions: number;
@@ -183,7 +203,7 @@ export default function App() {
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
-    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'intelligence' | 'soul_mgmt'>('logs');
+    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'intelligence' | 'soul_mgmt' | 'data'>('logs');
     const [isWsConnected, setIsWsConnected] = useState(false);
     const [topology, setTopology] = useState<ResonanceData[]>([]);
     const [topologyPage, setTopologyPage] = useState(1);
@@ -230,6 +250,7 @@ export default function App() {
     }>({ blueprint: null, lineage: [] });
     const [soulRefreshToken, setSoulRefreshToken] = useState(0);
     const [hubMessage, setHubMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+    const [dataStats, setDataStats] = useState<DataStats | null>(null);
 
     // WebSocket reference + pagination refs
     const wsRef = useRef<WebSocket | null>(null);
@@ -246,6 +267,17 @@ export default function App() {
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unknown error');
+        }
+    }, []);
+
+    const fetchDataStats = useCallback(async () => {
+        try {
+            const res = await fetch('/api/data-stats');
+            if (!res.ok) throw new Error('Failed to fetch data stats');
+            const data = await res.json();
+            setDataStats(data);
+        } catch (err) {
+            console.error('Failed to fetch data stats:', err);
         }
     }, []);
 
@@ -434,6 +466,21 @@ export default function App() {
         }
     };
 
+    const handleWipeData = async (keepSoul: boolean) => {
+        try {
+            const res = await fetch('/api/control/wipe-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keepSoul })
+            });
+            if (!res.ok) throw new Error('Failed to wipe data');
+            await refresh();
+            await fetchDataStats();
+        } catch (err) {
+            setError('Failed to wipe data');
+        }
+    };
+
     const refresh = useCallback(async () => {
         const logFetch = filterType?.startsWith('signals')
             ? fetchLogs({ limit: 2000, type: filterType })
@@ -447,10 +494,11 @@ export default function App() {
             fetchTopology(),
             fetchEvolution(evolutionPageRef.current),
             fetchSynthesis(synthesisPageRef.current),
-            fetchSovereignty()
+            fetchSovereignty(),
+            fetchDataStats()
         ]);
         setLastRefresh(new Date());
-    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, filterType]);
+    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, filterType]);
 
     const refreshPassive = useCallback(async () => {
         await Promise.all([
@@ -459,10 +507,11 @@ export default function App() {
             fetchTopology(),
             fetchEvolution(evolutionPageRef.current),
             fetchSynthesis(synthesisPageRef.current),
-            fetchSovereignty()
+            fetchSovereignty(),
+            fetchDataStats()
         ]);
         setLastRefresh(new Date());
-    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
+    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats]);
 
     // WebSocket Connection
     useEffect(() => {
@@ -708,6 +757,16 @@ export default function App() {
                                 )}
                             </button>
                         </Tooltip>
+
+                        <Tooltip text="Inspect and reset stored data.">
+                            <button
+                                className={activeTab === 'data' ? 'primary' : ''}
+                                onClick={() => setActiveTab('data')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                            >
+                                <Database size={16} /> Data Management
+                            </button>
+                        </Tooltip>
                     </div>
 
                     {activeTab === 'logs' ? (
@@ -806,6 +865,12 @@ export default function App() {
                             />
                             <SovereigntyPanel data={sovereignty} />
                         </div>
+                    ) : activeTab === 'data' ? (
+                        <DataManagement
+                            stats={dataStats}
+                            onWipe={handleWipeData}
+                            onRefresh={fetchDataStats}
+                        />
                     ) : (
                         <SoulPanel refreshToken={soulRefreshToken} />
                     )}
