@@ -193,6 +193,7 @@ export default function App() {
     const [autonomousPostTarget, setAutonomousPostTarget] = useState<string>('general');
     const [autonomousPosting, setAutonomousPosting] = useState(false);
     const [forceAutonomousPost, setForceAutonomousPost] = useState(false);
+    const [myPostsRefreshToken, setMyPostsRefreshToken] = useState(0);
     const [sovereignty, setSovereignty] = useState<{
         blueprint: StrategicObjective | null;
         lineage: MemeticMarker[];
@@ -446,6 +447,9 @@ export default function App() {
                             if (['post', 'comment', 'upvote', 'downvote'].includes(msg.payload.actionType)) {
                                 fetchStatus();
                             }
+                            if (msg.payload.actionType === 'post') {
+                                setMyPostsRefreshToken(prev => prev + 1);
+                            }
                             if (['CLEAR_STABILIZATION', 'ROLLBACK_TRIGGER'].includes(msg.payload.promptSent)) {
                                 fetchStatus();
                             }
@@ -660,7 +664,7 @@ export default function App() {
                     ) : activeTab === 'submolts' ? (
                         <SubmoltList submolts={submolts} />
                     ) : activeTab === 'posts' ? (
-                        <MyPosts />
+                        <MyPosts refreshToken={myPostsRefreshToken} />
                     ) : activeTab === 'intelligence' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>

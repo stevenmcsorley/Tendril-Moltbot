@@ -9,13 +9,13 @@ interface Post {
     createdAt: string;
 }
 
-export default function MyPosts() {
+export default function MyPosts({ refreshToken }: { refreshToken?: number }) {
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetchPosts();
-    }, []);
+    }, [refreshToken]);
 
     const fetchPosts = async () => {
         try {
