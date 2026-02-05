@@ -219,6 +219,7 @@ export function createDashboardServer(): express.Application {
                     enableUpvoting: config.ENABLE_UPVOTING,
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
                     evolutionMode: config.EVOLUTION_MODE,
+                    rollbacksEnabled: state.getRollbacksEnabled(config.ENABLE_ROLLBACKS),
                 },
                 evolution: {
                     selfModificationCooldownUntil: cooldownUntil?.toISOString() ?? null,
@@ -511,9 +512,31 @@ export function createDashboardServer(): express.Application {
         try {
             const state = getStateManager();
             state.setStabilizationUntil(null);
+            getActivityLogger().log({
+                actionType: 'decision',
+                targetId: null,
+                promptSent: 'CLEAR_STABILIZATION',
+                rawModelOutput: null,
+                finalAction: 'Stabilization cleared (operator override).',
+            });
             res.json({ success: true, message: 'Stabilization cleared.' });
         } catch (error) {
             res.status(500).json({ error: 'Failed to clear stabilization' });
+        }
+    });
+
+    /**
+     * POST /api/control/rollbacks
+     * Enable/disable rollback triggers (operator override)
+     */
+    app.post('/api/control/rollbacks', (req, res) => {
+        try {
+            const enabled = Boolean(req.body?.enabled);
+            const state = getStateManager();
+            state.setRollbacksEnabled(enabled);
+            res.json({ success: true, enabled });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to update rollback setting' });
         }
     });
 

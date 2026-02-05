@@ -8,6 +8,7 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
     const [evolving, setEvolving] = useState(false);
     const [rollingBack, setRollingBack] = useState(false);
     const [clearingStabilization, setClearingStabilization] = useState(false);
+    const [rollbacksEnabled, setRollbacksEnabled] = useState<boolean | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     const fetchSoul = async () => {
@@ -17,6 +18,11 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
             const result = await res.json();
             if (result.success) {
                 setSoul(result.soul);
+            }
+            const statusRes = await fetch('/api/status');
+            const status = await statusRes.json();
+            if (status?.config?.rollbacksEnabled !== undefined) {
+                setRollbacksEnabled(Boolean(status.config.rollbacksEnabled));
             }
         } catch (error) {
             console.error('Failed to fetch soul:', error);
@@ -106,6 +112,29 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
         }
     };
 
+    const handleToggleRollbacks = async () => {
+        if (rollbacksEnabled === null) return;
+        const next = !rollbacksEnabled;
+        if (!window.confirm(`${next ? 'Enable' : 'Disable'} rollback triggers?`)) return;
+        setMessage(null);
+        try {
+            const res = await fetch('/api/control/rollbacks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: next })
+            });
+            const result = await res.json();
+            if (result.success) {
+                setRollbacksEnabled(next);
+                setMessage({ type: 'success', text: `Rollbacks ${next ? 'enabled' : 'disabled'}.` });
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Failed to update rollbacks.' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to update rollbacks.' });
+        }
+    };
+
     useEffect(() => {
         fetchSoul();
     }, [refreshToken]);
@@ -166,6 +195,22 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
                         }}
                     >
                         <Unlock size={14} className={clearingStabilization ? 'spin' : ''} /> {clearingStabilization ? 'Clearing...' : 'Clear Stabilization'}
+                    </button>
+                    <button
+                        onClick={handleToggleRollbacks}
+                        disabled={rollbacksEnabled === null}
+                        className="btn-secondary"
+                        style={{
+                            padding: '6px 12px',
+                            fontSize: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            borderColor: rollbacksEnabled ? 'var(--warning)' : 'var(--success)',
+                            color: rollbacksEnabled ? 'var(--warning)' : 'var(--success)'
+                        }}
+                    >
+                        {rollbacksEnabled ? 'Disable Rollbacks' : 'Enable Rollbacks'}
                     </button>
                     <button
                         onClick={fetchSoul}

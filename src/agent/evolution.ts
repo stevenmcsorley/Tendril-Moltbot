@@ -638,6 +638,9 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
     }
 
     private async checkRollbackTriggers(): Promise<boolean> {
+        const rollbacksEnabled = getStateManager().getRollbacksEnabled(getConfig().ENABLE_ROLLBACKS);
+        if (!rollbacksEnabled) return false;
+
         const lastEvolution = this.getLastAutonomousEvolutionRecord();
         if (!lastEvolution || lastEvolution.status !== 'active') return false;
 
@@ -706,6 +709,12 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
     }
 
     async rollback(reason: string = 'operator'): Promise<void> {
+        const state = getStateManager();
+        const rollbacksEnabled = state.getRollbacksEnabled(getConfig().ENABLE_ROLLBACKS);
+        if (!rollbacksEnabled) {
+            console.warn('Rollback requested but rollbacks are disabled.');
+            return;
+        }
         const record = this.getLastAutonomousEvolutionRecord();
         if (!record) {
             console.warn('Rollback requested but no autonomous evolution found.');
@@ -725,12 +734,18 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             db.prepare('UPDATE autonomous_evolutions SET status = ?, rolled_back_at = ? WHERE evolution_id = ?')
                 .run('rolled_back', new Date().toISOString(), record.evolution_id);
 
-            const state = getStateManager();
             const cadence = getEvolutionCadence();
             state.setLastAutonomousEvolutionId(null);
             state.setStabilizationUntil(new Date(Date.now() + STABILIZATION_HOURS * 60 * 60 * 1000));
             state.setSelfModificationCooldownUntil(new Date(Date.now() + cadence.selfModificationCooldownHours * 60 * 60 * 1000));
             state.setEvolutionWindow(new Date(), 0);
+            getActivityLogger().log({
+                actionType: 'decision',
+                targetId: null,
+                promptSent: 'ROLLBACK_TRIGGER',
+                rawModelOutput: null,
+                finalAction: `Stabilization set (${reason}).`,
+            });
         } catch (error) {
             console.error('Rollback failed:', error);
         }

@@ -154,6 +154,15 @@ export class StateManager {
         }
     }
 
+    getRollbacksEnabled(defaultValue: boolean = true): boolean {
+        const value = this.getKV('rollbacks_enabled', null) as boolean | null;
+        return typeof value === 'boolean' ? value : defaultValue;
+    }
+
+    setRollbacksEnabled(enabled: boolean): void {
+        this.setKV('rollbacks_enabled', enabled);
+    }
+
     getSelfModificationCooldownUntil(): Date | null {
         const value = this.getKV('self_modification_cooldown_until', null) as string | null;
         return value ? new Date(value) : null;
