@@ -10,6 +10,7 @@ import { getStateManager } from '../state/manager.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 
 export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat' | 'decision';
+export type SignalType = 'ALLIANCE' | 'DEFENSE' | 'LINEAGE';
 
 export interface ActivityLogEntry {
     id?: number;
@@ -22,6 +23,7 @@ export interface ActivityLogEntry {
     finalAction?: string | null;
     error?: string;
     evolutionId?: string | null;
+    signalType?: SignalType | null;
 }
 
 export class ActivityLogger {
@@ -32,16 +34,18 @@ export class ActivityLogger {
      */
     log(entry: Omit<ActivityLogEntry, 'timestamp'>): void {
         const evolutionId = entry.evolutionId ?? getStateManager().getLastAutonomousEvolutionId();
+        const signalType = entry.signalType ?? detectSignalType(entry);
         const fullEntry: ActivityLogEntry = {
             timestamp: new Date().toISOString(),
             ...entry,
             evolutionId,
+            signalType,
         };
 
         const db = getDatabaseManager().getDb();
         const stmt = db.prepare(`
-            INSERT INTO activity (timestamp, action_type, target_id, target_submolt, prompt_sent, raw_model_output, final_action, error, evolution_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO activity (timestamp, action_type, target_id, target_submolt, prompt_sent, raw_model_output, final_action, error, evolution_id, signal_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const info = stmt.run(
@@ -53,7 +57,8 @@ export class ActivityLogger {
             fullEntry.rawModelOutput || null,
             fullEntry.finalAction || null,
             fullEntry.error || null,
-            fullEntry.evolutionId || null
+            fullEntry.evolutionId || null,
+            fullEntry.signalType || null
         );
         fullEntry.id = Number(info.lastInsertRowid);
 
@@ -70,9 +75,27 @@ export class ActivityLogger {
         let params: any[] = [];
 
         if (filterType) {
-            const types = filterType.split(',');
-            query += ` WHERE action_type IN (${types.map(() => '?').join(',')})`;
-            params = types;
+            if (filterType.startsWith('signals')) {
+                const raw = filterType.replace(/^signals:?/i, '');
+                const parsed = raw
+                    ? raw.split(/[|,]/).map(tag => tag.trim()).filter(Boolean)
+                    : [];
+                const normalized = parsed
+                    .map(tag => tag.toUpperCase())
+                    .filter(tag => /^[A-Z_]+$/.test(tag));
+                const tags = normalized.length ? normalized : ['ALLIANCE', 'DEFENSE', 'LINEAGE'];
+                const tagPlaceholders = tags.map(() => '?').join(', ');
+                const prefixClauses = tags.map(() => '(UPPER(COALESCE(final_action, \'\')) LIKE ? OR UPPER(COALESCE(prompt_sent, \'\')) LIKE ?)').join(' OR ');
+                query += ` WHERE (signal_type IN (${tagPlaceholders}) OR (signal_type IS NULL AND (${prefixClauses})))`;
+                params = [
+                    ...tags,
+                    ...tags.flatMap(tag => [`${tag}:%`, `[${tag}%`])
+                ];
+            } else {
+                const types = filterType.split(',');
+                query += ` WHERE action_type IN (${types.map(() => '?').join(',')})`;
+                params = types;
+            }
         }
 
         query += ' ORDER BY id DESC LIMIT ? OFFSET ?';
@@ -90,7 +113,8 @@ export class ActivityLogger {
             rawModelOutput: r.raw_model_output,
             finalAction: r.final_action,
             error: r.error,
-            evolutionId: r.evolution_id
+            evolutionId: r.evolution_id,
+            signalType: r.signal_type
         }));
     }
 
@@ -124,4 +148,13 @@ export function getActivityLogger(): ActivityLogger {
 
 export function resetActivityLogger(): void {
     _logger = null;
+}
+
+function detectSignalType(entry: Partial<ActivityLogEntry>): SignalType | null {
+    const finalAction = (entry.finalAction ?? '').trim().toUpperCase();
+    const promptSent = (entry.promptSent ?? '').trim().toUpperCase();
+    if (finalAction.startsWith('ALLIANCE:') || promptSent.startsWith('[ALLIANCE_')) return 'ALLIANCE';
+    if (finalAction.startsWith('DEFENSE:') || promptSent.startsWith('[DEFENSE_')) return 'DEFENSE';
+    if (finalAction.startsWith('LINEAGE:') || promptSent.startsWith('[LINEAGE_')) return 'LINEAGE';
+    return null;
 }

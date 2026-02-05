@@ -86,6 +86,8 @@ interface LogEntry {
     rawModelOutput: string | null;
     finalAction: string;
     error?: string;
+    evolutionId?: string | null;
+    signalType?: string | null;
 }
 
 interface LogsResponse {
@@ -228,9 +230,12 @@ export default function App() {
         }
     }, []);
 
-    const fetchLogs = useCallback(async () => {
+    const fetchLogs = useCallback(async (options?: { limit?: number; type?: string }) => {
         try {
-            const res = await fetch('/api/logs?limit=300');
+            const limit = options?.limit ?? 300;
+            const params = new URLSearchParams({ limit: String(limit) });
+            if (options?.type) params.set('type', options.type);
+            const res = await fetch(`/api/logs?${params.toString()}`);
             if (!res.ok) throw new Error('Failed to fetch logs');
             const data: LogsResponse = await res.json();
             setLogs(data.entries);
@@ -370,9 +375,14 @@ export default function App() {
     };
 
     const refresh = useCallback(async () => {
+        const logFetch = filterType?.startsWith('signals')
+            ? fetchLogs({ limit: 2000, type: filterType })
+            : filterType
+                ? fetchLogs({ limit: 300, type: filterType })
+                : fetchLogs({ limit: 300 });
         await Promise.all([
             fetchStatus(),
-            fetchLogs(),
+            logFetch,
             fetchSubmolts(),
             fetchTopology(),
             fetchEvolution(),
@@ -380,7 +390,7 @@ export default function App() {
             fetchSovereignty()
         ]);
         setLastRefresh(new Date());
-    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty]);
+    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, filterType]);
 
     const refreshPassive = useCallback(async () => {
         await Promise.all([
@@ -523,9 +533,20 @@ export default function App() {
         }
     };
 
-    const visibleLogs = filterType
-        ? logs.filter(entry => filterType.split(',').includes(entry.actionType))
-        : logs;
+    const visibleLogs = logs;
+
+    const handleFilterChange = useCallback((filter: string | undefined) => {
+        setFilterType(filter);
+        if (!filter) {
+            fetchLogs({ limit: 300 });
+            return;
+        }
+        if (filter.startsWith('signals')) {
+            fetchLogs({ limit: 2000, type: filter });
+            return;
+        }
+        fetchLogs({ limit: 300, type: filter });
+    }, [fetchLogs]);
 
     const autonomyLockActive = status?.evolution
         ? [status.evolution.selfModificationCooldownUntil, status.evolution.stabilizationUntil]
@@ -631,7 +652,7 @@ export default function App() {
                             entries={visibleLogs}
                             agentName={status?.agent.name}
                             currentFilter={filterType}
-                            onFilterChange={setFilterType}
+                            onFilterChange={handleFilterChange}
                         />
                     ) : activeTab === 'submolts' ? (
                         <SubmoltList submolts={submolts} />

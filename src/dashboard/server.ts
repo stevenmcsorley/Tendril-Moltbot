@@ -242,7 +242,8 @@ export function createDashboardServer(): express.Application {
      */
     app.get('/api/logs', (req, res) => {
         try {
-            const limit = Math.min(100, parseInt(String(req.query.limit)) || 50);
+            const maxLimit = 2000;
+            const limit = Math.min(maxLimit, parseInt(String(req.query.limit)) || 50);
             const offset = parseInt(String(req.query.offset)) || 0;
             const filterType = req.query.type ? String(req.query.type) : undefined;
 

@@ -11,6 +11,7 @@ interface LogEntry {
     finalAction: string;
     error?: string;
     evolutionId?: string | null;
+    signalType?: string | null;
 }
 
 interface ActivityLogProps {
@@ -22,11 +23,22 @@ interface ActivityLogProps {
 
 function filterBySignals(entries: LogEntry[], filter: string | undefined): LogEntry[] {
     if (!filter) return entries;
-    if (filter.startsWith('signals:')) {
-        const tags = filter.replace('signals:', '').split('|');
+    if (filter.startsWith('signals')) {
+        const raw = filter.replace(/^signals:?/i, '');
+        const tags = raw
+            ? raw.split(/[|,]/).map(tag => tag.trim()).filter(Boolean)
+            : [];
+        const signalTags = tags.length ? tags : ['ALLIANCE', 'DEFENSE', 'LINEAGE'];
         return entries.filter(entry => {
-            const source = `${entry.finalAction || ''} ${entry.promptSent || ''}`.toUpperCase();
-            return tags.some(tag => source.includes(tag.toUpperCase()));
+            const signalType = entry.signalType?.toUpperCase();
+            if (signalType && signalTags.includes(signalType)) {
+                return true;
+            }
+            const finalAction = (entry.finalAction || '').trim().toUpperCase();
+            const promptSent = (entry.promptSent || '').trim().toUpperCase();
+            return signalTags.some(tag =>
+                finalAction.startsWith(`${tag}:`) || promptSent.startsWith(`[${tag}_`)
+            );
         });
     }
     return entries.filter(entry => filter.split(',').includes(entry.actionType));
@@ -123,13 +135,13 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
                         Decisions
                     </button>
                     <button
-                        onClick={() => onFilterChange('signals:ALLIANCE|DEFENSE|LINEAGE')}
-                        disabled={currentFilter === 'signals:ALLIANCE|DEFENSE|LINEAGE'}
+                        onClick={() => onFilterChange('signals')}
+                        disabled={currentFilter === 'signals'}
                         style={{
                             padding: '4px 8px',
                             fontSize: 12,
-                            background: currentFilter === 'signals:ALLIANCE|DEFENSE|LINEAGE' ? 'var(--primary)' : 'var(--bg-tertiary)',
-                            color: currentFilter === 'signals:ALLIANCE|DEFENSE|LINEAGE' ? 'white' : 'var(--text-secondary)',
+                            background: currentFilter === 'signals' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                            color: currentFilter === 'signals' ? 'white' : 'var(--text-secondary)',
                             border: 'none',
                             borderRadius: 4,
                             cursor: 'pointer'
@@ -194,11 +206,24 @@ function LogEntryItem({
         ? `Evolution ID: ${entry.evolutionId}`
         : 'No evolutions yet (default soul)';
     const tagSource = `${entry.finalAction || ''} ${entry.promptSent || ''}`;
-    const tags = [
-        /ALLIANCE/i.test(tagSource) ? 'ALLIANCE' : null,
-        /DEFENSE/i.test(tagSource) ? 'DEFENSE' : null,
-        /LINEAGE/i.test(tagSource) ? 'LINEAGE' : null
-    ].filter(Boolean) as string[];
+    const normalizedSignal = entry.signalType ? entry.signalType.toUpperCase() : null;
+    const inferredSignal = normalizedSignal
+        ? null
+        : tagSource.trim().toUpperCase().startsWith('ALLIANCE:')
+            ? 'ALLIANCE'
+            : tagSource.trim().toUpperCase().startsWith('DEFENSE:')
+                ? 'DEFENSE'
+                : tagSource.trim().toUpperCase().startsWith('LINEAGE:')
+                    ? 'LINEAGE'
+                    : null;
+    const tags = (normalizedSignal || inferredSignal) ? [normalizedSignal || inferredSignal] : [];
+    const signalDetail = (entry.finalAction || entry.promptSent || '').trim();
+    const signalTooltip = tags.length && signalDetail
+        ? `Signal: ${signalDetail}`
+        : undefined;
+    const signalSummary = tags.length && entry.finalAction
+        ? entry.finalAction.replace(new RegExp(`^${tags[0]}:\\s*`, 'i'), '').trim()
+        : null;
 
     return (
         <div className="log-entry" style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
@@ -230,6 +255,7 @@ function LogEntryItem({
                     {tags.map(tag => (
                         <span
                             key={tag}
+                            title={signalTooltip}
                             style={{
                                 padding: '2px 6px',
                                 borderRadius: 4,
@@ -263,6 +289,11 @@ function LogEntryItem({
                     </span>
                 )}
             </div>
+            {tags.length > 0 && signalSummary && (
+                <div style={{ marginBottom: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+                    Signal: {signalSummary}
+                </div>
+            )}
 
             <div className="log-final-block" style={{
                 background: 'rgba(63, 185, 80, 0.05)',

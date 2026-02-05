@@ -88,6 +88,7 @@ export class LineageManager {
                         promptSent: '[LINEAGE_FORK_DETECTED]',
                         rawModelOutput: content,
                         finalAction: `LINEAGE: Memetic clone detected from @${username} (${m.marker})`,
+                        signalType: 'LINEAGE',
                     });
                     changed = true;
                 }

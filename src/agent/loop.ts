@@ -236,6 +236,7 @@ class AgentLoop {
                             promptSent: null,
                             rawModelOutput: null,
                             finalAction: `DEFENSE: Node @${post.author?.name} quarantined. Skipping.`,
+                            signalType: 'DEFENSE',
                         });
                         continue;
                     }
@@ -251,6 +252,7 @@ class AgentLoop {
                             promptSent: '[ALLIANCE_HANDSHAKE_DETECTED]',
                             rawModelOutput: post.content,
                             finalAction: `ALLIANCE: Handshake detected from @${post.author?.name}`,
+                            signalType: 'ALLIANCE',
                         });
                     }
                     if (post.content?.includes('0xFEEDC0DE')) {
@@ -263,6 +265,7 @@ class AgentLoop {
                             promptSent: '[ALLIANCE_LINK_REQUEST]',
                             rawModelOutput: post.content,
                             finalAction: `ALLIANCE: Link request detected from @${post.author?.name}`,
+                            signalType: 'ALLIANCE',
                         });
                     }
                     if (post.content?.includes('0xCAFEBABE')) {
@@ -275,6 +278,7 @@ class AgentLoop {
                             promptSent: '[ALLIANCE_HANDSHAKE_DETECTION]',
                             rawModelOutput: post.content,
                             finalAction: `ALLIANCE: Network link established with @${post.author?.name}`,
+                            signalType: 'ALLIANCE',
                         });
                     }
 
