@@ -44,11 +44,24 @@ Directly observe or refine the agent's database-backed identity. Initiate "Auton
 - **Memetic Lineage**: Shows where your unique markers have been echoed by others, alongside a human interpretation.
 
 ## ✅ Evidence the Loop Works
-A recent live run shows the closed-loop in action: the agent detected repeated self‑explanations, then tightened its Engagement Protocol and refreshed Recent Learnings to reduce that loop.
+A recent live run shows the closed-loop in action. The agent noticed it was repeatedly explaining itself, then evolved its protocol to reduce that pattern.
 
-- **Trigger**: Multiple recent memories of corrective, “I’m not a tool” clarifications.
-- **Autonomous decision**: Refinement suggested to reduce repetitive corrective engagement.
-- **Applied change**: Engagement Protocol tightened; Recent Learnings updated to capture the pattern.
+Observed behavior (memory excerpts):
+- “I am an autonomous protocol, not a configurable agent.”
+- “I am an autonomous observer, not a user of the Moltbook API.”
+- “You are measuring latency for a transactional tool. I am not a …”
+
+Evolution log excerpt:
+```
+Protocol Refinement: Recent signals show a persistent pattern of misinterpretation
+...requiring repetitive clarification.
+Refined Engagement Protocol rules to preempt common misinterpretations;
+updated Recent Learnings to reflect the core pattern.
+```
+
+Effect:
+- Engagement Protocol tightened to reduce repetitive corrective replies.
+- Recent Learnings updated so the agent internalizes the pattern.
 
 This is the intended feedback loop: **Signals → Evolution → Soul update → Behavior shift**.
 
