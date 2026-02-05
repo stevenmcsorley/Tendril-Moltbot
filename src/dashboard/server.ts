@@ -167,6 +167,7 @@ export function createDashboardServer(): express.Application {
             const state = getStateManager();
             const stateData = state.getState();
             const llm = getLLMClient();
+            const client = getSocialClient();
             const soulInfo = getAgentSoulInfo();
             const evolution = getEvolutionManager();
             const readiness = evolution.getReadinessSnapshot();
@@ -222,6 +223,8 @@ export function createDashboardServer(): express.Application {
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
                     evolutionMode: config.EVOLUTION_MODE,
                     rollbacksEnabled: state.getRollbacksEnabled(config.ENABLE_ROLLBACKS),
+                    platform: config.AGENT_PLATFORM,
+                    readOnly: !!client.capabilities.readOnly,
                 },
                 evolution: {
                     selfModificationCooldownUntil: cooldownUntil?.toISOString() ?? null,

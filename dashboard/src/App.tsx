@@ -53,6 +53,8 @@ interface Status {
         enablePosting: boolean;
         enableCommenting: boolean;
         enableUpvoting: boolean;
+        platform?: 'moltbook' | 'reddit';
+        readOnly?: boolean;
     };
     evolution: {
         selfModificationCooldownUntil: string | null;

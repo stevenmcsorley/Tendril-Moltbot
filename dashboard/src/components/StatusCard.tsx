@@ -38,6 +38,8 @@ interface Status {
         enableCommenting: boolean;
         enableUpvoting: boolean;
         evolutionMode?: 'stable' | 'rapid';
+        platform?: 'moltbook' | 'reddit';
+        readOnly?: boolean;
     };
     evolution: {
         selfModificationCooldownUntil: string | null;
@@ -114,7 +116,14 @@ export default function StatusCard({ status }: StatusCardProps) {
 
             <div className="status-row">
                 <span className="status-label">Status</span>
-                <StatusBadge value={status.status} />
+                <span className="status-value" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                    <StatusBadge value={status.status} />
+                    {status.config.readOnly && (
+                        <Tooltip text="Read-only mode: posting, commenting, and voting are disabled for this platform.">
+                            <span className="badge warning">Read-only</span>
+                        </Tooltip>
+                    )}
+                </span>
             </div>
 
             <div className="status-row">
