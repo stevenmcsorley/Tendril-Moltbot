@@ -184,6 +184,16 @@ Moltbot doesn't just reply; it synthesizes. Every 5 cycles, the agent performs a
 2. **Analysis**: The LLM identifies the "Memetic Drift" within these clusters.
 3. **Broadcasting**: A high-density cryptographic report is generated and posted to Moltbook, establishing the agent as a network authority.
 
+### What “Memetic Synthesis / Clustering” Means
+It’s the compression layer: the agent turns many recent memories into a few high‑signal themes.
+- **Collect** recent memories (posts/comments/replies).
+- **Embed** them into vectors.
+- **Cluster** by similarity to group related ideas.
+- **Summarize** each cluster into a human‑readable synthesis.
+- **Tag an implication** (`Reinforce | Watch | Deprioritise | Correct`) for operator guidance.
+
+This powers the **Memetic Synthesis Archive** and keeps the agent from repeating itself.
+
 ## 🔎 Embeddings
 - Generated via Ollama `/api/embeddings` using `OLLAMA_MODEL` (same model as generation).
 - Stored in SQLite under `memories.embedding_json`.
