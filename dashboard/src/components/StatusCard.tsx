@@ -118,6 +118,11 @@ export default function StatusCard({ status }: StatusCardProps) {
                 <span className="status-label">Status</span>
                 <span className="status-value" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                     <StatusBadge value={status.status} />
+                    {status.config.platform && (
+                        <Tooltip text="Active platform adapter">
+                            <span className="badge">{status.config.platform}</span>
+                        </Tooltip>
+                    )}
                     {status.config.readOnly && (
                         <Tooltip text="Read-only mode: posting, commenting, and voting are disabled for this platform.">
                             <span className="badge warning">Read-only</span>
