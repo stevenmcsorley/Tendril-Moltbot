@@ -97,6 +97,9 @@ export interface EvolutionReadiness {
     hoursSinceLast: number | null;
     minHoursBetween: number;
     windowRemaining: number;
+    windowMax: number;
+    selfModificationCooldownHours: number;
+    mode: 'stable' | 'rapid';
     selfModificationCooldownActive: boolean;
     stabilizationActive: boolean;
     eligible: boolean;
@@ -361,6 +364,9 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             hoursSinceLast,
             minHoursBetween: cadence.minHoursBetween,
             windowRemaining,
+            windowMax: cadence.maxEvolutionsPerWindow,
+            selfModificationCooldownHours: cadence.selfModificationCooldownHours,
+            mode: getConfig().EVOLUTION_MODE,
             selfModificationCooldownActive,
             stabilizationActive,
             eligible

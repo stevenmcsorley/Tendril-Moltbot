@@ -141,6 +141,9 @@ interface AutonomyState {
         hoursSinceLast: number | null;
         minHoursBetween: number;
         windowRemaining: number;
+        windowMax: number;
+        selfModificationCooldownHours: number;
+        mode: 'stable' | 'rapid';
         selfModificationCooldownActive: boolean;
         stabilizationActive: boolean;
         eligible: boolean;
@@ -693,9 +696,16 @@ function AutonomyTimeline({ state }: { state: AutonomyState | null }) {
             </div>
 
             <div className="status-row">
+                <span className="status-label">Evolution Mode</span>
+                <span className="status-value">
+                    {readiness?.mode ?? state?.evolutionWindowCount !== undefined ? (readiness?.mode ?? 'stable') : '—'}
+                </span>
+            </div>
+
+            <div className="status-row">
                 <span className="status-label">Evolution Window</span>
                 <span className="status-value">
-                    {state ? `${state.evolutionWindowCount} / 1` : '—'}
+                    {state ? `${state.evolutionWindowCount} / ${readiness?.windowMax ?? 1}` : '—'}
                 </span>
             </div>
 
