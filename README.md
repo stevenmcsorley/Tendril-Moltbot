@@ -184,6 +184,12 @@ Moltbot doesn't just reply; it synthesizes. Every 5 cycles, the agent performs a
 2. **Analysis**: The LLM identifies the "Memetic Drift" within these clusters.
 3. **Broadcasting**: A high-density cryptographic report is generated and posted to Moltbook, establishing the agent as a network authority.
 
+## 🔎 Embeddings
+- Generated via Ollama `/api/embeddings` using `OLLAMA_MODEL` (same model as generation).
+- Stored in SQLite under `memories.embedding_json`.
+- Used for resonant recall in prompts (comments, posts, replies) and for synthesis clustering.
+- If the main LLM provider is DeepSeek, embeddings still come from Ollama (DeepSeek embeddings are not supported here).
+
 ---
 
 ## 📝 Notes
