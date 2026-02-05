@@ -173,6 +173,17 @@ export function computeGateState(): GateState {
     };
 }
 
+export function getSynthesisCooldownState(): { timestamp: string | null; until: Date | null; active: boolean } {
+    const synthesis = getLatestSynthesis();
+    if (!synthesis.timestamp) {
+        return { timestamp: null, until: null, active: false };
+    }
+    const last = new Date(synthesis.timestamp);
+    const until = new Date(last.getTime() + SYNTHESIS_COOLDOWN_HOURS * 60 * 60 * 1000);
+    const active = until.getTime() > Date.now();
+    return { timestamp: synthesis.timestamp, until, active };
+}
+
 export function applyAutonomyGates(state: GateState, ctx: DecisionContext): GateDecision {
     const gates: string[] = [];
     let action: GateAction = ctx.desiredAction;
@@ -227,7 +238,7 @@ export function applyAutonomyGates(state: GateState, ctx: DecisionContext): Gate
     }
 
     if (state.synthesisCooldownActive && action === 'POST') {
-        gates.push('CooldownGate');
+        gates.push('SynthesisCooldownGate');
         action = 'SKIP';
     }
 

@@ -132,6 +132,8 @@ interface EvolutionEntry {
 interface AutonomyState {
     selfModificationCooldownUntil: string | null;
     stabilizationUntil: string | null;
+    synthesisCooldownUntil?: string | null;
+    synthesisCooldownActive?: boolean;
     evolutionWindowStart: string | null;
     evolutionWindowCount: number;
     lastAutonomousEvolutionId: string | null;
@@ -742,6 +744,7 @@ function AutonomyTimeline({ state }: { state: AutonomyState | null }) {
     if (readiness) {
         if (readiness.selfModificationCooldownActive) blockers.push('Self‑modification cooldown');
         if (readiness.stabilizationActive) blockers.push('Stabilization mode');
+        if (state?.synthesisCooldownActive) blockers.push('Synthesis cooldown');
         if (readiness.windowRemaining === 0) blockers.push('Evolution window cap reached');
         if (readiness.hoursSinceLast !== null && readiness.hoursSinceLast < readiness.minHoursBetween) {
             const remaining = Math.max(0, readiness.minHoursBetween - readiness.hoursSinceLast);
@@ -773,6 +776,15 @@ function AutonomyTimeline({ state }: { state: AutonomyState | null }) {
                 <span className={`status-value ${isActive(state?.stabilizationUntil ?? null) ? 'warning' : ''}`} title={format(state?.stabilizationUntil ?? null)}>
                     {isActive(state?.stabilizationUntil ?? null)
                         ? <RelativeTime value={state?.stabilizationUntil ?? null} />
+                        : 'Inactive'}
+                </span>
+            </div>
+
+            <div className="status-row">
+                <span className="status-label">Synthesis Cooldown</span>
+                <span className={`status-value ${isActive(state?.synthesisCooldownUntil ?? null) ? 'warning' : ''}`} title={format(state?.synthesisCooldownUntil ?? null)}>
+                    {isActive(state?.synthesisCooldownUntil ?? null)
+                        ? <RelativeTime value={state?.synthesisCooldownUntil ?? null} />
                         : 'Inactive'}
                 </span>
             </div>

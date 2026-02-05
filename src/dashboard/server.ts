@@ -23,6 +23,7 @@ import { getBlueprintManager } from '../agent/blueprints.js';
 import { getDatabaseManager } from '../state/db.js';
 import { getSynthesisManager } from '../agent/synthesis.js';
 import { getEvolutionManager } from '../agent/evolution.js';
+import { getSynthesisCooldownState } from '../agent/autonomy-gates.js';
 import { getWebSocketBroadcaster } from './websocket.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -169,6 +170,7 @@ export function createDashboardServer(): express.Application {
             const soulInfo = getAgentSoulInfo();
             const evolution = getEvolutionManager();
             const readiness = evolution.getReadinessSnapshot();
+            const synthesisCooldown = getSynthesisCooldownState();
 
             const llmHealthy = await llm.healthCheck();
             const loopStatus = loop.getStatus();
@@ -227,7 +229,9 @@ export function createDashboardServer(): express.Application {
                     evolutionWindowStart: evolutionWindow.start?.toISOString() ?? null,
                     evolutionWindowCount: evolutionWindow.count,
                     lastAutonomousEvolutionId: state.getLastAutonomousEvolutionId(),
-                    readiness
+                    readiness,
+                    synthesisCooldownUntil: synthesisCooldown.until?.toISOString() ?? null,
+                    synthesisCooldownActive: synthesisCooldown.active
                 },
                 lastHeartbeat: state.getLastHeartbeatAt()?.toISOString() ?? null,
             });
