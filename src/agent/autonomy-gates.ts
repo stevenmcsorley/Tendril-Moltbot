@@ -40,6 +40,7 @@ export interface DecisionContext {
     multiSourceContext?: boolean;
     novelty?: boolean;
     allowLowNovelty?: boolean;
+    ignoreSynthesisCooldown?: boolean;
     lastPostAt?: Date | null;
     counterpartyInteractions?: number;
     lastMode?: ModeLabel;
@@ -237,7 +238,7 @@ export function applyAutonomyGates(state: GateState, ctx: DecisionContext): Gate
         }
     }
 
-    if (state.synthesisCooldownActive && action === 'POST') {
+    if (state.synthesisCooldownActive && action === 'POST' && !ctx.ignoreSynthesisCooldown) {
         gates.push('SynthesisCooldownGate');
         action = 'SKIP';
     }

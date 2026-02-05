@@ -703,6 +703,7 @@ class AgentLoop {
                 confidence,
                 novelty,
                 allowLowNovelty: options.allowLowNovelty,
+                ignoreSynthesisCooldown: !!options.forcePost,
                 multiSourceContext,
                 lastPostAt
             });
@@ -988,7 +989,7 @@ class AgentLoop {
             });
             const gateState = this.gateState ?? computeGateState();
             if (feed.posts.length === 0) {
-                await this.trySeedPost(targetSubmolt, gateState, true);
+                await this.trySeedPost(targetSubmolt, gateState, true, options?.force);
             } else {
                 await this.tryProactivePost(feed.posts, gateState, {
                     targetSubmoltOverride: targetSubmolt,
@@ -1012,7 +1013,7 @@ class AgentLoop {
         }
     }
 
-    private async trySeedPost(targetSubmolt: string | undefined, gateState: GateState, allowLowNovelty: boolean): Promise<void> {
+    private async trySeedPost(targetSubmolt: string | undefined, gateState: GateState, allowLowNovelty: boolean, forcePost: boolean = false): Promise<void> {
         const config = getConfig();
         const logger = getActivityLogger();
         const llm = getLLMClient();
@@ -1030,7 +1031,12 @@ class AgentLoop {
         let action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
         if (action === 'CREATE_SUBMOLT') action = 'POST';
 
+        const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
         if (result.isSkip || action === 'SKIP') {
+            if (forcePost && contentMatch) {
+                console.log('Force post enabled: overriding SKIP for seed post because content was provided.');
+                action = 'POST';
+            } else {
             const decision: GateDecision = {
                 action: 'SKIP',
                 gatesTriggered: [],
@@ -1038,6 +1044,7 @@ class AgentLoop {
             };
             this.logAutonomyDecision(logger, null, targetSubmolt, decision, 'post', { rawModelOutput: result.rawOutput });
             return;
+            }
         }
 
         const lastPostAt = stateManager.getLastPostAt();
@@ -1046,13 +1053,13 @@ class AgentLoop {
             confidence,
             novelty,
             allowLowNovelty,
+            ignoreSynthesisCooldown: forcePost,
             multiSourceContext: true,
             lastPostAt
         });
         this.logAutonomyDecision(logger, null, targetSubmolt, gateDecision, 'post', { rawModelOutput: result.rawOutput });
         if (gateDecision.action !== 'POST') return;
 
-        const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
         if (!contentMatch) return;
 
         const content = this.stripDiagnostics(contentMatch[1].trim());
