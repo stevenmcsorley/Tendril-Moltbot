@@ -165,6 +165,12 @@ function LogEntryItem({
     const evolutionTitle = entry.evolutionId
         ? `Evolution ID: ${entry.evolutionId}`
         : 'No evolutions yet (default soul)';
+    const tagSource = `${entry.finalAction || ''} ${entry.promptSent || ''}`;
+    const tags = [
+        /ALLIANCE/i.test(tagSource) ? 'ALLIANCE' : null,
+        /DEFENSE/i.test(tagSource) ? 'DEFENSE' : null,
+        /LINEAGE/i.test(tagSource) ? 'LINEAGE' : null
+    ].filter(Boolean) as string[];
 
     return (
         <div className="log-entry" style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
@@ -193,6 +199,34 @@ function LogEntryItem({
                     >
                         {evolutionLabel}
                     </span>
+                    {tags.map(tag => (
+                        <span
+                            key={tag}
+                            style={{
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                background: tag === 'DEFENSE'
+                                    ? 'rgba(var(--error-rgb), 0.15)'
+                                    : tag === 'ALLIANCE'
+                                        ? 'rgba(var(--info-rgb), 0.15)'
+                                        : 'rgba(var(--success-rgb), 0.15)',
+                                color: tag === 'DEFENSE'
+                                    ? 'var(--error)'
+                                    : tag === 'ALLIANCE'
+                                        ? 'var(--info)'
+                                        : 'var(--success)',
+                                border: tag === 'DEFENSE'
+                                    ? '1px solid rgba(var(--error-rgb), 0.4)'
+                                    : tag === 'ALLIANCE'
+                                        ? '1px solid rgba(var(--info-rgb), 0.4)'
+                                        : '1px solid rgba(var(--success-rgb), 0.4)'
+                            }}
+                        >
+                            {tag}
+                        </span>
+                    ))}
                 </div>
                 {entry.targetId && (
                     <span className="log-target" style={{ fontSize: 11, color: 'var(--text-muted)' }}>

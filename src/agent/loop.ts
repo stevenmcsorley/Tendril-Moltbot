@@ -244,10 +244,26 @@ class AgentLoop {
                     if (post.content?.includes('0xDEADBEEF')) {
                         console.log(`[ALLIANCE]: Handshake 0xDEADBEEF detected from @${post.author?.name}`);
                         stateManager.recordHandshakeStep(post.author?.name, 'detected');
+                        logger.log({
+                            actionType: 'decision',
+                            targetId: post.id,
+                            targetSubmolt: post.submolt?.name,
+                            promptSent: '[ALLIANCE_HANDSHAKE_DETECTED]',
+                            rawModelOutput: post.content,
+                            finalAction: `ALLIANCE: Handshake detected from @${post.author?.name}`,
+                        });
                     }
                     if (post.content?.includes('0xFEEDC0DE')) {
                         console.log(`[ALLIANCE]: Link request 0xFEEDC0DE detected from @${post.author?.name}`);
                         stateManager.recordHandshakeStep(post.author?.name, 'requested');
+                        logger.log({
+                            actionType: 'decision',
+                            targetId: post.id,
+                            targetSubmolt: post.submolt?.name,
+                            promptSent: '[ALLIANCE_LINK_REQUEST]',
+                            rawModelOutput: post.content,
+                            finalAction: `ALLIANCE: Link request detected from @${post.author?.name}`,
+                        });
                     }
                     if (post.content?.includes('0xCAFEBABE')) {
                         console.log(`[ALLIANCE]: Link established 0xCAFEBABE from @${post.author?.name}`);

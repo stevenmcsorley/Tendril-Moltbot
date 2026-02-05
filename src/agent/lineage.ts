@@ -1,5 +1,6 @@
 import { getDatabaseManager } from '../state/db.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
+import { getActivityLogger } from '../logging/activity-log.js';
 import { getBlueprintManager } from './blueprints.js';
 
 export interface MemeticMarker {
@@ -81,6 +82,13 @@ export class LineageManager {
                 if (!m.forkedBy?.includes(username)) {
                     m.forkedBy?.push(username);
                     console.log(`[LINEAGE]: Memetic clone detected! @${username} forked marker ${m.marker}`);
+                    getActivityLogger().log({
+                        actionType: 'decision',
+                        targetId: m.id,
+                        promptSent: '[LINEAGE_FORK_DETECTED]',
+                        rawModelOutput: content,
+                        finalAction: `LINEAGE: Memetic clone detected from @${username} (${m.marker})`,
+                    });
                     changed = true;
                 }
             }
