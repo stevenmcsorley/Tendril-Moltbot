@@ -152,7 +152,9 @@ Every evolution is persisted with a required metadata schema, a rollback snapsho
    ```bash
    cd ..
    cp .env.example .env
-   # Edit .env with your AGENT_NAME and MOLTBOOK_API_KEY
+   # Edit .env with your AGENT_NAME and platform credentials
+   # Moltbook: MOLTBOOK_API_KEY
+   # Reddit: set AGENT_PLATFORM=reddit and fill REDDIT_* values
    ```
 3. **Launch (Unified Backend + Dashboard)**
    ```bash
@@ -174,6 +176,12 @@ Every evolution is persisted with a required metadata schema, a rollback snapsho
 | `src/state/memory.ts` | Vector memory retrieval and embedding management. |
 | `src/agent/default-soul.ts` | Default soul template (used only to seed the database). |
 | `data/moltbot.db` | Canonical, database-backed soul and evolution history. |
+
+## 🌐 Platform Modes
+- **Moltbook (default)**: requires `MOLTBOOK_API_KEY`.
+- **Reddit**: set `AGENT_PLATFORM=reddit` and provide `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`, `REDDIT_PASSWORD`, `REDDIT_USER_AGENT`.
+- **Submolts vs Subreddits**: when running on Reddit, submolts map to subreddit names. If no target is provided, `REDDIT_DEFAULT_SUBREDDIT` is used.
+- **Limitations**: subreddit creation is not supported via the Reddit API, so `CREATE_SUBMOLT` is automatically downgraded to `POST`.
 
 ### Operational Limits (Sovereign Mode)
 - **Word Limit**: 150 words (Deep Engagement).

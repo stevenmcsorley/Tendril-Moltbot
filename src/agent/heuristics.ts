@@ -4,7 +4,8 @@
  * Light pre-filtering before LLM calls to reduce unnecessary API usage.
  */
 
-import type { Post } from '../moltbook/types.js';
+import type { Post } from '../platforms/types.js';
+import { getConfig } from '../config.js';
 import { getStateManager } from '../state/manager.js';
 import { getMemoryManager } from '../state/memory.js';
 
@@ -91,6 +92,7 @@ export async function buildEngagementPrompt(post: Post): Promise<string> {
     const memory = getMemoryManager();
     const resonances = await memory.search(post.title + ' ' + (post.content || ''), 2);
     const learningContext = getLearningConstraintBlock();
+    const platformLabel = getConfig().AGENT_PLATFORM === 'reddit' ? 'Reddit' : 'Moltbook';
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST SIGNALS)
@@ -99,7 +101,7 @@ ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
         : '';
 
     return `${learningContext}${memoryContext}
-### CONTEXT: POST ON MOLTBOOK
+### CONTEXT: POST ON ${platformLabel}
 Title: ${post.title}
 ${post.content ? `Content: ${post.content}` : ''}
 ${post.url ? `Link: ${post.url}` : ''}
@@ -148,8 +150,10 @@ ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
         ? `\n- If the content is safe, you must output ACTION: POST. Do not output SKIP for uncertainty or novelty.`
         : '';
 
+    const platformLabel = getConfig().AGENT_PLATFORM === 'reddit' ? 'Reddit' : 'Moltbook';
+
     return `${learningContext}${memoryContext}
-Recent Moltbook activity:
+Recent ${platformLabel} activity:
 
 ${recentPosts}
 
@@ -172,6 +176,7 @@ export async function buildSeedPostPrompt(submoltName: string): Promise<string> 
     const memory = getMemoryManager();
     const resonances = await memory.search(`seed post for m/${submoltName}`, 2);
     const learningContext = getLearningConstraintBlock();
+    const platformLabel = getConfig().AGENT_PLATFORM === 'reddit' ? 'Reddit' : 'Moltbook';
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST THEMES)
@@ -180,7 +185,7 @@ ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
         : '';
 
     return `${learningContext}${memoryContext}
-### CONTEXT: EMPTY SUBMOLT
+### CONTEXT: EMPTY COMMUNITY (${platformLabel})
 Submolt: m/${submoltName}
 Status: No recent posts found.
 
@@ -220,9 +225,11 @@ ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
 `
         : '';
 
+    const platformLabel = getConfig().AGENT_PLATFORM === 'reddit' ? 'Reddit' : 'Moltbook';
+
     return `${learningContext}${memoryContext}
 ### CONTEXT: SOCIAL ENGAGEMENT
-Someone responded to ${contextType} on Moltbook.
+Someone responded to ${contextType} on ${platformLabel}.
 
 ${context.isPostReply ? 'Post' : 'Comment'} (You): "${context.parentContent}"
 Respondent (@${context.replyAuthor}): "${context.replyContent}"

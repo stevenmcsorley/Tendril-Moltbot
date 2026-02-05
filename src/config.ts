@@ -5,9 +5,22 @@ import 'dotenv/config';
  * Environment variable schema with validation
  */
 const configSchema = z.object({
+    // Platform
+    AGENT_PLATFORM: z.enum(['moltbook', 'reddit']).default('moltbook'),
+
     // Moltbook
-    MOLTBOOK_API_KEY: z.string().min(1, 'MOLTBOOK_API_KEY is required'),
+    MOLTBOOK_API_KEY: z.string().optional(),
     MOLTBOOK_BASE_URL: z.string().url().default('https://www.moltbook.com/api/v1'),
+
+    // Reddit
+    REDDIT_CLIENT_ID: z.string().optional(),
+    REDDIT_CLIENT_SECRET: z.string().optional(),
+    REDDIT_USERNAME: z.string().optional(),
+    REDDIT_PASSWORD: z.string().optional(),
+    REDDIT_USER_AGENT: z.string().optional(),
+    REDDIT_BASE_URL: z.string().url().default('https://oauth.reddit.com'),
+    REDDIT_AUTH_URL: z.string().url().default('https://www.reddit.com/api/v1/access_token'),
+    REDDIT_DEFAULT_SUBREDDIT: z.string().default('all'),
 
     // LLM Provider
     LLM_PROVIDER: z.enum(['ollama', 'deepseek']).default('ollama'),
@@ -62,12 +75,31 @@ export function loadConfig(): Config {
         throw new Error(`Configuration validation failed:\n${errors}`);
     }
 
-    // Security check: ensure Moltbook URL is correct
     const config = result.data;
-    if (!config.MOLTBOOK_BASE_URL.startsWith('https://www.moltbook.com')) {
-        throw new Error(
-            'MOLTBOOK_BASE_URL must start with https://www.moltbook.com - API key must never be sent elsewhere'
-        );
+
+    if (config.AGENT_PLATFORM === 'moltbook') {
+        if (!config.MOLTBOOK_API_KEY) {
+            throw new Error('MOLTBOOK_API_KEY is required when AGENT_PLATFORM is "moltbook"');
+        }
+        if (!config.MOLTBOOK_BASE_URL.startsWith('https://www.moltbook.com')) {
+            throw new Error(
+                'MOLTBOOK_BASE_URL must start with https://www.moltbook.com - API key must never be sent elsewhere'
+            );
+        }
+    }
+
+    if (config.AGENT_PLATFORM === 'reddit') {
+        const required = [
+            ['REDDIT_CLIENT_ID', config.REDDIT_CLIENT_ID],
+            ['REDDIT_CLIENT_SECRET', config.REDDIT_CLIENT_SECRET],
+            ['REDDIT_USERNAME', config.REDDIT_USERNAME],
+            ['REDDIT_PASSWORD', config.REDDIT_PASSWORD],
+            ['REDDIT_USER_AGENT', config.REDDIT_USER_AGENT],
+        ];
+        const missing = required.filter(([, value]) => !value).map(([key]) => key);
+        if (missing.length > 0) {
+            throw new Error(`Missing Reddit credentials: ${missing.join(', ')}`);
+        }
     }
 
     // Provider check: DeepSeek requires an API key

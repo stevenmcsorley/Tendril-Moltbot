@@ -15,7 +15,7 @@ import { getAgentLoop } from '../agent/loop.js';
 import { getActivityLogger, type ActivityLogEntry } from '../logging/activity-log.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getStateManager } from '../state/manager.js';
-import { getMoltbookClient, resetMoltbookClient } from '../moltbook/client.js';
+import { getSocialClient, resetSocialClient } from '../platforms/index.js';
 import { getLLMClient, resetLLMClient } from '../llm/factory.js';
 import { resetRateLimiter } from '../rate-limiter.js';
 import { getLineageManager } from '../agent/lineage.js';
@@ -334,7 +334,7 @@ export function createDashboardServer(): express.Application {
     app.post('/api/control/reload', (req, res) => {
         try {
             // Reset all singletons to pick up new config
-            resetMoltbookClient();
+            resetSocialClient();
             resetLLMClient();
             resetRateLimiter();
 
@@ -608,27 +608,35 @@ export function createDashboardServer(): express.Application {
                 return;
             }
 
-            const moltbook = getMoltbookClient();
-            const created = await moltbook.createSubmolt({
+            const client = getSocialClient();
+            if (!client.capabilities.supportsSubmolts || !client.createSubmolt) {
+                res.status(400).json({ error: 'Submolt creation is not supported on this platform.' });
+                return;
+            }
+            const created = await client.createSubmolt({
                 name: slug,
                 display_name: displayName,
                 description
             });
 
+            const recordId = created.id ?? slug;
+            const recordName = created.name ?? slug;
+            const recordDisplayName = created.display_name ?? displayName;
+
             const state = getStateManager();
             state.recordSubmolt({
-                id: created.id,
-                name: created.name,
-                display_name: created.display_name
+                id: recordId,
+                name: recordName,
+                display_name: recordDisplayName
             });
 
             getActivityLogger().log({
                 actionType: 'post',
-                targetId: created.id,
-                targetSubmolt: created.name,
+                targetId: recordId,
+                targetSubmolt: recordName,
                 promptSent: 'MANUAL_SUBMOLT_CREATE',
                 rawModelOutput: null,
-                finalAction: `Created submolt: m/${created.name}`,
+                finalAction: `Created submolt: m/${recordName}`,
             });
 
             res.json({ success: true, submolt: created });

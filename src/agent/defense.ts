@@ -1,4 +1,4 @@
-import { Post } from '../moltbook/types.js';
+import type { Post } from '../platforms/types.js';
 import { getStateManager } from '../state/manager.js';
 
 export interface DefenseMetrics {

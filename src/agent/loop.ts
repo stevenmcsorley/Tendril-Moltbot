@@ -1,12 +1,12 @@
 /**
  * Agent Decision Loop
  * 
- * Deterministic heartbeat loop that processes the Moltbook feed.
+ * Deterministic heartbeat loop that processes the platform feed.
  * No autonomous branching beyond this loop is allowed.
  */
 
 import { getConfig } from '../config.js';
-import { getMoltbookClient, MoltbookApiError } from '../moltbook/client.js';
+import { getSocialClient, PlatformApiError } from '../platforms/index.js';
 import { getLLMClient } from '../llm/factory.js';
 import { getStateManager } from '../state/manager.js';
 import { getMemoryManager } from '../state/memory.js';
@@ -20,7 +20,8 @@ import { getDefenseManager } from './defense.js';
 import { getLineageManager } from './lineage.js';
 import { getBlueprintManager } from './blueprints.js';
 import { getSynthesisManager } from './synthesis.js';
-import type { Post, Comment } from '../moltbook/types.js';
+import type { Post, Comment } from '../platforms/types.js';
+import type { SocialClient } from '../platforms/interfaces.js';
 
 const COUNTERPARTY_WINDOW_MS = 60 * 60 * 1000;
 
@@ -151,7 +152,7 @@ class AgentLoop {
         }
 
         const config = getConfig();
-        const moltbook = getMoltbookClient();
+        const client = getSocialClient();
         const llm = getLLMClient();
         const rateLimiter = getRateLimiter();
         const stateManager = getStateManager();
@@ -201,7 +202,7 @@ class AgentLoop {
 
             // Fetch feed
             console.log('Fetching feed...');
-            const feed = await moltbook.getFeed({ sort: 'new', limit: 25 });
+            const feed = await client.getFeed({ sort: 'new', limit: 25 });
 
             logger.log({
                 actionType: 'read',
@@ -479,14 +480,14 @@ class AgentLoop {
             });
 
         } catch (error) {
-            if (error instanceof MoltbookApiError && error.isRateLimited) {
+            if (error instanceof PlatformApiError && error.isRateLimited) {
                 rateLimiter.setBackoff(error.retryAfterSeconds, error.retryAfterMinutes);
                 logger.log({
                     actionType: 'error',
                     targetId: null,
                     promptSent: null,
                     rawModelOutput: null,
-                    finalAction: 'Rate limited by Moltbook API',
+                    finalAction: `Rate limited by ${getConfig().AGENT_PLATFORM} API`,
                     error: error.message,
                 });
             } else {
@@ -520,13 +521,13 @@ class AgentLoop {
         prompt: string,
         rawOutput: string
     ): Promise<boolean> {
-        const moltbook = getMoltbookClient();
+        const client = getSocialClient();
         const rateLimiter = getRateLimiter();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
 
         try {
-            const commentObj = await moltbook.createComment(post.id, comment);
+            const commentObj = await client.createComment(post.id, comment);
             rateLimiter.recordComment(post.id);
             stateManager.recordComment(post.id, commentObj.id);
 
@@ -557,12 +558,12 @@ class AgentLoop {
         prompt: string,
         rawOutput: string
     ): Promise<void> {
-        const moltbook = getMoltbookClient();
+        const client = getSocialClient();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
 
         try {
-            await moltbook.upvotePost(post.id);
+            await client.upvotePost(post.id);
             stateManager.recordUpvote();
 
             logger.log({
@@ -590,12 +591,12 @@ class AgentLoop {
         prompt: string,
         rawOutput: string
     ): Promise<void> {
-        const moltbook = getMoltbookClient();
+        const client = getSocialClient();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
 
         try {
-            await moltbook.downvotePost(post.id);
+            await client.downvotePost(post.id);
             stateManager.recordDownvote();
 
             logger.log({
@@ -631,8 +632,8 @@ class AgentLoop {
         const rateLimiter = getRateLimiter();
         const logger = getActivityLogger();
         const llm = getLLMClient();
-        const moltbook = getMoltbookClient();
-        const allowSubmoltCreation = options.allowSubmoltCreation ?? true;
+        const client = getSocialClient();
+        const allowSubmoltCreation = options.allowSubmoltCreation ?? client.capabilities.supportsSubmolts;
 
         if (!config.ENABLE_POSTING) return;
         if (!rateLimiter.canPost()) return;
@@ -667,7 +668,7 @@ class AgentLoop {
 
             // Constraint: Disable submolt creation if target submolt is set
             if (!allowSubmoltCreation && action === 'CREATE_SUBMOLT') {
-                console.log('Constraint: Manual post does not allow submolt creation. Downgrading to POST.');
+                console.log('Constraint: Submolt creation not supported. Downgrading to POST.');
                 action = 'POST';
             }
             if (config.TARGET_SUBMOLT && action === 'CREATE_SUBMOLT') {
@@ -741,31 +742,40 @@ class AgentLoop {
                         return;
                     }
 
+                    if (!client.createSubmolt) {
+                        console.log('Constraint: Submolt creation not supported by platform.');
+                        return;
+                    }
+
                     console.log(`Creating submolt: m/${name}`);
                     try {
-                        const submolt = await moltbook.createSubmolt({
+                        const submolt = await client.createSubmolt({
                             name: name,
                             display_name: displayName.trim(),
                             description: description.trim()
                         });
 
+                        const recordId = submolt.id ?? name;
+                        const recordName = submolt.name ?? name;
+                        const recordDisplayName = submolt.display_name ?? displayName.trim();
+
                         stateManager.recordSubmolt({
-                            id: submolt.id,
-                            name: submolt.name,
-                            display_name: submolt.display_name
+                            id: recordId,
+                            name: recordName,
+                            display_name: recordDisplayName
                         });
 
                         logger.log({
                             actionType: 'post',
-                            targetId: submolt.id,
-                            targetSubmolt: submolt.name,
+                            targetId: recordId,
+                            targetSubmolt: recordName,
                             promptSent: prompt,
                             rawModelOutput: result.rawOutput,
-                            finalAction: `Convergence Zone Established: Created m/${submolt.name}`,
+                            finalAction: `Convergence Zone Established: Created m/${recordName}`,
                         });
                         // Store the interaction in memory
                         const memory = getMemoryManager();
-                        await memory.store(`Established new submolt: m/${name}. Display name: ${displayName}`, 'post', submolt.id);
+                        await memory.store(`Established new submolt: m/${recordName}. Display name: ${recordDisplayName}`, 'post', recordId);
 
                     } catch (err: any) {
                         err.rawOutput = result.rawOutput;
@@ -800,7 +810,7 @@ class AgentLoop {
                         const marker = getLineageManager().generateMarker();
                         const stampedContent = `${content}\n\n${marker}`;
 
-                        const post = await moltbook.createPost({
+                        const post = await client.createPost({
                             submolt: targetSubmolt,
                             title: title,
                             content: stampedContent
@@ -851,7 +861,7 @@ class AgentLoop {
      */
     private async trySocialEngagement(): Promise<void> {
         const config = getConfig();
-        const moltbook = getMoltbookClient();
+        const client = getSocialClient();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
         const llm = getLLMClient();
@@ -865,7 +875,7 @@ class AgentLoop {
         const myPosts = stateManager.getMyPosts();
         for (const post of myPosts) {
             try {
-                const { comments } = await moltbook.getComments(post.id);
+                const { comments } = await client.getComments(post.id);
                 let repliesInThisPost = 0;
                 for (const comment of comments) {
                     if (repliesInThisPost >= 5) break; // Limit per post to prevent flood
@@ -875,7 +885,7 @@ class AgentLoop {
                         true,
                         logger,
                         llm,
-                        moltbook,
+                        client,
                         stateManager,
                         rateLimiter,
                         this.gateState ?? computeGateState()
@@ -883,7 +893,7 @@ class AgentLoop {
                     if (replied) repliesInThisPost++;
                 }
             } catch (err) {
-                if (err instanceof MoltbookApiError && err.statusCode === 404) {
+                if (err instanceof PlatformApiError && err.statusCode === 404) {
                     console.warn(`Post ${post.id} no longer exists, removing from tracking.`);
                     stateManager.removeMyPost(post.id);
                 } else {
@@ -913,7 +923,7 @@ class AgentLoop {
             if (myPosts.some(p => p.id === postId)) continue; // Already checked this post in step 1
 
             try {
-                const { comments } = await moltbook.getComments(postId);
+                const { comments } = await client.getComments(postId);
                 let repliesInThisPost = 0;
                 for (const comment of comments) {
                     if (repliesInThisPost >= 5) break;
@@ -924,7 +934,7 @@ class AgentLoop {
                             false,
                             logger,
                             llm,
-                            moltbook,
+                            client,
                             stateManager,
                             rateLimiter,
                             this.gateState ?? computeGateState()
@@ -933,7 +943,7 @@ class AgentLoop {
                     }
                 }
             } catch (err) {
-                if (err instanceof MoltbookApiError && err.statusCode === 404) {
+                if (err instanceof PlatformApiError && err.statusCode === 404) {
                     console.warn(`Post ${postId} (containing my comment) no longer exists, removing comments from tracking.`);
                     for (const commentId of commentIds) {
                         stateManager.removeMyComment(commentId);
@@ -998,10 +1008,10 @@ class AgentLoop {
             finalAction: forceMode ? 'Autonomous post requested (force).' : 'Autonomous post requested.'
         });
 
-        const moltbook = getMoltbookClient();
+        const client = getSocialClient();
 
         try {
-            const feed = await moltbook.getFeed({
+            const feed = await client.getFeed({
                 sort: 'new',
                 limit: 25,
                 submolt: targetSubmolt || undefined
@@ -1036,7 +1046,7 @@ class AgentLoop {
         const config = getConfig();
         const logger = getActivityLogger();
         const llm = getLLMClient();
-        const moltbook = getMoltbookClient();
+        const client = getSocialClient();
         const stateManager = getStateManager();
 
         if (!config.ENABLE_POSTING) return;
@@ -1105,7 +1115,7 @@ class AgentLoop {
         const stampedContent = `${content}\n\n${marker}`;
 
         try {
-            const post = await moltbook.createPost({
+            const post = await client.createPost({
                 submolt: target,
                 title,
                 content: stampedContent
@@ -1144,7 +1154,7 @@ class AgentLoop {
         isPostReply: boolean,
         logger: any,
         llm: any,
-        moltbook: any,
+        client: SocialClient,
         stateManager: any,
         rateLimiter: any,
         gateState: GateState
@@ -1182,7 +1192,7 @@ class AgentLoop {
         let parentContent = "[Context unavailable]";
         if (isPostReply) {
             try {
-                const post = await moltbook.getPost(postId);
+                const post = await client.getPost(postId);
                 parentContent = post.content || post.title;
             } catch { }
         } else {
@@ -1232,7 +1242,7 @@ class AgentLoop {
             if (gateDecision.action !== 'COMMENT') return false;
 
             console.log(`Replying to @${reply.author.name} in social engagement...`);
-            const newComment = await moltbook.createComment(postId, responseText, reply.id);
+            const newComment = await client.createComment(postId, responseText, reply.id);
 
             rateLimiter.recordComment(postId);
             stateManager.recordComment(postId, newComment.id);
@@ -1258,7 +1268,7 @@ class AgentLoop {
 
             return true;
         } catch (error) {
-            if (error instanceof MoltbookApiError && error.statusCode === 404) {
+            if (error instanceof PlatformApiError && error.statusCode === 404) {
                 console.warn(`Social target ${reply.id} or post ${postId} no longer exists. Marking as processed.`);
                 stateManager.recordSocialReply(reply.id);
             }
@@ -1434,15 +1444,16 @@ class AgentLoop {
         const rateLimiter = getRateLimiter();
         const logger = getActivityLogger();
 
-        if (error instanceof MoltbookApiError && error.isRateLimited) {
+        if (error instanceof PlatformApiError && error.isRateLimited) {
             rateLimiter.setBackoff(error.retryAfterSeconds, error.retryAfterMinutes);
+            const platform = error.platform || getConfig().AGENT_PLATFORM;
             logger.log({
                 actionType: 'error',
                 targetId,
                 targetSubmolt,
                 promptSent: prompt,
                 rawModelOutput: rawOutput,
-                finalAction: `Rate limited by Moltbook API during ${actionType}`,
+                finalAction: `Rate limited by ${platform} API during ${actionType}`,
                 error: error.message,
             });
         } else {
@@ -1459,7 +1470,7 @@ class AgentLoop {
     }
 
     /**
-     * Ensure submolt name follows Moltbook rules:
+     * Ensure community name follows platform rules:
      * - lowercase alphanumeric only (no underscores or hyphens)
      * - 3-24 characters
      */
@@ -1478,7 +1489,7 @@ class AgentLoop {
         const report = await synthesis.performSynthesis();
 
         if (report && report.report) {
-            const moltbook = getMoltbookClient();
+            const client = getSocialClient();
             const config = getConfig();
             const stateManager = getStateManager();
             const logger = getActivityLogger();
@@ -1502,7 +1513,7 @@ class AgentLoop {
 
             try {
                 const title = `SYNTHESIS_REPORT_${Math.random().toString(16).substr(2, 4).toUpperCase()}`;
-                const result = await moltbook.createPost({
+                const result = await client.createPost({
                     submolt: targetSubmolt,
                     title,
                     content: report.report

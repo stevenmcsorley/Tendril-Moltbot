@@ -7,43 +7,61 @@
 
 import { getConfig } from '../config.js';
 import type {
-    ApiResponse,
     Post,
     Comment,
     FeedResponse,
     CommentsResponse,
-    RateLimitError,
     Agent,
     Submolt,
     StatusResponse,
-} from './types.js';
+} from '../platforms/types.js';
+import type { SocialClient } from '../platforms/interfaces.js';
+import { PlatformApiError } from '../platforms/errors.js';
 
-export class MoltbookApiError extends Error {
+interface ApiResponse<T> {
+    success: boolean;
+    data?: T;
+    error?: string;
+    hint?: string;
+}
+
+interface RateLimitError {
+    success: false;
+    error: string;
+    retry_after_minutes?: number;
+    retry_after_seconds?: number;
+    daily_remaining?: number;
+}
+
+export class MoltbookApiError extends PlatformApiError {
     constructor(
         message: string,
-        public statusCode: number,
-        public hint?: string,
-        public retryAfterMinutes?: number,
-        public retryAfterSeconds?: number,
-        public dailyRemaining?: number
+        statusCode: number,
+        hint?: string,
+        retryAfterMinutes?: number,
+        retryAfterSeconds?: number,
+        dailyRemaining?: number
     ) {
-        super(message);
+        super(message, statusCode, 'moltbook', hint, retryAfterMinutes, retryAfterSeconds, dailyRemaining);
         this.name = 'MoltbookApiError';
-    }
-
-    get isRateLimited(): boolean {
-        return this.statusCode === 429;
     }
 }
 
-export class MoltbookClient {
+export class MoltbookClient implements SocialClient {
     private baseUrl: string;
     private apiKey: string;
+    capabilities = {
+        platform: 'moltbook' as const,
+        supportsSubmolts: true
+    };
 
     constructor() {
         const config = getConfig();
         this.baseUrl = config.MOLTBOOK_BASE_URL;
-        this.apiKey = config.MOLTBOOK_API_KEY;
+        this.apiKey = config.MOLTBOOK_API_KEY ?? '';
+        if (!this.apiKey) {
+            throw new Error('MOLTBOOK_API_KEY is required for Moltbook client');
+        }
 
         // Security: Validate URL is correct domain
         if (!this.baseUrl.startsWith('https://www.moltbook.com')) {

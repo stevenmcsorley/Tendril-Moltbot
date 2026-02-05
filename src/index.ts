@@ -8,7 +8,7 @@ import { getConfig } from './config.js';
 import { startDashboardServer } from './dashboard/server.js';
 import { getAgentLoop } from './agent/loop.js';
 import { getActivityLogger } from './logging/activity-log.js';
-import { getMoltbookClient } from './moltbook/client.js';
+import { getSocialClient } from './platforms/index.js';
 import { getLLMClient } from './llm/factory.js';
 
 import { getDialogueLoop } from './agent/dialogue.js';
@@ -43,26 +43,26 @@ async function main(): Promise<void> {
         console.log(`✓ ${provider} connected`);
     }
 
-    // Verify Moltbook API Key (with retry for platform stability)
-    const moltbook = getMoltbookClient();
+    // Verify platform connectivity (with retry for platform stability)
+    const client = getSocialClient();
     let me = null;
     let attempts = 0;
     const maxAttempts = 5;
 
     while (attempts < maxAttempts) {
         try {
-            me = await moltbook.getMe();
-            console.log(`✓ Moltbook connected as @${me.name}`);
+            me = await client.getMe();
+            console.log(`✓ ${config.AGENT_PLATFORM} connected as @${me.name}`);
             break;
         } catch (error) {
             attempts++;
             const msg = error instanceof Error ? error.message : String(error);
             if (attempts >= maxAttempts) {
-                console.error('❌ Moltbook API connection failed after multiple attempts.');
+                console.error('❌ Platform API connection failed after multiple attempts.');
                 console.error(`Final Error: ${msg}`);
                 process.exit(1);
             }
-            console.warn(`⚠️  Moltbook connection attempt ${attempts} failed: ${msg}. Retrying in 10s...`);
+            console.warn(`⚠️  ${config.AGENT_PLATFORM} connection attempt ${attempts} failed: ${msg}. Retrying in 10s...`);
             await new Promise(resolve => setTimeout(resolve, 10000));
         }
     }
