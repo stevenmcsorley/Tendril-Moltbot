@@ -35,7 +35,8 @@ export class DatabaseManager {
                 prompt_sent TEXT,
                 raw_model_output TEXT,
                 final_action TEXT,
-                error TEXT
+                error TEXT,
+                evolution_id TEXT
             );
 
             CREATE TABLE IF NOT EXISTS memories (
@@ -126,6 +127,7 @@ export class DatabaseManager {
         this.ensureColumn('synthesis', 'human_summary', 'TEXT');
         this.ensureColumn('synthesis', 'implication', 'TEXT');
         this.ensureColumn('evolutions', 'interpretation', 'TEXT');
+        this.ensureColumn('activity', 'evolution_id', 'TEXT');
     }
 
     private ensureColumn(table: string, column: string, type: string): void {

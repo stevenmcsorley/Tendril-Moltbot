@@ -6,6 +6,7 @@
  */
 
 import { getDatabaseManager } from '../state/db.js';
+import { getStateManager } from '../state/manager.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 
 export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat' | 'decision';
@@ -20,6 +21,7 @@ export interface ActivityLogEntry {
     rawModelOutput?: string | null;
     finalAction?: string | null;
     error?: string;
+    evolutionId?: string | null;
 }
 
 export class ActivityLogger {
@@ -29,15 +31,17 @@ export class ActivityLogger {
      * Log an activity entry
      */
     log(entry: Omit<ActivityLogEntry, 'timestamp'>): void {
+        const evolutionId = entry.evolutionId ?? getStateManager().getLastAutonomousEvolutionId();
         const fullEntry: ActivityLogEntry = {
             timestamp: new Date().toISOString(),
             ...entry,
+            evolutionId,
         };
 
         const db = getDatabaseManager().getDb();
         const stmt = db.prepare(`
-            INSERT INTO activity (timestamp, action_type, target_id, target_submolt, prompt_sent, raw_model_output, final_action, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO activity (timestamp, action_type, target_id, target_submolt, prompt_sent, raw_model_output, final_action, error, evolution_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const info = stmt.run(
@@ -48,7 +52,8 @@ export class ActivityLogger {
             fullEntry.promptSent || null,
             fullEntry.rawModelOutput || null,
             fullEntry.finalAction || null,
-            fullEntry.error || null
+            fullEntry.error || null,
+            fullEntry.evolutionId || null
         );
         fullEntry.id = Number(info.lastInsertRowid);
 
@@ -84,7 +89,8 @@ export class ActivityLogger {
             promptSent: r.prompt_sent,
             rawModelOutput: r.raw_model_output,
             finalAction: r.final_action,
-            error: r.error
+            error: r.error,
+            evolutionId: r.evolution_id
         }));
     }
 

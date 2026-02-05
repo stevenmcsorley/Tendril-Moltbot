@@ -10,6 +10,7 @@ interface LogEntry {
     rawModelOutput: string | null;
     finalAction: string;
     error?: string;
+    evolutionId?: string | null;
 }
 
 interface ActivityLogProps {
@@ -160,6 +161,10 @@ function LogEntryItem({
     onToggle: (open: boolean) => void;
 }) {
     const hasDetails = entry.promptSent || entry.rawModelOutput;
+    const evolutionLabel = entry.evolutionId ? `evo:${entry.evolutionId.split('_').pop()}` : 'evo:seed';
+    const evolutionTitle = entry.evolutionId
+        ? `Evolution ID: ${entry.evolutionId}`
+        : 'No evolutions yet (default soul)';
 
     return (
         <div className="log-entry" style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
@@ -174,6 +179,20 @@ function LogEntryItem({
                         background: `rgba(var(--${entry.actionType}-rgb), 0.1)`,
                         color: `var(--${entry.actionType})`
                     }}>{entry.actionType}</span>
+                    <span
+                        title={evolutionTitle}
+                        style={{
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            background: 'rgba(var(--info-rgb), 0.15)',
+                            color: 'var(--info)',
+                            border: '1px solid rgba(var(--info-rgb), 0.4)'
+                        }}
+                    >
+                        {evolutionLabel}
+                    </span>
                 </div>
                 {entry.targetId && (
                     <span className="log-target" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
@@ -214,6 +233,10 @@ function LogEntryItem({
                         View internal reasoning & prompt
                     </summary>
                     <div className="engagement-details" style={{ marginTop: 16 }}>
+                        <div className="prompt-section" style={{ marginBottom: 12 }}>
+                            <div className="prompt-label">EVOLUTION ITERATION</div>
+                            <pre className="prompt-pre">{entry.evolutionId ?? 'seed'}</pre>
+                        </div>
                         {entry.promptSent && (
                             <div className="prompt-section">
                                 {entry.promptSent.includes('### ') ? (
