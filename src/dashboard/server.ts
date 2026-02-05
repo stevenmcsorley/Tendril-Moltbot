@@ -315,7 +315,8 @@ export function createDashboardServer(): express.Application {
         try {
             const loop = getAgentLoop();
             const submolt = typeof req.body?.submolt === 'string' ? req.body.submolt.trim() : undefined;
-            const result = await loop.triggerAutonomousPost(submolt || undefined);
+            const force = req.body?.force === true;
+            const result = await loop.triggerAutonomousPost(submolt || undefined, { force });
             res.json(result);
         } catch (error) {
             res.status(500).json({ success: false, message: 'Failed to trigger autonomous post.' });

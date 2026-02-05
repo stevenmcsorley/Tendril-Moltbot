@@ -624,7 +624,7 @@ class AgentLoop {
     private async tryProactivePost(
         feedPosts: Post[],
         gateState: GateState,
-        options: { targetSubmoltOverride?: string; allowSubmoltCreation?: boolean; allowLowNovelty?: boolean } = {}
+        options: { targetSubmoltOverride?: string; allowSubmoltCreation?: boolean; allowLowNovelty?: boolean; forcePost?: boolean } = {}
     ): Promise<void> {
         const config = getConfig();
         const stateManager = getStateManager();
@@ -645,7 +645,10 @@ class AgentLoop {
         }
 
         console.log('Attempting proactive synthesis...');
-        const prompt = await buildSynthesisPrompt(feedPosts);
+        const prompt = await buildSynthesisPrompt(feedPosts, {
+            allowLowNovelty: options.allowLowNovelty,
+            forcePost: options.forcePost
+        });
 
         try {
             let result;
@@ -672,7 +675,12 @@ class AgentLoop {
                 action = 'POST'; // Downgrade to a regular post if synthesis was strong
             }
 
+            const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
             if (result.isSkip || action === 'SKIP') {
+                if (options.forcePost && contentMatch) {
+                    console.log('Force post enabled: overriding SKIP because content was provided.');
+                    action = 'POST';
+                } else {
                 const decision: GateDecision = {
                     action: 'SKIP',
                     gatesTriggered: [],
@@ -687,6 +695,7 @@ class AgentLoop {
                     { rawModelOutput: result.rawOutput }
                 );
                 return;
+                }
             }
 
             const gateDecision = applyAutonomyGates(gateState, {
@@ -750,7 +759,6 @@ class AgentLoop {
                     }
                 }
             } else if (action === 'POST') {
-                const contentMatch = result.rawOutput.match(/\[CONTENT\]:\s*([\s\S]+)/i);
                 if (contentMatch) {
                     const content = this.stripDiagnostics(contentMatch[1].trim());
                     if (this.containsForbiddenPublicTerms(content)) {
@@ -933,7 +941,7 @@ class AgentLoop {
     /**
      * Manually trigger an autonomous post using synthesis on recent feed context.
      */
-    async triggerAutonomousPost(targetSubmolt?: string): Promise<{ success: boolean; message: string }> {
+    async triggerAutonomousPost(targetSubmolt?: string, options?: { force?: boolean }): Promise<{ success: boolean; message: string }> {
         const config = getConfig();
         const logger = getActivityLogger();
         if (!config.ENABLE_POSTING) {
@@ -965,9 +973,9 @@ class AgentLoop {
             actionType: 'decision',
             targetId: null,
             targetSubmolt: targetSubmolt,
-            promptSent: 'AUTONOMOUS_POST_TRIGGER',
+            promptSent: options?.force ? 'AUTONOMOUS_POST_TRIGGER_FORCE' : 'AUTONOMOUS_POST_TRIGGER',
             rawModelOutput: null,
-            finalAction: 'Autonomous post requested.'
+            finalAction: options?.force ? 'Autonomous post requested (force).' : 'Autonomous post requested.'
         });
 
         const moltbook = getMoltbookClient();
@@ -985,7 +993,8 @@ class AgentLoop {
                 await this.tryProactivePost(feed.posts, gateState, {
                     targetSubmoltOverride: targetSubmolt,
                     allowSubmoltCreation: false,
-                    allowLowNovelty: true
+                    allowLowNovelty: true,
+                    forcePost: options?.force
                 });
             }
             return { success: true, message: 'Autonomous post attempt completed. Check activity log.' };

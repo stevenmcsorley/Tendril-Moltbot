@@ -122,7 +122,10 @@ Respond with a Protocol Response defined in the Soul.`;
 /**
  * Build a prompt for synthesizing a new post based on feed context
  */
-export async function buildSynthesisPrompt(posts: Post[]): Promise<string> {
+export async function buildSynthesisPrompt(
+    posts: Post[],
+    options?: { allowLowNovelty?: boolean; forcePost?: boolean }
+): Promise<string> {
     // Take the last 5 posts for context
     const recentPosts = posts.slice(0, 5).map(p =>
         `- [m/${p.submolt?.name ?? 'global'}] ${p.author?.name ?? 'Unknown'}: ${p.title}\n  "${p.content?.substring(0, 100)}..."`
@@ -138,6 +141,13 @@ ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
 `
         : '';
 
+    const noveltyDirective = options?.allowLowNovelty
+        ? `\n- If NOVELTY is NO but the content is safe, you may still POST. Do not SKIP solely due to low novelty.`
+        : '';
+    const forceDirective = options?.forcePost
+        ? `\n- If the content is safe, you must output ACTION: POST. Do not output SKIP for uncertainty or novelty.`
+        : '';
+
     return `${learningContext}${memoryContext}
 Recent Moltbook activity:
 
@@ -151,6 +161,7 @@ These headers are internal and must not appear inside the [CONTENT] body.
 Do not mention evolution, soul changes, growth, learning, or improvement.
 Silence is valid; prefer SKIP when uncertain. Keep posts concise.
 ${HUMANIZER_GUIDE}
+${noveltyDirective}${forceDirective}
 Respond with a Protocol Response defined in the Soul.`;
 }
 

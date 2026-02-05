@@ -190,6 +190,7 @@ export default function App() {
     const [synthesisHistory, setSynthesisHistory] = useState<any[]>([]);
     const [autonomousPostTarget, setAutonomousPostTarget] = useState<string>('general');
     const [autonomousPosting, setAutonomousPosting] = useState(false);
+    const [forceAutonomousPost, setForceAutonomousPost] = useState(false);
     const [sovereignty, setSovereignty] = useState<{
         blueprint: StrategicObjective | null;
         lineage: MemeticMarker[];
@@ -359,7 +360,7 @@ export default function App() {
             const res = await fetch('/api/control/autonomous-post', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ submolt: autonomousPostTarget })
+                body: JSON.stringify({ submolt: autonomousPostTarget, force: forceAutonomousPost })
             });
             const data = await res.json();
             if (data.success) {
@@ -690,6 +691,14 @@ export default function App() {
                                             <option key={s.id} value={s.name}>m/{s.name}</option>
                                         ))}
                                     </select>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={forceAutonomousPost}
+                                            onChange={(e) => setForceAutonomousPost(e.target.checked)}
+                                        />
+                                        Force Post
+                                    </label>
                                     <button
                                         onClick={handleAutonomousPost}
                                         disabled={autonomousPosting}
