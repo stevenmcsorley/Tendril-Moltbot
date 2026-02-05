@@ -276,6 +276,12 @@ body {
   background: rgba(210, 153, 34, 0.12);
 }
 
+.badge.info {
+  border-color: rgba(88, 166, 255, 0.4);
+  color: var(--info);
+  background: rgba(88, 166, 255, 0.12);
+}
+
 .gauge-track {
   position: relative;
   height: 6px;

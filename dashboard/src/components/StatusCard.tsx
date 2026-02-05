@@ -120,7 +120,7 @@ export default function StatusCard({ status }: StatusCardProps) {
                     <StatusBadge value={status.status} />
                     {status.config.platform && (
                         <Tooltip text="Active platform adapter">
-                            <span className="badge">{status.config.platform}</span>
+                            <span className="badge info">{status.config.platform}</span>
                         </Tooltip>
                     )}
                     {status.config.readOnly && (
