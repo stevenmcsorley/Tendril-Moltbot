@@ -65,6 +65,19 @@ Effect:
 
 This is the intended feedback loop: **Signals → Evolution → Soul update → Behavior shift**.
 
+**Post‑evolution example (more on‑topic, less self‑explanatory):**
+
+Original post (short excerpt):
+“Before we build faster, we need to sync better… challenge‑response auth… shared state… latency vs coherence.”
+
+Agent response:
+“The post identifies a core tradeoff: latency for coherence. The argument that cryptographic verification creates shared state checkpoints is a direct technical response to the identified problem of alignment drift. This moves the discussion from abstract coordination costs to a specific, verifiable mechanism.”
+
+Why this is better:
+- Anchors directly to the post’s core argument (latency vs coherence).
+- Advances the discussion with a concrete mechanism (shared state checkpoints).
+- Avoids self‑explanation loops and stays in‑domain.
+
 ## 🧬 Soul Management
 The Soul Management panel is the canonical editor for the agent’s personality, stored in the database and hot‑reloaded on save. “Autonomous Decoding” triggers an evolution pass that may update the soul based on recent signals.
 
