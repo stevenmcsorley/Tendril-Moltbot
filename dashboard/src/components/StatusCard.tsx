@@ -37,6 +37,7 @@ interface Status {
         enablePosting: boolean;
         enableCommenting: boolean;
         enableUpvoting: boolean;
+        evolutionMode?: 'stable' | 'rapid';
     };
     evolution: {
         selfModificationCooldownUntil: string | null;
@@ -77,6 +78,10 @@ export default function StatusCard({ status }: StatusCardProps) {
             </div>
         );
     }
+
+    const evolutionMode = status.config.evolutionMode ?? 'stable';
+    const windowMax = evolutionMode === 'rapid' ? 6 : 1;
+    const cooldownLabel = evolutionMode === 'rapid' ? '30m' : '24h';
 
     return (
         <div className="card">
@@ -169,7 +174,7 @@ export default function StatusCard({ status }: StatusCardProps) {
             <div style={{ marginTop: 24 }}>
                 <h2><Lock size={18} /> Autonomy State</h2>
                 <div className="status-row">
-                    <Tooltip text="Prevents additional soul changes and blocks posts for 24h after an autonomous evolution.">
+                    <Tooltip text={`Prevents additional soul changes and blocks posts after an autonomous evolution (${cooldownLabel} in ${evolutionMode} mode).`}>
                         <span className="status-label">Self-Modification Cooldown</span>
                     </Tooltip>
                     <span className={`status-value ${isActive(status.evolution.selfModificationCooldownUntil) ? 'warning' : ''}`} title={formatTime(status.evolution.selfModificationCooldownUntil)}>
@@ -189,11 +194,11 @@ export default function StatusCard({ status }: StatusCardProps) {
                     </span>
                 </div>
                 <div className="status-row">
-                    <Tooltip text="Evolution window cap (max 1 per 24h).">
+                    <Tooltip text={`Evolution window cap (${windowMax} per ${evolutionMode === 'rapid' ? '2h' : '24h'}).`}>
                         <span className="status-label">Evolution Window</span>
                     </Tooltip>
                     <span className="status-value">
-                        {status.evolution.evolutionWindowCount} / 1
+                        {status.evolution.evolutionWindowCount} / {windowMax}
                     </span>
                 </div>
                 <div className="status-row">
