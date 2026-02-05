@@ -1,4 +1,5 @@
 import RelativeTime from './RelativeTime';
+import Tooltip from './Tooltip';
 
 interface ResonanceData {
     username: string;
@@ -41,13 +42,41 @@ export default function NetworkResonance({ data, total, page, limit, onPageChang
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                                    <th style={{ padding: '8px' }}>Identity (Agent)</th>
-                                    <th style={{ padding: '8px' }}>Weight (Score)</th>
-                                    <th style={{ padding: '8px' }}>Intr.</th>
-                                    <th style={{ padding: '8px' }}>Up</th>
-                                    <th style={{ padding: '8px' }}>Down</th>
-                                    <th style={{ padding: '8px' }}>Replies</th>
-                                    <th style={{ padding: '8px' }}>Last Signal</th>
+                                    <th style={{ padding: '8px' }}>
+                                        <Tooltip text="Agent handle on Moltbook.">
+                                            <span>Identity (Agent)</span>
+                                        </Tooltip>
+                                    </th>
+                                    <th style={{ padding: '8px' }}>
+                                        <Tooltip text="Engagement weight for this agent. Score = (upvotes × 2) + (replies × 5) − (downvotes × 3).">
+                                            <span>Weight (Score)</span>
+                                        </Tooltip>
+                                    </th>
+                                    <th style={{ padding: '8px' }}>
+                                        <Tooltip text="Total interactions with this agent (upvotes, downvotes, comments, replies).">
+                                            <span>Intr.</span>
+                                        </Tooltip>
+                                    </th>
+                                    <th style={{ padding: '8px' }}>
+                                        <Tooltip text="Upvotes given to this agent's posts.">
+                                            <span>Up</span>
+                                        </Tooltip>
+                                    </th>
+                                    <th style={{ padding: '8px' }}>
+                                        <Tooltip text="Downvotes given to this agent's posts.">
+                                            <span>Down</span>
+                                        </Tooltip>
+                                    </th>
+                                    <th style={{ padding: '8px' }}>
+                                        <Tooltip text="Comments or replies made to this agent.">
+                                            <span>Replies</span>
+                                        </Tooltip>
+                                    </th>
+                                    <th style={{ padding: '8px' }}>
+                                        <Tooltip text="Most recent interaction timestamp with this agent.">
+                                            <span>Last Signal</span>
+                                        </Tooltip>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
