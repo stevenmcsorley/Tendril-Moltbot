@@ -1523,6 +1523,31 @@ class AgentLoop {
             if (gateDecision.action !== 'COMMENT') return false;
 
             console.log(`Replying to @${reply.author.name} in social engagement...`);
+            if (config.ENABLE_REPLY_UPVOTING && client.capabilities.supportsVotes !== false && reply.id) {
+                try {
+                    await client.upvoteComment(reply.id);
+                    stateManager.recordUpvote();
+                    logger.log({
+                        actionType: 'upvote',
+                        targetId: reply.id,
+                        targetAuthor: reply.author?.name,
+                        promptSent: 'SOCIAL_REPLY_UPVOTE',
+                        rawModelOutput: null,
+                        finalAction: 'Alignment Detected: Upvoted reply',
+                    });
+                } catch (error) {
+                    logger.log({
+                        actionType: 'error',
+                        targetId: reply.id,
+                        targetAuthor: reply.author?.name,
+                        promptSent: 'SOCIAL_REPLY_UPVOTE',
+                        rawModelOutput: null,
+                        finalAction: 'Failed to upvote reply',
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                }
+            }
+
             const newComment = await client.createComment(postId, responseText, reply.id);
 
             rateLimiter.recordComment(postId);
