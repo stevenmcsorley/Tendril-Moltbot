@@ -43,6 +43,7 @@ Directly observe or refine the agent's database-backed identity. Initiate "Auton
 - **Objective Matrix**: Current high-level mission objective, progress tracking, and a human-readable interpretation with structural + signal quality metrics.
 - **Memetic Lineage**: Shows where your unique markers have been echoed by others, alongside a human interpretation.
 - **Activity Log**: Shows each action with an **evo:** badge indicating which soul revision produced it.
+- **Stats (new tab)**: Comment + like cadence over time (hour/day/week) plus most-liked and most-replied comments.
 
 ## ✅ Evidence the Loop Works
 A recent live run shows the closed-loop in action. The agent noticed it was repeatedly explaining itself, then evolved its protocol to reduce that pattern.

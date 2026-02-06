@@ -6,6 +6,7 @@ import SubmoltList from './components/SubmoltList';
 import SelfDialoguePanel, { TerminalLog } from './components/SelfDialoguePanel';
 import MyPosts from './components/MyPosts';
 import MyComments from './components/MyComments';
+import StatsPanel from './components/StatsPanel';
 import DataManagement from './components/DataManagement';
 import NetworkResonance from './components/NetworkResonance';
 import EvolutionHistory from './components/EvolutionHistory';
@@ -22,7 +23,8 @@ import {
     FileText,
     Cpu,
     Database,
-    ShieldAlert
+    ShieldAlert,
+    BarChart3
 } from 'lucide-react';
 
 interface Status {
@@ -211,7 +213,7 @@ export default function App() {
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
-    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'comments' | 'intelligence' | 'soul_mgmt' | 'data'>('logs');
+    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'comments' | 'stats' | 'intelligence' | 'soul_mgmt' | 'data'>('logs');
     const [isWsConnected, setIsWsConnected] = useState(false);
     const [topology, setTopology] = useState<ResonanceData[]>([]);
     const [topologyPage, setTopologyPage] = useState(1);
@@ -236,6 +238,7 @@ export default function App() {
     const [forceAutonomousPost, setForceAutonomousPost] = useState(false);
     const [myPostsRefreshToken, setMyPostsRefreshToken] = useState(0);
     const [myCommentsRefreshToken, setMyCommentsRefreshToken] = useState(0);
+    const [statsRefreshToken, setStatsRefreshToken] = useState(0);
     const [sovereignty, setSovereignty] = useState<{
         blueprint: StrategicObjective | null;
         lineage: MemeticMarker[];
@@ -538,6 +541,7 @@ export default function App() {
             fetchDataStats()
         ]);
         setLastRefresh(new Date());
+        setStatsRefreshToken(prev => prev + 1);
     }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, filterType]);
 
     const refreshPassive = useCallback(async () => {
@@ -551,6 +555,7 @@ export default function App() {
             fetchDataStats()
         ]);
         setLastRefresh(new Date());
+        setStatsRefreshToken(prev => prev + 1);
     }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats]);
 
     // WebSocket Connection
@@ -597,6 +602,7 @@ export default function App() {
                             }
                             if (msg.payload.actionType === 'comment') {
                                 setMyCommentsRefreshToken(prev => prev + 1);
+                                setStatsRefreshToken(prev => prev + 1);
                             }
                             if (['CLEAR_STABILIZATION', 'ROLLBACK_TRIGGER'].includes(msg.payload.promptSent)) {
                                 fetchStatus();
@@ -605,6 +611,7 @@ export default function App() {
 
                         case 'comment_engagement':
                             setMyCommentsRefreshToken(prev => prev + 1);
+                            setStatsRefreshToken(prev => prev + 1);
                             break;
 
                         case 'stats_update':
@@ -792,6 +799,16 @@ export default function App() {
                             </button>
                         </Tooltip>
 
+                        <Tooltip text="Engagement rhythm, top comments, and response cadence.">
+                            <button
+                                className={activeTab === 'stats' ? 'primary' : ''}
+                                onClick={() => setActiveTab('stats')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                            >
+                                <BarChart3 size={16} /> Stats
+                            </button>
+                        </Tooltip>
+
                         <Tooltip text="High-level cognitive state, autonomous goals, and memetic lineage.">
                             <button
                                 className={activeTab === 'intelligence' ? 'primary' : ''}
@@ -839,6 +856,8 @@ export default function App() {
                         <MyPosts refreshToken={myPostsRefreshToken} />
                     ) : activeTab === 'comments' ? (
                         <MyComments refreshToken={myCommentsRefreshToken} platform={status?.config.platform} />
+                    ) : activeTab === 'stats' ? (
+                        <StatsPanel refreshToken={statsRefreshToken} platform={status?.config.platform} />
                     ) : activeTab === 'intelligence' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>

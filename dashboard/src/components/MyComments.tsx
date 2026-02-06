@@ -41,7 +41,7 @@ export default function MyComments({ refreshToken, platform }: { refreshToken?: 
     const [total, setTotal] = useState(0);
     const [sort, setSort] = useState<'recent' | 'likes' | 'replies'>('recent');
     const [loading, setLoading] = useState(true);
-    const limit = 20;
+    const limit = 100;
 
     useEffect(() => {
         fetchComments();

@@ -134,6 +134,16 @@ export class DatabaseManager {
                 last_seen TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS comment_engagement_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                comment_id TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                like_count INTEGER DEFAULT 0,
+                reply_count INTEGER DEFAULT 0,
+                delta_likes INTEGER DEFAULT 0,
+                delta_replies INTEGER DEFAULT 0
+            );
+
             CREATE TABLE IF NOT EXISTS personas (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,

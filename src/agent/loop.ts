@@ -639,6 +639,7 @@ class AgentLoop {
                         const changed = nextLikes !== currentLikes || nextReplies !== currentReplies;
                         stateManager.updateCommentEngagement(comment.id, stats);
                         if (changed) {
+                            stateManager.recordCommentEngagementEvent(comment.id, currentLikes, currentReplies, nextLikes, nextReplies);
                             getWebSocketBroadcaster().broadcast('comment_engagement', {
                                 id: comment.id,
                                 likes: nextLikes,

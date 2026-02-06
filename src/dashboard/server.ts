@@ -578,6 +578,89 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * GET /api/stats/engagement
+     * Time series for comment frequency and like frequency
+     */
+    app.get('/api/stats/engagement', (req, res) => {
+        try {
+            const bucket = String(req.query.bucket || 'day');
+            const bucketType = bucket === 'hour' || bucket === 'week' ? bucket : 'day';
+            const now = new Date();
+            let bucketMs = 24 * 60 * 60 * 1000;
+            let rangeMs = 30 * bucketMs;
+            if (bucketType === 'hour') {
+                bucketMs = 60 * 60 * 1000;
+                rangeMs = 48 * bucketMs;
+            } else if (bucketType === 'week') {
+                bucketMs = 7 * 24 * 60 * 60 * 1000;
+                rangeMs = 26 * bucketMs;
+            }
+            const start = new Date(now.getTime() - rangeMs);
+            const startIso = start.toISOString();
+
+            const db = getDatabaseManager().getDb();
+            const commentRows = db.prepare('SELECT timestamp FROM comments WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string }>;
+            const likeRows = db.prepare('SELECT timestamp, delta_likes FROM comment_engagement_events WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string; delta_likes: number }>;
+
+            const buckets: Array<{ timestamp: string; comments: number; likes: number }> = [];
+            const bucketCount = Math.floor((now.getTime() - start.getTime()) / bucketMs) + 1;
+            for (let i = 0; i < bucketCount; i++) {
+                const t = new Date(start.getTime() + i * bucketMs);
+                buckets.push({ timestamp: t.toISOString(), comments: 0, likes: 0 });
+            }
+
+            const indexFor = (dateStr: string) => {
+                const time = new Date(dateStr).getTime();
+                if (!Number.isFinite(time)) return -1;
+                const idx = Math.floor((time - start.getTime()) / bucketMs);
+                return idx >= 0 && idx < buckets.length ? idx : -1;
+            };
+
+            for (const row of commentRows) {
+                const idx = indexFor(row.timestamp);
+                if (idx >= 0) buckets[idx].comments += 1;
+            }
+            for (const row of likeRows) {
+                const idx = indexFor(row.timestamp);
+                if (idx >= 0) buckets[idx].likes += Math.max(0, row.delta_likes || 0);
+            }
+
+            res.json({
+                bucket: bucketType,
+                start: start.toISOString(),
+                end: now.toISOString(),
+                series: buckets
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to fetch engagement stats',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
+     * GET /api/stats/top-comments
+     * Most liked and most replied comments
+     */
+    app.get('/api/stats/top-comments', (req, res) => {
+        try {
+            const db = getDatabaseManager().getDb();
+            const topLiked = db.prepare('SELECT * FROM comments ORDER BY like_count DESC, timestamp DESC LIMIT 1').get() as any;
+            const topReplied = db.prepare('SELECT * FROM comments ORDER BY reply_count DESC, timestamp DESC LIMIT 1').get() as any;
+            res.json({
+                topLiked: topLiked || null,
+                topReplied: topReplied || null
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to fetch top comments',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
      * GET /api/submolts
      * Get list of submolts created by the agent
      */

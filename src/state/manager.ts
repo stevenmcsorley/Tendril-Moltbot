@@ -832,6 +832,25 @@ export class StateManager {
         }
     }
 
+    recordCommentEngagementEvent(commentId: string, prevLikes: number, prevReplies: number, nextLikes: number, nextReplies: number): void {
+        if (!commentId) return;
+        const db = getDatabaseManager().getDb();
+        const deltaLikes = nextLikes - prevLikes;
+        const deltaReplies = nextReplies - prevReplies;
+        if (deltaLikes === 0 && deltaReplies === 0) return;
+        db.prepare(`
+            INSERT INTO comment_engagement_events (comment_id, timestamp, like_count, reply_count, delta_likes, delta_replies)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(
+            commentId,
+            new Date().toISOString(),
+            nextLikes,
+            nextReplies,
+            deltaLikes,
+            deltaReplies
+        );
+    }
+
     removeMyPost(postId: string): void {
         const db = getDatabaseManager().getDb();
         db.prepare('DELETE FROM posts WHERE id = ?').run(postId);
