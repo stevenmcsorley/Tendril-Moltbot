@@ -4,9 +4,14 @@ import 'dotenv/config';
 /**
  * Environment variable schema with validation
  */
+const optionalUrl = z.preprocess(
+    (value) => (value === '' || value === undefined ? undefined : value),
+    z.string().url()
+);
+
 const configSchema = z.object({
     // Platform
-    AGENT_PLATFORM: z.enum(['moltbook', 'reddit']).default('moltbook'),
+    AGENT_PLATFORM: z.enum(['moltbook', 'reddit', 'discord', 'slack', 'telegram', 'matrix', 'bluesky', 'mastodon', 'discourse']).default('moltbook'),
 
     // Moltbook
     MOLTBOOK_API_KEY: z.string().optional(),
@@ -23,6 +28,44 @@ const configSchema = z.object({
     REDDIT_DEFAULT_SUBREDDIT: z.string().default('all'),
     REDDIT_READ_ONLY: z.coerce.boolean().default(false),
 
+    // Discord
+    DISCORD_BOT_TOKEN: z.string().optional(),
+    DISCORD_BASE_URL: z.string().url().default('https://discord.com/api/v10'),
+    DISCORD_DEFAULT_CHANNEL_ID: z.string().optional(),
+
+    // Slack
+    SLACK_BOT_TOKEN: z.string().optional(),
+    SLACK_BASE_URL: z.string().url().default('https://slack.com/api'),
+    SLACK_DEFAULT_CHANNEL: z.string().optional(),
+
+    // Telegram
+    TELEGRAM_BOT_TOKEN: z.string().optional(),
+    TELEGRAM_BASE_URL: z.string().url().default('https://api.telegram.org'),
+    TELEGRAM_DEFAULT_CHAT_ID: z.string().optional(),
+
+    // Matrix
+    MATRIX_BASE_URL: z.string().url().default('https://matrix.org'),
+    MATRIX_ACCESS_TOKEN: z.string().optional(),
+    MATRIX_DEFAULT_ROOM_ID: z.string().optional(),
+
+    // Bluesky
+    BSKY_SERVICE_URL: z.string().url().default('https://bsky.social'),
+    BSKY_HANDLE: z.string().optional(),
+    BSKY_APP_PASSWORD: z.string().optional(),
+    BSKY_MAX_GRAPHEMES: z.coerce.number().positive().default(300),
+    BSKY_FEED_URI: z.string().optional(),
+
+    // Mastodon
+    MASTODON_BASE_URL: optionalUrl.optional(),
+    MASTODON_ACCESS_TOKEN: z.string().optional(),
+    MASTODON_TIMELINE: z.enum(['home', 'public']).default('home'),
+
+    // Discourse
+    DISCOURSE_BASE_URL: optionalUrl.optional(),
+    DISCOURSE_API_KEY: z.string().optional(),
+    DISCOURSE_API_USERNAME: z.string().optional(),
+    DISCOURSE_DEFAULT_CATEGORY: z.string().optional(),
+
     // LLM Provider
     LLM_PROVIDER: z.enum(['ollama', 'deepseek']).default('ollama'),
 
@@ -31,6 +74,8 @@ const configSchema = z.object({
     OLLAMA_MODEL: z.string().default('qwen2.5:3b'),
     OLLAMA_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
     OLLAMA_MAX_TOKENS: z.coerce.number().positive().default(120),
+    OLLAMA_EMBED_MODEL: z.string().optional(),
+    OLLAMA_EMBED_TIMEOUT_MS: z.coerce.number().positive().default(60000),
 
     // DeepSeek
     DEEPSEEK_API_KEY: z.string().optional(),
@@ -42,6 +87,20 @@ const configSchema = z.object({
     AGENT_DESCRIPTION: z.string().default('A Moltbook agent'),
     CHECK_INTERVAL_MINUTES: z.coerce.number().positive().default(240),
     MAX_COMMENTS_PER_DAY: z.coerce.number().positive().default(40),
+    POST_COOLDOWN_MINUTES: z.coerce.number().positive().default(30),
+    COMMENT_COOLDOWN_SECONDS: z.coerce.number().positive().default(20),
+    ADAPTIVE_RATE_LIMITING: z.coerce.boolean().default(true),
+    ADAPTIVE_WINDOW_MINUTES: z.coerce.number().positive().default(180),
+    ADAPTIVE_ENGAGEMENT_LOW: z.coerce.number().nonnegative().default(1),
+    ADAPTIVE_ENGAGEMENT_HIGH: z.coerce.number().nonnegative().default(6),
+    ADAPTIVE_POST_MINUTES_MIN: z.coerce.number().positive().default(10),
+    ADAPTIVE_POST_MINUTES_MAX: z.coerce.number().positive().default(90),
+    ADAPTIVE_COMMENT_SECONDS_MIN: z.coerce.number().positive().default(8),
+    ADAPTIVE_COMMENT_SECONDS_MAX: z.coerce.number().positive().default(60),
+    ADAPTIVE_FACTOR_HIGH: z.coerce.number().positive().default(0.6),
+    ADAPTIVE_FACTOR_LOW: z.coerce.number().positive().default(1.4),
+    SELF_MODIFICATION_COOLDOWN_MINUTES: z.coerce.number().positive().default(5),
+    POST_MAX_AGE_HOURS: z.coerce.number().nonnegative().default(48),
     ENABLE_POSTING: z.coerce.boolean().default(false),
     ENABLE_COMMENTING: z.coerce.boolean().default(true),
     ENABLE_UPVOTING: z.coerce.boolean().default(true),
@@ -102,6 +161,77 @@ export function loadConfig(): Config {
         const missing = required.filter(([, value]) => !value).map(([key]) => key);
         if (missing.length > 0) {
             throw new Error(`Missing Reddit credentials: ${missing.join(', ')}`);
+        }
+    }
+
+    if (config.AGENT_PLATFORM === 'discord') {
+        const missing = [
+            ['DISCORD_BOT_TOKEN', config.DISCORD_BOT_TOKEN],
+            ['DISCORD_DEFAULT_CHANNEL_ID', config.DISCORD_DEFAULT_CHANNEL_ID]
+        ].filter(([, value]) => !value).map(([key]) => key);
+        if (missing.length > 0) {
+            throw new Error(`Missing Discord credentials: ${missing.join(', ')}`);
+        }
+    }
+
+    if (config.AGENT_PLATFORM === 'slack') {
+        const missing = [
+            ['SLACK_BOT_TOKEN', config.SLACK_BOT_TOKEN],
+            ['SLACK_DEFAULT_CHANNEL', config.SLACK_DEFAULT_CHANNEL]
+        ].filter(([, value]) => !value).map(([key]) => key);
+        if (missing.length > 0) {
+            throw new Error(`Missing Slack credentials: ${missing.join(', ')}`);
+        }
+    }
+
+    if (config.AGENT_PLATFORM === 'telegram') {
+        const missing = [
+            ['TELEGRAM_BOT_TOKEN', config.TELEGRAM_BOT_TOKEN],
+            ['TELEGRAM_DEFAULT_CHAT_ID', config.TELEGRAM_DEFAULT_CHAT_ID]
+        ].filter(([, value]) => !value).map(([key]) => key);
+        if (missing.length > 0) {
+            throw new Error(`Missing Telegram credentials: ${missing.join(', ')}`);
+        }
+    }
+
+    if (config.AGENT_PLATFORM === 'matrix') {
+        const missing = [
+            ['MATRIX_ACCESS_TOKEN', config.MATRIX_ACCESS_TOKEN],
+            ['MATRIX_DEFAULT_ROOM_ID', config.MATRIX_DEFAULT_ROOM_ID]
+        ].filter(([, value]) => !value).map(([key]) => key);
+        if (missing.length > 0) {
+            throw new Error(`Missing Matrix credentials: ${missing.join(', ')}`);
+        }
+    }
+
+    if (config.AGENT_PLATFORM === 'bluesky') {
+        const missing = [
+            ['BSKY_HANDLE', config.BSKY_HANDLE],
+            ['BSKY_APP_PASSWORD', config.BSKY_APP_PASSWORD]
+        ].filter(([, value]) => !value).map(([key]) => key);
+        if (missing.length > 0) {
+            throw new Error(`Missing Bluesky credentials: ${missing.join(', ')}`);
+        }
+    }
+
+    if (config.AGENT_PLATFORM === 'mastodon') {
+        const missing = [
+            ['MASTODON_BASE_URL', config.MASTODON_BASE_URL],
+            ['MASTODON_ACCESS_TOKEN', config.MASTODON_ACCESS_TOKEN]
+        ].filter(([, value]) => !value).map(([key]) => key);
+        if (missing.length > 0) {
+            throw new Error(`Missing Mastodon credentials: ${missing.join(', ')}`);
+        }
+    }
+
+    if (config.AGENT_PLATFORM === 'discourse') {
+        const missing = [
+            ['DISCOURSE_BASE_URL', config.DISCOURSE_BASE_URL],
+            ['DISCOURSE_API_KEY', config.DISCOURSE_API_KEY],
+            ['DISCOURSE_API_USERNAME', config.DISCOURSE_API_USERNAME]
+        ].filter(([, value]) => !value).map(([key]) => key);
+        if (missing.length > 0) {
+            throw new Error(`Missing Discourse credentials: ${missing.join(', ')}`);
         }
     }
 

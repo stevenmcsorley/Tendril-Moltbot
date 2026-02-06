@@ -10,6 +10,7 @@ import { getAgentLoop } from './agent/loop.js';
 import { getActivityLogger } from './logging/activity-log.js';
 import { getSocialClient } from './platforms/index.js';
 import { getLLMClient } from './llm/factory.js';
+import { getStateManager } from './state/manager.js';
 
 import { getDialogueLoop } from './agent/dialogue.js';
 
@@ -53,6 +54,10 @@ async function main(): Promise<void> {
         try {
             me = await client.getMe();
             console.log(`✓ ${config.AGENT_PLATFORM} connected as @${me.name}`);
+            const state = getStateManager();
+            if (me?.name) {
+                state.setPlatformHandle(me.name);
+            }
             break;
         } catch (error) {
             attempts++;

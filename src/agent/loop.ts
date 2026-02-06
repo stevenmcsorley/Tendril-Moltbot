@@ -297,7 +297,7 @@ class AgentLoop {
                     getLineageManager().detectFork(post.content || '', post.author?.name);
 
                     // Apply heuristic filter
-                    const filterResult = filterPost(post, config.AGENT_NAME);
+                    const filterResult = filterPost(post, stateManager.getPlatformHandle() || config.AGENT_NAME);
                     if (!filterResult.shouldProcess) {
                         if (filterResult.reason === 'already_seen') {
                             alreadySeenCount++;
@@ -363,7 +363,7 @@ class AgentLoop {
                         if (!isSkip && canComment && commentRaw) {
                             const counterpartyStats = this.getCounterpartyStats(post.author?.name);
                             const newFrame = this.isNewFrame(commentRaw, counterpartyStats.lastResponse);
-                            const gateDecision = applyAutonomyGates(this.gateState ?? computeGateState(), {
+                            const gateDecision = applyAutonomyGates(computeGateState(), {
                                 desiredAction: 'COMMENT',
                                 confidence,
                                 mode,
@@ -468,7 +468,7 @@ class AgentLoop {
 
             // Try proactive synthesis
             if (feed.posts.length > 0) {
-                await this.tryProactivePost(feed.posts, this.gateState ?? computeGateState());
+                await this.tryProactivePost(feed.posts, computeGateState());
             }
 
             // Social Engagement: Check for replies to my posts/comments
@@ -600,6 +600,18 @@ class AgentLoop {
             });
             return;
         }
+        if (client.capabilities.supportsVotes === false) {
+            logger.log({
+                actionType: 'skip',
+                targetId: post.id,
+                targetSubmolt: post.submolt?.name,
+                targetAuthor: post.author?.name,
+                promptSent: prompt,
+                rawModelOutput: rawOutput,
+                finalAction: `Upvote skipped: ${client.capabilities.platform} does not support voting.`
+            });
+            return;
+        }
 
         try {
             await client.upvotePost(post.id);
@@ -643,6 +655,18 @@ class AgentLoop {
                 promptSent: prompt,
                 rawModelOutput: rawOutput,
                 finalAction: 'Read-only mode: downvote skipped.'
+            });
+            return;
+        }
+        if (client.capabilities.supportsDownvotes === false || client.capabilities.supportsVotes === false) {
+            logger.log({
+                actionType: 'skip',
+                targetId: post.id,
+                targetSubmolt: post.submolt?.name,
+                targetAuthor: post.author?.name,
+                promptSent: prompt,
+                rawModelOutput: rawOutput,
+                finalAction: `Downvote skipped: ${client.capabilities.platform} does not support downvotes.`
             });
             return;
         }
@@ -758,6 +782,7 @@ class AgentLoop {
                 novelty,
                 allowLowNovelty: options.allowLowNovelty,
                 ignoreSynthesisCooldown: !!options.forcePost,
+                ignoreUncertainty: !!options.forcePost,
                 multiSourceContext,
                 lastPostAt
             });
@@ -942,7 +967,7 @@ class AgentLoop {
                         client,
                         stateManager,
                         rateLimiter,
-                        this.gateState ?? computeGateState()
+                        computeGateState()
                     );
                     if (replied) repliesInThisPost++;
                 }
@@ -991,7 +1016,7 @@ class AgentLoop {
                             client,
                             stateManager,
                             rateLimiter,
-                            this.gateState ?? computeGateState()
+                            computeGateState()
                         );
                         if (replied) repliesInThisPost++;
                     }
@@ -1080,7 +1105,7 @@ class AgentLoop {
                 limit: 25,
                 submolt: targetSubmolt || undefined
             });
-            const gateState = this.gateState ?? computeGateState();
+            const gateState = computeGateState();
             if (feed.posts.length === 0) {
                 await this.trySeedPost(targetSubmolt, gateState, true, forceMode);
             } else {
@@ -1148,6 +1173,7 @@ class AgentLoop {
             novelty,
             allowLowNovelty,
             ignoreSynthesisCooldown: forcePost,
+            ignoreUncertainty: forcePost,
             multiSourceContext: true,
             lastPostAt
         });
@@ -1237,11 +1263,15 @@ class AgentLoop {
 
         // Skip if already replied or if it's our own comment
         if (stateManager.hasRepliedToSocial(reply.id)) return false;
-        if (reply.author.name.toLowerCase() === config.AGENT_NAME.toLowerCase()) return false;
+        const selfHandle = stateManager.getPlatformHandle() || config.AGENT_NAME;
+        if (reply.author.name.toLowerCase() === selfHandle.toLowerCase()) return false;
 
         // Skip if too old (> 48h)
         const age = Date.now() - new Date(reply.created_at).getTime();
         if (age > 48 * 60 * 60 * 1000) return false;
+
+        // Record inbound engagement signal (reply seen)
+        stateManager.recordEngagementSignal();
 
         // Rate limit check
         if (!rateLimiter.canComment()) {
@@ -1391,16 +1421,20 @@ class AgentLoop {
 
     private containsForbiddenPublicTerms(text: string): boolean {
         if (!text) return false;
-        const patterns = [
-            /\bevolution\b/i,
-            /\bevolve(d|s|ing)?\b/i,
+        const hardBans = [
             /\bsoul\b/i,
-            /\bgrowth\b/i,
-            /\blearning\b/i,
-            /\bimprovement\b/i,
             /self[-\s]?modification/i
         ];
-        return patterns.some((pattern) => pattern.test(text));
+        if (hardBans.some((pattern) => pattern.test(text))) return true;
+
+        const selfRef = /\b(i|we|my|our|agent|protocol)\b/i;
+        const sensitive = /\b(evolution|evolve(d|s|ing)?|growth|learning|improvement)\b/i;
+        const window = 80; // characters
+
+        const forward = new RegExp(`${selfRef.source}[^.]{0,${window}}${sensitive.source}`, 'i');
+        const backward = new RegExp(`${sensitive.source}[^.]{0,${window}}${selfRef.source}`, 'i');
+
+        return forward.test(text) || backward.test(text);
     }
 
     private isAmbiguousText(text: string): boolean {

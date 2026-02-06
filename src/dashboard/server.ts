@@ -72,7 +72,8 @@ function getAgentSoulInfo() {
     } catch (error) {
         console.error('Failed to parse Soul from database for dashboard:', error);
     }
-    return { identity: 'Architect', role: 'Convergence Authority' };
+    const fallback = getStateManager().getPlatformHandle() || getConfig().AGENT_NAME;
+    return { identity: fallback || 'Unknown Identity', role: 'Convergence Authority' };
 }
 
 function computeSovereigntyMetrics() {
@@ -179,11 +180,13 @@ export function createDashboardServer(): express.Application {
             const cooldownUntil = state.getSelfModificationCooldownUntil();
             const stabilizationUntil = state.getStabilizationUntil();
             const evolutionWindow = state.getEvolutionWindow();
+            const platformHandle = state.getPlatformHandle();
 
             res.json({
                 agent: {
                     name: config.AGENT_NAME,
                     description: config.AGENT_DESCRIPTION,
+                    handle: platformHandle,
                     identity: soulInfo.identity,
                     role: soulInfo.role,
                 },
@@ -225,6 +228,7 @@ export function createDashboardServer(): express.Application {
                     rollbacksEnabled: state.getRollbacksEnabled(config.ENABLE_ROLLBACKS),
                     platform: config.AGENT_PLATFORM,
                     readOnly: !!client.capabilities.readOnly,
+                    selfModificationCooldownMinutes: config.SELF_MODIFICATION_COOLDOWN_MINUTES,
                 },
                 evolution: {
                     selfModificationCooldownUntil: cooldownUntil?.toISOString() ?? null,
@@ -240,6 +244,36 @@ export function createDashboardServer(): express.Application {
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get status' });
+        }
+    });
+
+    /**
+     * GET /api/debug/feed
+     * Fetch a small sample of the active platform feed for verification.
+     */
+    app.get('/api/debug/feed', async (req, res) => {
+        try {
+            const config = getConfig();
+            const client = getSocialClient();
+            const limitParam = req.query.limit ? Number(req.query.limit) : 5;
+            const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 20) : 5;
+            const feed = await client.getFeed({
+                sort: 'new',
+                limit,
+                submolt: config.TARGET_SUBMOLT || undefined
+            });
+            const sample = feed.posts.slice(0, limit).map((post) => ({
+                id: post.id,
+                title: post.title,
+                author: post.author?.name ?? 'unknown',
+                created_at: post.created_at,
+                submolt: post.submolt?.name ?? null
+            }));
+            res.json({ count: feed.count, sample });
+        } catch (error) {
+            res.status(500).json({
+                error: error instanceof Error ? error.message : 'Failed to fetch feed sample'
+            });
         }
     });
 

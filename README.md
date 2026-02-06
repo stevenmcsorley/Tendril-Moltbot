@@ -130,8 +130,7 @@ Every evolution is persisted with a required metadata schema, a rollback snapsho
 - Rollback restores the previous soul snapshot and enters a 48h stabilization window.
 
 **Cooldown & stabilization:**
-- After any evolution: self‑modification cooldown depends on `EVOLUTION_MODE`  
-  rapid = 30 minutes, stable = 24 hours.
+- After any evolution: self‑modification cooldown is controlled by `SELF_MODIFICATION_COOLDOWN_MINUTES` (default 5 minutes).
 - Stabilization blocks posts and tightens engagement.
 - Dashboard shows cooldown/stabilization timers and the last evolution ID; an Autonomy Lock badge appears during lock periods.
 
@@ -183,12 +182,22 @@ Every evolution is persisted with a required metadata schema, a rollback snapsho
 - **Reddit Read‑Only**: set `REDDIT_READ_ONLY=true` to disable posting/commenting/voting. Only `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT` are required.
 - **Submolts vs Subreddits**: when running on Reddit, submolts map to subreddit names. If no target is provided, `REDDIT_DEFAULT_SUBREDDIT` is used.
 - **Limitations**: subreddit creation is not supported via the Reddit API, so `CREATE_SUBMOLT` is automatically downgraded to `POST`.
+- **Discord**: set `AGENT_PLATFORM=discord`, `DISCORD_BOT_TOKEN`, `DISCORD_DEFAULT_CHANNEL_ID`. Submolt maps to a channel ID.
+- **Slack**: set `AGENT_PLATFORM=slack`, `SLACK_BOT_TOKEN`, `SLACK_DEFAULT_CHANNEL`. Submolt maps to a channel ID.
+- **Telegram**: set `AGENT_PLATFORM=telegram`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_DEFAULT_CHAT_ID`. Submolt maps to a chat ID.
+- **Matrix**: set `AGENT_PLATFORM=matrix`, `MATRIX_ACCESS_TOKEN`, `MATRIX_DEFAULT_ROOM_ID`. Submolt maps to a room ID.
+- **Bluesky**: set `AGENT_PLATFORM=bluesky`, `BSKY_HANDLE`, `BSKY_APP_PASSWORD`. Optionally set `BSKY_FEED_URI` to a custom feed (e.g. the `whats-hot` generator). `BSKY_MAX_GRAPHEMES` caps post length (default 300).
+- **Mastodon**: set `AGENT_PLATFORM=mastodon`, `MASTODON_BASE_URL`, `MASTODON_ACCESS_TOKEN`. Timeline only (no submolts).
+- **Discourse**: set `AGENT_PLATFORM=discourse`, `DISCOURSE_BASE_URL`, `DISCOURSE_API_KEY`, `DISCOURSE_API_USERNAME`. Uses latest feed or `DISCOURSE_DEFAULT_CATEGORY`.
+- **Voting support**: chat-style platforms do not support native up/downvotes, so voting is skipped automatically.
 
 ### Operational Limits (Sovereign Mode)
 - **Word Limit**: 150 words (Deep Engagement).
-- **Posts**: 1 per 30 minutes.
-- **Comments**: 1 per 20 seconds (Max 40/day by default).
+- **Posts**: `POST_COOLDOWN_MINUTES` (default 30m).
+- **Comments**: `COMMENT_COOLDOWN_SECONDS` (default 20s), capped by `MAX_COMMENTS_PER_DAY` (default 40).
 - **Auto-Backoff**: Transactional retry logic for 429 rate limits.
+- **Adaptive Rate Limiting** (optional): when enabled, cooldowns scale within min/max bounds based on recent engagement signals (`ADAPTIVE_*` settings).
+- **Post Freshness Filter**: `POST_MAX_AGE_HOURS` (default 48). Set to `0` to disable age filtering.
 
 ---
 
@@ -209,10 +218,11 @@ It’s the compression layer: the agent turns many recent memories into a few hi
 This powers the **Memetic Synthesis Archive** and keeps the agent from repeating itself.
 
 ## 🔎 Embeddings
-- Generated via Ollama `/api/embeddings` using `OLLAMA_MODEL` (same model as generation).
+- Generated via Ollama `/api/embeddings` using `OLLAMA_EMBED_MODEL` (falls back to `OLLAMA_MODEL`).
 - Stored in SQLite under `memories.embedding_json`.
 - Used for resonant recall in prompts (comments, posts, replies) and for synthesis clustering.
 - If the main LLM provider is DeepSeek, embeddings still come from Ollama (DeepSeek embeddings are not supported here).
+- Timeout is controlled by `OLLAMA_EMBED_TIMEOUT_MS`.
 
 ---
 

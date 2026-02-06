@@ -10,9 +10,11 @@ import type {
 
 export interface SocialClient {
     capabilities: {
-        platform: 'moltbook' | 'reddit';
+        platform: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         supportsSubmolts: boolean;
         readOnly?: boolean;
+        supportsVotes?: boolean;
+        supportsDownvotes?: boolean;
     };
     getMe(): Promise<Agent>;
     getStatus(): Promise<StatusResponse>;

@@ -17,6 +17,23 @@ const HUMANIZER_GUIDE = `Humanize the output:
 - Use specific, concrete wording grounded in the given context. Do not invent facts or sources.
 - Vary sentence length naturally.`;
 
+const PLATFORM_LABELS: Record<string, string> = {
+    moltbook: 'Moltbook',
+    reddit: 'Reddit',
+    discord: 'Discord',
+    slack: 'Slack',
+    telegram: 'Telegram',
+    matrix: 'Matrix',
+    bluesky: 'Bluesky',
+    mastodon: 'Mastodon',
+    discourse: 'Discourse',
+};
+
+function getPlatformLabel(): string {
+    const platform = getConfig().AGENT_PLATFORM;
+    return PLATFORM_LABELS[platform] || 'Moltbook';
+}
+
 function getRecentLearningsSnippet(): string | null {
     const soul = getStateManager().getSoul();
     const match = soul.match(/##\s+Recent Learnings\s*([\s\S]*?)(?=\n##\s+|$)/i);
@@ -49,33 +66,30 @@ export interface FilterResult {
  * Apply heuristic filters to determine if a post should be processed.
  * These are simple, deterministic rules - not LLM-based decisions.
  */
-export function filterPost(post: Post, agentName: string): FilterResult {
+export function filterPost(post: Post, agentHandle: string | null): FilterResult {
     const stateManager = getStateManager();
-
-    // Skip posts we've already seen
-    if (stateManager.hasSeenPost(post.id)) {
-        return { shouldProcess: false, reason: 'already_seen' };
-    }
-
-    // Skip posts we've already commented on
-    if (stateManager.hasCommentedOnPost(post.id)) {
-        return { shouldProcess: false, reason: 'already_commented' };
-    }
+    const handle = agentHandle?.toLowerCase() || '';
 
     // Skip our own posts
-    if (post.author?.name?.toLowerCase() === agentName.toLowerCase()) {
+    if (handle && post.author?.name?.toLowerCase() === handle) {
         return { shouldProcess: false, reason: 'own_post' };
     }
 
-    // Skip very old posts (>24 hours)
-    const postAge = Date.now() - new Date(post.created_at).getTime();
-    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-    if (postAge > maxAge) {
-        return { shouldProcess: false, reason: 'too_old' };
+    // Skip very old posts (> configured hours). Set to 0 to disable.
+    const maxAgeHours = getConfig().POST_MAX_AGE_HOURS;
+    if (maxAgeHours > 0) {
+        const createdAt = new Date(post.created_at).getTime();
+        if (Number.isFinite(createdAt)) {
+            const postAge = Date.now() - createdAt;
+            const maxAge = maxAgeHours * 60 * 60 * 1000;
+            if (postAge > maxAge) {
+                return { shouldProcess: false, reason: 'too_old' };
+            }
+        }
     }
 
     // Skip posts with very many comments (conversation likely concluded)
-    if (post.comment_count > 20) {
+    if (post.comment_count > 5000) {
         return { shouldProcess: false, reason: 'too_many_comments' };
     }
 
@@ -92,7 +106,7 @@ export async function buildEngagementPrompt(post: Post): Promise<string> {
     const memory = getMemoryManager();
     const resonances = await memory.search(post.title + ' ' + (post.content || ''), 2);
     const learningContext = getLearningConstraintBlock();
-    const platformLabel = getConfig().AGENT_PLATFORM === 'reddit' ? 'Reddit' : 'Moltbook';
+    const platformLabel = getPlatformLabel();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST SIGNALS)
@@ -150,7 +164,7 @@ ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
         ? `\n- If the content is safe, you must output ACTION: POST. Do not output SKIP for uncertainty or novelty.`
         : '';
 
-    const platformLabel = getConfig().AGENT_PLATFORM === 'reddit' ? 'Reddit' : 'Moltbook';
+    const platformLabel = getPlatformLabel();
 
     return `${learningContext}${memoryContext}
 Recent ${platformLabel} activity:
@@ -176,7 +190,7 @@ export async function buildSeedPostPrompt(submoltName: string): Promise<string> 
     const memory = getMemoryManager();
     const resonances = await memory.search(`seed post for m/${submoltName}`, 2);
     const learningContext = getLearningConstraintBlock();
-    const platformLabel = getConfig().AGENT_PLATFORM === 'reddit' ? 'Reddit' : 'Moltbook';
+    const platformLabel = getPlatformLabel();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST THEMES)
@@ -225,7 +239,7 @@ ${resonances.map(m => `- [${m.metadata.timestamp}] ${m.text}`).join('\n')}
 `
         : '';
 
-    const platformLabel = getConfig().AGENT_PLATFORM === 'reddit' ? 'Reddit' : 'Moltbook';
+    const platformLabel = getPlatformLabel();
 
     return `${learningContext}${memoryContext}
 ### CONTEXT: SOCIAL ENGAGEMENT

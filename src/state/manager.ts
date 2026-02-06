@@ -7,6 +7,7 @@
 
 import { getDatabaseManager } from './db.js';
 import { DEFAULT_SOUL } from '../agent/default-soul.js';
+import { getConfig } from '../config.js';
 
 export interface AgentState {
     lastHeartbeatAt: string | null;
@@ -43,6 +44,7 @@ export class StateManager {
         this.checkDailyReset();
         this.migrateSoulIfNeeded();
         this.cleanupDeprecatedKeys();
+        this.handlePlatformChange();
     }
 
     private getKV(key: string, defaultValue: any): any {
@@ -152,6 +154,41 @@ export class StateManager {
         } catch (error) {
             console.error('Failed to clean deprecated soul keys:', error);
         }
+    }
+
+    private handlePlatformChange(): void {
+        try {
+            const current = getConfig().AGENT_PLATFORM;
+            const last = this.getKV('platform_active', null) as string | null;
+            if (last && last !== current) {
+                const db = getDatabaseManager().getDb();
+                db.prepare('DELETE FROM posts').run();
+                db.prepare('DELETE FROM comments').run();
+                db.prepare('DELETE FROM topology').run();
+                this.setKV('posts_seen', []);
+                this.setKV('posts_commented', []);
+                this.setKV('social_replied_to', []);
+                this.setKV('created_submolts', []);
+                this.setKV('last_post_at', null);
+                this.setKV('last_comment_at', null);
+                this.setKV('upvotes_given', 0);
+                this.setKV('downvotes_given', 0);
+                this.setKV('platform_handle', null);
+                console.warn(`⚠️ Platform changed from ${last} to ${current}. Cleared platform-specific state.`);
+            }
+            this.setKV('platform_active', current);
+        } catch (error) {
+            console.error('Failed to handle platform change:', error);
+        }
+    }
+
+    getPlatformHandle(): string | null {
+        return this.getKV('platform_handle', null);
+    }
+
+    setPlatformHandle(handle: string): void {
+        if (!handle) return;
+        this.setKV('platform_handle', handle);
     }
 
     /**
@@ -341,6 +378,25 @@ export class StateManager {
             replied.push(targetId);
             this.setKV('social_replied_to', replied.slice(-1000));
         }
+    }
+
+    recordEngagementSignal(): void {
+        const events = this.getKV('engagement_events', []) as string[];
+        events.push(new Date().toISOString());
+        const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+        const pruned = events.filter(ts => new Date(ts).getTime() >= cutoff).slice(-1000);
+        this.setKV('engagement_events', pruned);
+    }
+
+    getRecentEngagementCount(windowMs: number): number {
+        const events = this.getKV('engagement_events', []) as string[];
+        if (!events.length) return 0;
+        const cutoff = Date.now() - windowMs;
+        const pruned = events.filter(ts => new Date(ts).getTime() >= cutoff);
+        if (pruned.length !== events.length) {
+            this.setKV('engagement_events', pruned.slice(-1000));
+        }
+        return pruned.length;
     }
 
     hasRepliedToSocial(targetId: string): boolean {

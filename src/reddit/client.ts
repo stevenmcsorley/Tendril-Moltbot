@@ -28,7 +28,9 @@ export class RedditClient implements SocialClient {
     capabilities = {
         platform: 'reddit' as const,
         supportsSubmolts: false,
-        readOnly: false
+        readOnly: false,
+        supportsVotes: true,
+        supportsDownvotes: true
     };
 
     private baseUrl: string;

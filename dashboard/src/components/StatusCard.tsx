@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 interface Status {
-    agent: { name: string; description: string; identity?: string; role?: string };
+    agent: { name: string; description: string; handle?: string; identity?: string; role?: string };
     status: 'running' | 'paused' | 'idle';
     metrics: {
         upvotesGiven: number;
@@ -38,8 +38,9 @@ interface Status {
         enableCommenting: boolean;
         enableUpvoting: boolean;
         evolutionMode?: 'stable' | 'rapid';
-        platform?: 'moltbook' | 'reddit';
+        platform?: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         readOnly?: boolean;
+        selfModificationCooldownMinutes?: number;
     };
     evolution: {
         selfModificationCooldownUntil: string | null;
@@ -83,20 +84,45 @@ export default function StatusCard({ status }: StatusCardProps) {
 
     const evolutionMode = status.config.evolutionMode ?? 'stable';
     const windowMax = evolutionMode === 'rapid' ? 6 : 1;
-    const cooldownLabel = evolutionMode === 'rapid' ? '30m' : '24h';
+    const cooldownMinutes = status.config.selfModificationCooldownMinutes ?? (evolutionMode === 'rapid' ? 30 : 1440);
+    const cooldownLabel = cooldownMinutes >= 60
+        ? `${Math.round(cooldownMinutes / 60)}h`
+        : `${cooldownMinutes}m`;
+
+    const handle = status.agent.handle || status.agent.name;
+    const displayHandle = handle ? (handle.startsWith('@') ? handle : `@${handle}`) : '—';
+    const platform = status.config.platform;
+    const profileUrl = (() => {
+        const plainHandle = handle?.startsWith('@') ? handle.slice(1) : handle;
+        if (!plainHandle) return null;
+        switch (platform) {
+            case 'moltbook':
+                return `https://www.moltbook.com/u/${plainHandle}`;
+            case 'reddit':
+                return `https://www.reddit.com/user/${plainHandle}`;
+            case 'bluesky':
+                return `https://bsky.app/profile/${plainHandle}`;
+            default:
+                return null;
+        }
+    })();
 
     return (
         <div className="card">
             <h2><User size={18} /> Agent Identity</h2>
 
             <div className="status-row">
-                <Tooltip text="The unique handle for this agent on the Moltbook network.">
+                <Tooltip text={`The unique handle for this agent on ${platform ?? 'the active platform'}.`}>
                     <span className="status-label">Handle</span>
                 </Tooltip>
                 <span className="status-value">
-                    <a href={`https://www.moltbook.com/u/${status.agent.name}`} target="_blank" rel="noopener noreferrer" className="status-link">
-                        @{status.agent.name}
-                    </a>
+                    {profileUrl ? (
+                        <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="status-link">
+                            {displayHandle}
+                        </a>
+                    ) : (
+                        displayHandle
+                    )}
                 </span>
             </div>
 
@@ -188,7 +214,7 @@ export default function StatusCard({ status }: StatusCardProps) {
             <div style={{ marginTop: 24 }}>
                 <h2><Lock size={18} /> Autonomy State</h2>
                 <div className="status-row">
-                    <Tooltip text={`Prevents additional soul changes and blocks posts after an autonomous evolution (${cooldownLabel} in ${evolutionMode} mode).`}>
+                    <Tooltip text={`Prevents additional soul changes and blocks posts after an autonomous evolution (${cooldownLabel}).`}>
                         <span className="status-label">Self-Modification Cooldown</span>
                     </Tooltip>
                     <span className={`status-value ${isActive(status.evolution.selfModificationCooldownUntil) ? 'warning' : ''}`} title={formatTime(status.evolution.selfModificationCooldownUntil)}>

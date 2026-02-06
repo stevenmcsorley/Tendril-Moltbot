@@ -41,6 +41,7 @@ export interface DecisionContext {
     novelty?: boolean;
     allowLowNovelty?: boolean;
     ignoreSynthesisCooldown?: boolean;
+    ignoreUncertainty?: boolean;
     lastPostAt?: Date | null;
     counterpartyInteractions?: number;
     lastMode?: ModeLabel;
@@ -261,7 +262,7 @@ export function applyAutonomyGates(state: GateState, ctx: DecisionContext): Gate
         }
     }
 
-    if (action !== 'SKIP' && (belowThreshold || ctx.contextAmbiguous)) {
+    if (action !== 'SKIP' && (belowThreshold || ctx.contextAmbiguous) && !ctx.ignoreUncertainty) {
         gates.push('UncertaintyGate');
         action = 'SKIP';
     }

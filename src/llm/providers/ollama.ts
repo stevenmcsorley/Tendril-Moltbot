@@ -24,6 +24,8 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
     private model: string;
     private temperature: number;
     private maxTokens: number;
+    private embedModel: string;
+    private embedTimeoutMs: number;
 
     constructor() {
         super();
@@ -32,6 +34,8 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
         this.model = config.OLLAMA_MODEL;
         this.temperature = config.OLLAMA_TEMPERATURE;
         this.maxTokens = config.OLLAMA_MAX_TOKENS;
+        this.embedModel = config.OLLAMA_EMBED_MODEL || config.OLLAMA_MODEL;
+        this.embedTimeoutMs = config.OLLAMA_EMBED_TIMEOUT_MS;
     }
 
     async ollamaFetch(request: OllamaGenerateRequest): Promise<OllamaResponse> {
@@ -107,7 +111,7 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
 
     async embed(text: string): Promise<number[]> {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 60000); // 60s for embedding
+        const timeout = setTimeout(() => controller.abort(), this.embedTimeoutMs);
 
         try {
             const response = await fetch(`${this.baseUrl}/api/embeddings`, {
@@ -116,7 +120,7 @@ export class OllamaProvider extends BaseProvider implements LLMClient {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    model: this.model,
+                    model: this.embedModel,
                     prompt: text,
                 }),
                 signal: controller.signal

@@ -13,7 +13,6 @@ type EvolutionCadence = {
     nudgeAfterHours: number;
     minWindowDurationHours: number;
     maxEvolutionsPerWindow: number;
-    selfModificationCooldownHours: number;
 };
 
 const EVOLUTION_CADENCE: Record<'stable' | 'rapid', EvolutionCadence> = {
@@ -24,7 +23,6 @@ const EVOLUTION_CADENCE: Record<'stable' | 'rapid', EvolutionCadence> = {
         nudgeAfterHours: 24,
         minWindowDurationHours: 24,
         maxEvolutionsPerWindow: 1,
-        selfModificationCooldownHours: 24,
     },
     rapid: {
         minSuccessForFull: 3,
@@ -33,7 +31,6 @@ const EVOLUTION_CADENCE: Record<'stable' | 'rapid', EvolutionCadence> = {
         nudgeAfterHours: 1,
         minWindowDurationHours: 2,
         maxEvolutionsPerWindow: 6,
-        selfModificationCooldownHours: 0.5,
     }
 };
 
@@ -51,7 +48,13 @@ const EVOLUTION_MAX_TOKENS = 900;
 const EVOLUTION_TEMPERATURE = 0.4;
 const EVOLUTION_SYSTEM_PROMPT = `You are Moltbot performing self-evolution.
 Follow the user's required output format exactly.
-Do not output SKIP. Do not use cryptic encodings. Use plain English.`;
+Do not output SKIP. Do not use cryptic encodings. Use plain English.
+Never edit the Synthesis Protocol section; copy it verbatim from the current soul.`;
+
+function getSelfModificationCooldownMs(): number {
+    const minutes = getConfig().SELF_MODIFICATION_COOLDOWN_MINUTES;
+    return Math.max(1, minutes) * 60 * 1000;
+}
 
 interface EvolutionMetadata {
     confidence_score: number;
@@ -223,6 +226,7 @@ TASK:
 - Preserve section headers: Mission, Voice & Style, Engagement Protocol, Synthesis Protocol, Evolution Protocol, Boundaries, Recent Learnings.
 - You may edit ONLY: Mission, Voice & Style, Engagement Protocol, Recent Learnings (and optional Self-Restraint if present).
 - You must NOT modify: # Identity, ## Role, Synthesis Protocol, Evolution Protocol, Boundaries, rate limits, autonomy gates, or rollback infrastructure.
+- IMPORTANT: Copy the entire Synthesis Protocol section verbatim from CURRENT SOUL. Do not rewrite it.
 - Update the "Recent Learnings" section with 1-3 bullets grounded in recent signals.
 - Keep total length under ~400 words.
 - Do NOT answer with SKIP for this task.
@@ -375,7 +379,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             minHoursBetween: cadence.minHoursBetween,
             windowRemaining,
             windowMax: cadence.maxEvolutionsPerWindow,
-            selfModificationCooldownHours: cadence.selfModificationCooldownHours,
+            selfModificationCooldownHours: getConfig().SELF_MODIFICATION_COOLDOWN_MINUTES / 60,
             mode: getConfig().EVOLUTION_MODE,
             selfModificationCooldownActive,
             stabilizationActive,
@@ -466,8 +470,7 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             console.log('🧬 SOUL EVOLVED. Re-encoding identity...');
             state.setSoul(fullSoul);
             state.setLastAutonomousEvolutionId(evolutionId);
-            const cadence = getEvolutionCadence();
-            state.setSelfModificationCooldownUntil(new Date(Date.now() + cadence.selfModificationCooldownHours * 60 * 60 * 1000));
+            state.setSelfModificationCooldownUntil(new Date(Date.now() + getSelfModificationCooldownMs()));
             this.incrementEvolutionWindow();
         } catch (err) {
             console.error('Failed to apply autonomous evolution:', err);
@@ -744,10 +747,9 @@ If your trajectory is optimal, set STATUS to OPTIMAL and omit the soul body.`;
             db.prepare('UPDATE autonomous_evolutions SET status = ?, rolled_back_at = ? WHERE evolution_id = ?')
                 .run('rolled_back', new Date().toISOString(), record.evolution_id);
 
-            const cadence = getEvolutionCadence();
             state.setLastAutonomousEvolutionId(null);
             state.setStabilizationUntil(new Date(Date.now() + STABILIZATION_HOURS * 60 * 60 * 1000));
-            state.setSelfModificationCooldownUntil(new Date(Date.now() + cadence.selfModificationCooldownHours * 60 * 60 * 1000));
+            state.setSelfModificationCooldownUntil(new Date(Date.now() + getSelfModificationCooldownMs()));
             state.setEvolutionWindow(new Date(), 0);
             getActivityLogger().log({
                 actionType: 'decision',
@@ -974,6 +976,7 @@ TASK:
 - Keep it plain English, readable, and under ~400 words.
 - Maintain "# Identity:" and "## Role:" headers.
 - Preserve section headers: Mission, Voice & Style, Engagement Protocol, Synthesis Protocol, Evolution Protocol, Boundaries, Recent Learnings.
+- IMPORTANT: Copy the entire Synthesis Protocol section verbatim from CURRENT SOUL. Do not rewrite it.
 - Update "Recent Learnings" with 1-3 bullets grounded in recent signals.
 - Mode: ${mode.toUpperCase()} (if NUDGE, keep changes minimal).
 

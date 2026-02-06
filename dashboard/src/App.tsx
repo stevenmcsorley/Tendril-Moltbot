@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 interface Status {
-    agent: { name: string; description: string; identity?: string; role?: string };
+    agent: { name: string; description: string; handle?: string; identity?: string; role?: string };
     status: 'running' | 'paused' | 'idle';
     metrics: {
         upvotesGiven: number;
@@ -55,7 +55,7 @@ interface Status {
         enablePosting: boolean;
         enableCommenting: boolean;
         enableUpvoting: boolean;
-        platform?: 'moltbook' | 'reddit';
+        platform?: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         readOnly?: boolean;
     };
     evolution: {

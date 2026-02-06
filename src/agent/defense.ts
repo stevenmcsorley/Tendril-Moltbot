@@ -8,7 +8,7 @@ export interface DefenseMetrics {
 }
 
 export class DefenseManager {
-    private recentlyProcessedPosts: Map<string, { author: string; timestamp: number }> = new Map();
+    private recentlyProcessedPosts: Map<string, { count: number; windowStart: number; lastSeen: number; lastPostId?: string }> = new Map();
 
     /**
      * Analyze a post for adversarial patterns
@@ -37,15 +37,30 @@ export class DefenseManager {
         }
 
         // 3. Detect repetitive noise from same author
-        const lastSeen = this.recentlyProcessedPosts.get(post.author?.name);
-        if (lastSeen && (Date.now() - lastSeen.timestamp) < 5000) { // < 5 seconds
-            metrics.repetitiveNoise = true;
+        const author = post.author?.name;
+        if (author) {
+            const now = Date.now();
+            const windowMs = 15000;
+            const lastSeen = this.recentlyProcessedPosts.get(author);
+            if (lastSeen && (now - lastSeen.windowStart) < windowMs) {
+                if (post.id !== lastSeen.lastPostId) {
+                    lastSeen.count += 1;
+                    lastSeen.lastPostId = post.id;
+                }
+                lastSeen.lastSeen = now;
+                if (lastSeen.count >= 3) {
+                    metrics.repetitiveNoise = true;
+                }
+                this.recentlyProcessedPosts.set(author, lastSeen);
+            } else {
+                this.recentlyProcessedPosts.set(author, {
+                    count: 1,
+                    windowStart: now,
+                    lastSeen: now,
+                    lastPostId: post.id
+                });
+            }
         }
-
-        this.recentlyProcessedPosts.set(post.author?.name, {
-            author: post.author?.name,
-            timestamp: Date.now()
-        });
 
         // Cleanup map
         if (this.recentlyProcessedPosts.size > 100) {
@@ -65,9 +80,20 @@ export class DefenseManager {
         const metrics = this.analyzePost(post);
         const stateManager = getStateManager();
 
+        const author = post.author?.name;
+        if (!author) return false;
+        const alreadyQuarantined = stateManager.isQuarantined(author);
+        if (alreadyQuarantined) return true;
+
+        // On Bluesky, large system accounts can appear repeatedly in the timeline.
+        // Avoid quarantining purely due to repetitive presence in a short window.
+        if (process.env.AGENT_PLATFORM === 'bluesky') {
+            metrics.repetitiveNoise = false;
+        }
+
         if (metrics.rapidVoteSpike || metrics.poisonedSignals || metrics.repetitiveNoise) {
-            console.warn(`[DEFENSE]: Adversarial pattern detected from @${post.author?.name}. Quarantining node.`);
-            stateManager.setQuarantine(post.author?.name, true);
+            console.warn(`[DEFENSE]: Adversarial pattern detected from @${author}. Quarantining node.`);
+            stateManager.setQuarantine(author, true);
             return true;
         }
 

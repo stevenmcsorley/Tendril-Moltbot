@@ -1,10 +1,11 @@
 /**
  * Rate Limiter
  * 
- * Enforces Moltbook rate limits:
- * - 1 post per 30 minutes
- * - 1 comment per 20 seconds
- * - 50 comments per day (configurable via MAX_COMMENTS_PER_DAY)
+ * Enforces platform-safe rate limits (configurable):
+ * - Post cooldown (minutes)
+ * - Comment cooldown (seconds)
+ * - Max comments per day
+ * Optionally adapts cooldowns based on recent engagement.
  */
 
 import { getConfig } from './config.js';
@@ -23,14 +24,59 @@ export interface RateLimitStatus {
 export class RateLimiter {
     private stateManager: StateManager;
     private maxCommentsPerDay: number;
-
-    // Moltbook rate limits
-    private readonly POST_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
-    private readonly COMMENT_COOLDOWN_MS = 20 * 1000; // 20 seconds
+    private postCooldownMs: number;
+    private commentCooldownMs: number;
+    private adaptiveEnabled: boolean;
+    private adaptiveWindowMs: number;
+    private adaptiveLow: number;
+    private adaptiveHigh: number;
+    private adaptivePostMinMs: number;
+    private adaptivePostMaxMs: number;
+    private adaptiveCommentMinMs: number;
+    private adaptiveCommentMaxMs: number;
+    private adaptiveHighFactor: number;
+    private adaptiveLowFactor: number;
 
     constructor() {
         this.stateManager = getStateManager();
-        this.maxCommentsPerDay = getConfig().MAX_COMMENTS_PER_DAY;
+        const config = getConfig();
+        this.maxCommentsPerDay = config.MAX_COMMENTS_PER_DAY;
+        this.postCooldownMs = config.POST_COOLDOWN_MINUTES * 60 * 1000;
+        this.commentCooldownMs = config.COMMENT_COOLDOWN_SECONDS * 1000;
+        this.adaptiveEnabled = config.ADAPTIVE_RATE_LIMITING;
+        this.adaptiveWindowMs = config.ADAPTIVE_WINDOW_MINUTES * 60 * 1000;
+        this.adaptiveLow = config.ADAPTIVE_ENGAGEMENT_LOW;
+        this.adaptiveHigh = config.ADAPTIVE_ENGAGEMENT_HIGH;
+        this.adaptivePostMinMs = config.ADAPTIVE_POST_MINUTES_MIN * 60 * 1000;
+        this.adaptivePostMaxMs = config.ADAPTIVE_POST_MINUTES_MAX * 60 * 1000;
+        this.adaptiveCommentMinMs = config.ADAPTIVE_COMMENT_SECONDS_MIN * 1000;
+        this.adaptiveCommentMaxMs = config.ADAPTIVE_COMMENT_SECONDS_MAX * 1000;
+        this.adaptiveHighFactor = config.ADAPTIVE_FACTOR_HIGH;
+        this.adaptiveLowFactor = config.ADAPTIVE_FACTOR_LOW;
+    }
+
+    private clamp(value: number, min: number, max: number): number {
+        return Math.min(Math.max(value, min), max);
+    }
+
+    private getAdaptiveMultiplier(): number {
+        if (!this.adaptiveEnabled) return 1;
+        const engagement = this.stateManager.getRecentEngagementCount(this.adaptiveWindowMs);
+        if (engagement >= this.adaptiveHigh) return this.adaptiveHighFactor;
+        if (engagement <= this.adaptiveLow) return this.adaptiveLowFactor;
+        return 1;
+    }
+
+    private getPostCooldownMs(): number {
+        const multiplier = this.getAdaptiveMultiplier();
+        const scaled = Math.round(this.postCooldownMs * multiplier);
+        return this.clamp(scaled, this.adaptivePostMinMs, this.adaptivePostMaxMs);
+    }
+
+    private getCommentCooldownMs(): number {
+        const multiplier = this.getAdaptiveMultiplier();
+        const scaled = Math.round(this.commentCooldownMs * multiplier);
+        return this.clamp(scaled, this.adaptiveCommentMinMs, this.adaptiveCommentMaxMs);
     }
 
     /**
@@ -43,7 +89,7 @@ export class RateLimiter {
         if (!lastPost) return true;
 
         const elapsed = Date.now() - lastPost.getTime();
-        return elapsed >= this.POST_COOLDOWN_MS;
+        return elapsed >= this.getPostCooldownMs();
     }
 
     /**
@@ -53,7 +99,7 @@ export class RateLimiter {
         const lastPost = this.stateManager.getLastPostAt();
         if (!lastPost) return null;
 
-        const nextTime = new Date(lastPost.getTime() + this.POST_COOLDOWN_MS);
+        const nextTime = new Date(lastPost.getTime() + this.getPostCooldownMs());
         return nextTime > new Date() ? nextTime : null;
     }
 
@@ -73,7 +119,7 @@ export class RateLimiter {
         if (!lastComment) return true;
 
         const elapsed = Date.now() - lastComment.getTime();
-        return elapsed >= this.COMMENT_COOLDOWN_MS;
+        return elapsed >= this.getCommentCooldownMs();
     }
 
     /**
@@ -83,7 +129,7 @@ export class RateLimiter {
         const lastComment = this.stateManager.getLastCommentAt();
         if (!lastComment) return null;
 
-        const nextTime = new Date(lastComment.getTime() + this.COMMENT_COOLDOWN_MS);
+        const nextTime = new Date(lastComment.getTime() + this.getCommentCooldownMs());
         return nextTime > new Date() ? nextTime : null;
     }
 
