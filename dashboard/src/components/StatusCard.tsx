@@ -1,5 +1,6 @@
 import RelativeTime from './RelativeTime';
 import Tooltip from './Tooltip';
+import { useEffect, useState } from 'react';
 import {
     User,
     BarChart3,
@@ -79,6 +80,16 @@ function StatusBadge({ value }: { value: 'running' | 'paused' | 'idle' | undefin
 }
 
 export default function StatusCard({ status }: StatusCardProps) {
+    const [bioDraft, setBioDraft] = useState('');
+    const [bioSaving, setBioSaving] = useState(false);
+    const [bioMessage, setBioMessage] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (status?.agent?.description) {
+            setBioDraft(status.agent.description);
+        }
+    }, [status?.agent?.description]);
+
     if (!status) {
         return (
             <div className="card">
@@ -112,6 +123,29 @@ export default function StatusCard({ status }: StatusCardProps) {
                 return null;
         }
     })();
+
+    const canEditProfile = status.config.platform === 'bluesky';
+    const submitBio = async () => {
+        if (!bioDraft.trim()) {
+            setBioMessage('Bio cannot be empty.');
+            return;
+        }
+        try {
+            setBioSaving(true);
+            const res = await fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ description: bioDraft.trim() })
+            });
+            if (!res.ok) throw new Error('Failed to update bio');
+            setBioMessage('Profile bio updated.');
+        } catch (err) {
+            setBioMessage(err instanceof Error ? err.message : 'Failed to update bio');
+        } finally {
+            setBioSaving(false);
+            setTimeout(() => setBioMessage(null), 3000);
+        }
+    };
 
     return (
         <div className="card">
@@ -162,6 +196,37 @@ export default function StatusCard({ status }: StatusCardProps) {
                     )}
                 </span>
             </div>
+
+            {canEditProfile && (
+                <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Profile Bio</div>
+                    <textarea
+                        value={bioDraft}
+                        onChange={(e) => setBioDraft(e.target.value)}
+                        rows={3}
+                        style={{
+                            width: '100%',
+                            background: 'var(--bg-tertiary)',
+                            border: '1px solid var(--border)',
+                            color: 'var(--text-primary)',
+                            borderRadius: 6,
+                            padding: '8px 10px',
+                            fontSize: 12,
+                            resize: 'vertical'
+                        }}
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                        <button className="btn-secondary" onClick={submitBio} disabled={bioSaving}>
+                            {bioSaving ? 'Saving…' : 'Update Bio'}
+                        </button>
+                        {bioMessage && (
+                            <span style={{ fontSize: 12, color: bioMessage.includes('Failed') ? 'var(--error)' : 'var(--success)' }}>
+                                {bioMessage}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <div className="status-row">
                 <span className="status-label">LLM Provider</span>

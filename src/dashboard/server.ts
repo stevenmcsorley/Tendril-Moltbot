@@ -888,6 +888,40 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * POST /api/profile
+     * Update agent profile (bio/display name) on supported platforms
+     */
+    app.post('/api/profile', async (req, res) => {
+        try {
+            const description = typeof req.body?.description === 'string' ? req.body.description.trim() : undefined;
+            const displayName = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : undefined;
+            if (!description && !displayName) {
+                res.status(400).json({ error: 'description or displayName is required.' });
+                return;
+            }
+            const client = getSocialClient();
+            if (!client.updateProfile) {
+                res.status(400).json({ error: 'Profile updates are not supported on this platform.' });
+                return;
+            }
+            await client.updateProfile({ description, displayName });
+            getActivityLogger().log({
+                actionType: 'decision',
+                targetId: null,
+                promptSent: 'PROFILE_UPDATE',
+                rawModelOutput: null,
+                finalAction: 'Updated platform profile.'
+            });
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to update profile',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
      * POST /api/control/create-submolt
      * Create a submolt on behalf of the agent
      */

@@ -224,6 +224,39 @@ export class BlueskyClient implements SocialClient {
         };
     }
 
+    async updateProfile(profile: { description?: string; displayName?: string }): Promise<void> {
+        const session = await this.getSession();
+        const repo = session.did;
+        const collection = 'app.bsky.actor.profile';
+        const rkey = 'self';
+        let existing: Record<string, any> = {};
+
+        try {
+            const record = await this.request<any>('GET', `com.atproto.repo.getRecord?repo=${encodeURIComponent(repo)}&collection=${collection}&rkey=${rkey}`);
+            existing = record?.value || {};
+        } catch (error) {
+            if (error instanceof PlatformApiError && error.statusCode === 404) {
+                existing = {};
+            } else {
+                throw error;
+            }
+        }
+
+        const nextRecord = {
+            ...existing,
+            description: profile.description !== undefined ? profile.description : existing.description,
+            displayName: profile.displayName !== undefined ? profile.displayName : existing.displayName,
+            createdAt: existing.createdAt || new Date().toISOString(),
+        };
+
+        await this.request('POST', 'com.atproto.repo.putRecord', {
+            repo,
+            collection,
+            rkey,
+            record: nextRecord
+        });
+    }
+
     async getStatus(): Promise<StatusResponse> {
         await this.getMe();
         return { status: 'claimed' };
