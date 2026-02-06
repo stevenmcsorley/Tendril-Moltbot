@@ -119,7 +119,7 @@ const configSchema = z.object({
     FOLLOWERS_FETCH_LIMIT: z.coerce.number().positive().default(100),
     EVOLUTION_MODE: z.enum(['stable', 'rapid']).default('rapid'),
     ENABLE_ROLLBACKS: z.coerce.boolean().default(true),
-    ENABLE_SYNTHESIS_BROADCAST: z.coerce.boolean().default(true),
+    ENABLE_SYNTHESIS_BROADCAST: z.coerce.boolean().default(false),
     EVOLUTION_AUTOMATIC: z.coerce.boolean().default(true),
     DIALOGUE_INTERVAL_MS: z.coerce.number().positive().default(8000),
     TARGET_SUBMOLT: z.string().optional(),
