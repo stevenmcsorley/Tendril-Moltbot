@@ -7,7 +7,9 @@
 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, mkdirSync, writeFileSync, copyFileSync, createReadStream, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import os from 'node:os';
 import express, { type Request, type Response, type NextFunction } from 'express';
 
 import { getConfig, reloadConfigSync } from '../config.js';
@@ -884,6 +886,117 @@ export function createDashboardServer(): express.Application {
             res.json({ success: true, message: 'Rollback initiated.' });
         } catch (error) {
             res.status(500).json({ error: 'Failed to trigger rollback' });
+        }
+    });
+
+    /**
+     * GET /api/data-export
+     * Export DB + sanitized settings for migration
+     */
+    app.get('/api/data-export', async (req, res) => {
+        try {
+            const config = getConfig();
+            const db = getDatabaseManager().getDb();
+            const dbPath = (db as any).name as string | undefined;
+            if (!dbPath || !existsSync(dbPath)) {
+                res.status(500).json({ error: 'Database file not found.' });
+                return;
+            }
+
+            const exportDir = join(os.tmpdir(), `moltbot-export-${Date.now()}`);
+            mkdirSync(exportDir, { recursive: true });
+
+            const settings = {
+                exportedAt: new Date().toISOString(),
+                platform: config.AGENT_PLATFORM,
+                agent: {
+                    name: config.AGENT_NAME,
+                    description: config.AGENT_DESCRIPTION
+                },
+                limits: {
+                    feedFetchLimit: config.FEED_FETCH_LIMIT,
+                    postCooldownMinutes: config.POST_COOLDOWN_MINUTES,
+                    commentCooldownSeconds: config.COMMENT_COOLDOWN_SECONDS,
+                    maxCommentsPerDay: config.MAX_COMMENTS_PER_DAY,
+                    postMaxAgeHours: config.POST_MAX_AGE_HOURS,
+                    commentEngagementRefreshLimit: config.COMMENT_ENGAGEMENT_REFRESH_LIMIT
+                },
+                toggles: {
+                    enablePosting: config.ENABLE_POSTING,
+                    enableCommenting: config.ENABLE_COMMENTING,
+                    enableUpvoting: config.ENABLE_UPVOTING,
+                    enableReplyUpvoting: config.ENABLE_REPLY_UPVOTING,
+                    enableFollowing: config.ENABLE_FOLLOWING,
+                    enableUnfollowing: config.ENABLE_UNFOLLOWING,
+                    enableFollowBack: config.ENABLE_FOLLOW_BACK,
+                    enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
+                    enableRollbacks: config.ENABLE_ROLLBACKS
+                },
+                evolution: {
+                    mode: config.EVOLUTION_MODE,
+                    auto: config.EVOLUTION_AUTOMATIC
+                },
+                adaptive: {
+                    enabled: config.ADAPTIVE_RATE_LIMITING,
+                    windowMinutes: config.ADAPTIVE_WINDOW_MINUTES,
+                    engagementLow: config.ADAPTIVE_ENGAGEMENT_LOW,
+                    engagementHigh: config.ADAPTIVE_ENGAGEMENT_HIGH,
+                    postMinutesMin: config.ADAPTIVE_POST_MINUTES_MIN,
+                    postMinutesMax: config.ADAPTIVE_POST_MINUTES_MAX,
+                    commentSecondsMin: config.ADAPTIVE_COMMENT_SECONDS_MIN,
+                    commentSecondsMax: config.ADAPTIVE_COMMENT_SECONDS_MAX
+                },
+                bluesky: {
+                    serviceUrl: config.BSKY_SERVICE_URL,
+                    feedUri: config.BSKY_FEED_URI,
+                    maxGraphemes: config.BSKY_MAX_GRAPHEMES,
+                    threadDepth: config.BSKY_THREAD_DEPTH,
+                    defenseMute: config.BSKY_DEFENSE_MUTE
+                },
+                reddit: {
+                    baseUrl: config.REDDIT_BASE_URL,
+                    defaultSubreddit: config.REDDIT_DEFAULT_SUBREDDIT,
+                    readOnly: config.REDDIT_READ_ONLY
+                },
+                mastodon: {
+                    baseUrl: config.MASTODON_BASE_URL,
+                    timeline: config.MASTODON_TIMELINE
+                },
+                discourse: {
+                    baseUrl: config.DISCOURSE_BASE_URL,
+                    defaultCategory: config.DISCOURSE_DEFAULT_CATEGORY
+                }
+            };
+
+            const settingsPath = join(exportDir, 'settings.json');
+            writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+
+            const dbExportName = 'moltbot.db';
+            const dbExportPath = join(exportDir, dbExportName);
+            copyFileSync(dbPath, dbExportPath);
+
+            const archiveName = `moltbot-export-${new Date().toISOString().replace(/[:.]/g, '')}.tgz`;
+            const archivePath = join(exportDir, archiveName);
+            execFileSync('tar', ['-czf', archivePath, '-C', exportDir, dbExportName, 'settings.json']);
+
+            res.setHeader('Content-Type', 'application/gzip');
+            res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+            res.setHeader('Cache-Control', 'no-store');
+
+            const stream = createReadStream(archivePath);
+            stream.pipe(res);
+            stream.on('close', () => {
+                try {
+                    rmSync(exportDir, { recursive: true, force: true });
+                } catch {
+                    // Ignore cleanup failures
+                }
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to export data',
+                details: error instanceof Error ? error.message : String(error)
+            });
         }
     });
 

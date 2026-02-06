@@ -41,6 +41,8 @@ function formatBytes(bytes: number): string {
 export default function DataManagement({ stats, onWipe, onRefresh }: DataManagementProps) {
     const [keepSoul, setKeepSoul] = useState(true);
     const [busy, setBusy] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const [exportMessage, setExportMessage] = useState<string | null>(null);
 
     const handleWipe = async () => {
         const warning = keepSoul
@@ -52,6 +54,31 @@ export default function DataManagement({ stats, onWipe, onRefresh }: DataManagem
             await onWipe(keepSoul);
         } finally {
             setBusy(false);
+        }
+    };
+
+    const handleExport = async () => {
+        setExportMessage(null);
+        setExporting(true);
+        try {
+            const res = await fetch('/api/data-export');
+            if (!res.ok) throw new Error('Failed to export data');
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const stamp = new Date().toISOString().replace(/[:.]/g, '');
+            a.href = url;
+            a.download = `moltbot-export-${stamp}.tgz`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            setExportMessage('Export ready.');
+        } catch (error) {
+            setExportMessage(error instanceof Error ? error.message : 'Export failed.');
+        } finally {
+            setExporting(false);
+            setTimeout(() => setExportMessage(null), 4000);
         }
     };
 
@@ -143,6 +170,24 @@ export default function DataManagement({ stats, onWipe, onRefresh }: DataManagem
                             {busy ? 'Wiping…' : 'Wipe Data'}
                         </button>
                     </Tooltip>
+                </div>
+            </div>
+
+            <div className="card">
+                <h2>Migration Snapshot</h2>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                    Download a portable bundle containing the SQLite database and sanitized settings (no secrets).
+                    Copy your `.env` separately for API credentials.
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button className="btn-secondary" onClick={handleExport} disabled={exporting}>
+                        {exporting ? 'Preparing…' : 'Download Export'}
+                    </button>
+                    {exportMessage && (
+                        <span style={{ fontSize: 12, color: exportMessage.includes('failed') ? 'var(--error)' : 'var(--success)' }}>
+                            {exportMessage}
+                        </span>
+                    )}
                 </div>
             </div>
         </div>
