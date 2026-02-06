@@ -108,6 +108,7 @@ const configSchema = z.object({
     ENABLE_COMMENTING: z.coerce.boolean().default(true),
     ENABLE_UPVOTING: z.coerce.boolean().default(true),
     ENABLE_REPLY_UPVOTING: z.coerce.boolean().default(true),
+    REPLY_UPVOTE_MIN_CONFIDENCE: z.enum(['low', 'medium', 'high']).default('high'),
     ENABLE_FOLLOWING: z.coerce.boolean().default(false),
     ENABLE_UNFOLLOWING: z.coerce.boolean().default(false),
     ENABLE_FOLLOW_BACK: z.coerce.boolean().default(false),

@@ -1523,7 +1523,14 @@ class AgentLoop {
             if (gateDecision.action !== 'COMMENT') return false;
 
             console.log(`Replying to @${reply.author.name} in social engagement...`);
-            if (config.ENABLE_REPLY_UPVOTING && client.capabilities.supportsVotes !== false && reply.id) {
+            const confidenceRank: Record<ConfidenceLevel, number> = { low: 0, medium: 1, high: 2 };
+            const minConfidence = config.REPLY_UPVOTE_MIN_CONFIDENCE || 'high';
+            const shouldUpvoteReply = config.ENABLE_REPLY_UPVOTING
+                && client.capabilities.supportsVotes !== false
+                && reply.id
+                && confidenceRank[confidence] >= confidenceRank[minConfidence];
+
+            if (shouldUpvoteReply) {
                 try {
                     await client.upvoteComment(reply.id);
                     stateManager.recordUpvote();
