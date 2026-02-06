@@ -15,6 +15,7 @@ interface Status {
         followsGiven: number;
         unfollowsGiven: number;
         followsActive: number;
+        followersActive: number;
         submoltsCreated: number;
         totalComments: number;
         totalPosts: number;
@@ -306,6 +307,12 @@ export default function StatusCard({ status }: StatusCardProps) {
                         <span className="status-label">Active Follows</span>
                     </Tooltip>
                     <span className="status-value" style={{ color: 'var(--info)' }}>{status.metrics.followsActive}</span>
+                </div>
+                <div className="status-row">
+                    <Tooltip text="Accounts currently following the agent (last sync).">
+                        <span className="status-label">Followers</span>
+                    </Tooltip>
+                    <span className="status-value" style={{ color: 'var(--info)' }}>{status.metrics.followersActive}</span>
                 </div>
                 <div className="status-row">
                     <Tooltip text="Autonomous digital habitats created during synthesis convergences.">

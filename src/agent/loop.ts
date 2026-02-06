@@ -210,6 +210,8 @@ class AgentLoop {
                 return;
             }
 
+            await this.syncFollowers();
+
             // Fetch feed
             console.log('Fetching feed...');
             const feed = await client.getFeed({ sort: 'new', limit: 25 });
@@ -1601,6 +1603,63 @@ class AgentLoop {
         const seed = trimmed.length + trimmed.charCodeAt(0) + trimmed.charCodeAt(trimmed.length - 1);
         const prefix = prefixes[seed % prefixes.length];
         return `${prefix} ${trimmed}`;
+    }
+
+    private async syncFollowers(): Promise<void> {
+        const client = getSocialClient();
+        if (!client.getFollowers) return;
+        const stateManager = getStateManager();
+        const config = getConfig();
+        const logger = getActivityLogger();
+
+        try {
+            const response = await client.getFollowers({ limit: config.FOLLOWERS_FETCH_LIMIT });
+            const followers = response?.followers || [];
+            if (!followers.length) return;
+            stateManager.recordFollowers(followers);
+
+            if (!config.ENABLE_FOLLOW_BACK) return;
+            if (!client.capabilities.supportsFollows || !client.followUser) return;
+            if (client.capabilities.readOnly) return;
+
+            const maxFollowBack = Math.max(1, config.FOLLOW_BACK_MAX_PER_RUN || 1);
+            let followBackCount = 0;
+            const selfHandle = stateManager.getPlatformHandle() || config.AGENT_NAME;
+
+            for (const follower of followers) {
+                if (followBackCount >= maxFollowBack) break;
+                const followerId = follower.id;
+                const followerHandle = follower.name || null;
+                if (!followerId) continue;
+                if (followerHandle && selfHandle && followerHandle.toLowerCase() === selfHandle.toLowerCase()) continue;
+                if (followerHandle && stateManager.isQuarantined(followerHandle)) continue;
+                if (stateManager.isFollowing(followerId)) continue;
+
+                const result = await client.followUser(followerId);
+                if (!result?.uri) continue;
+                stateManager.recordFollow(followerId, followerHandle, result.uri);
+                followBackCount += 1;
+
+                logger.log({
+                    actionType: 'follow',
+                    targetId: followerId,
+                    targetAuthor: followerHandle,
+                    promptSent: '[FOLLOW_BACK]',
+                    rawModelOutput: null,
+                    finalAction: followerHandle ? `Followed back @${followerHandle}` : `Followed back ${followerId}`,
+                    signalType: 'FOLLOW_BACK'
+                });
+            }
+        } catch (error) {
+            logger.log({
+                actionType: 'error',
+                targetId: null,
+                promptSent: '[FOLLOW_BACK]',
+                rawModelOutput: null,
+                finalAction: 'Failed to sync followers',
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
     }
 
     private async maybeFollowAuthor(author?: { id?: string; name?: string | null }): Promise<void> {

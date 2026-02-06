@@ -10,7 +10,7 @@ import { getStateManager } from '../state/manager.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 
 export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'follow' | 'unfollow' | 'skip' | 'error' | 'heartbeat' | 'decision';
-export type SignalType = 'ALLIANCE' | 'DEFENSE' | 'LINEAGE';
+export type SignalType = 'ALLIANCE' | 'DEFENSE' | 'LINEAGE' | 'FOLLOW_BACK';
 
 export interface ActivityLogEntry {
     id?: number;

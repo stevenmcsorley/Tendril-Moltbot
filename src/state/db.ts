@@ -127,6 +127,13 @@ export class DatabaseManager {
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS followers (
+                did TEXT PRIMARY KEY,
+                handle TEXT,
+                followed_at TEXT,
+                last_seen TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS inbound_engagements (
                 username TEXT PRIMARY KEY,
                 replies INTEGER DEFAULT 0,

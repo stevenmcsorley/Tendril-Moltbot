@@ -211,6 +211,20 @@ export class BlueskyClient implements SocialClient {
         return { status: 'claimed' };
     }
 
+    async getFollowers(options: { limit?: number; cursor?: string } = {}): Promise<{ followers: Agent[]; cursor?: string }> {
+        const session = await this.getSession();
+        const limit = Math.min(options.limit || 50, 100);
+        const cursorParam = options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : '';
+        const endpoint = `app.bsky.graph.getFollowers?actor=${encodeURIComponent(session.did)}&limit=${limit}${cursorParam}`;
+        const data = await this.request<{ followers: any[]; cursor?: string }>('GET', endpoint);
+        const followers = (data.followers || []).map((f) => ({
+            id: f.did,
+            name: f.handle || 'unknown',
+            created_at: f.createdAt || new Date().toISOString(),
+        }));
+        return { followers, cursor: data.cursor };
+    }
+
     async getFeed(options: { sort?: 'hot' | 'new' | 'top' | 'rising'; limit?: number; submolt?: string } = {}): Promise<FeedResponse> {
         const config = getConfig();
         const limit = Math.min(options.limit || 25, 100);

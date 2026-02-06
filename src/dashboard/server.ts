@@ -197,6 +197,7 @@ export function createDashboardServer(): express.Application {
                     followsGiven: stateData.followsGiven || 0,
                     unfollowsGiven: stateData.unfollowsGiven || 0,
                     followsActive: state.getFollowCount(),
+                    followersActive: state.getFollowerCount(),
                     submoltsCreated: stateData.createdSubmolts?.length || 0,
                     totalComments: state.getMyComments().length,
                     totalPosts: state.getMyPosts().length,

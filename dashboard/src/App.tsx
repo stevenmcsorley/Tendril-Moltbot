@@ -33,6 +33,7 @@ interface Status {
         followsGiven: number;
         unfollowsGiven: number;
         followsActive: number;
+        followersActive: number;
         submoltsCreated: number;
         totalComments: number;
         totalPosts: number;

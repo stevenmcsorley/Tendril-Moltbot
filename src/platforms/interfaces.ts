@@ -41,4 +41,5 @@ export interface SocialClient {
     unmuteUser?(userId: string): Promise<void>;
     followUser?(userId: string): Promise<{ uri: string }>;
     unfollowUser?(followUri: string): Promise<void>;
+    getFollowers?(options?: { limit?: number; cursor?: string }): Promise<{ followers: Agent[]; cursor?: string }>;
 }

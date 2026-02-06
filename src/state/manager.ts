@@ -26,6 +26,7 @@ export interface AgentState {
     downvotesGiven: number;
     followsGiven: number;
     unfollowsGiven: number;
+    followersCount?: number;
     agentResonance: Array<{
         username: string;
         interactions: number;
@@ -168,6 +169,7 @@ export class StateManager {
                 db.prepare('DELETE FROM comments').run();
                 db.prepare('DELETE FROM topology').run();
                 db.prepare('DELETE FROM follows').run();
+                db.prepare('DELETE FROM followers').run();
                 db.prepare('DELETE FROM inbound_engagements').run();
                 this.setKV('posts_seen', []);
                 this.setKV('posts_commented', []);
@@ -218,6 +220,7 @@ export class StateManager {
             DELETE FROM posts;
             DELETE FROM comments;
             DELETE FROM follows;
+            DELETE FROM followers;
             DELETE FROM inbound_engagements;
             DELETE FROM kv_state;
             COMMIT;
@@ -379,6 +382,37 @@ export class StateManager {
         const db = getDatabaseManager().getDb();
         const row = db.prepare('SELECT COUNT(*) as count FROM follows').get() as { count: number };
         return row.count;
+    }
+
+    recordFollower(did: string, handle?: string | null, followedAt?: string | null): void {
+        if (!did) return;
+        const db = getDatabaseManager().getDb();
+        const now = new Date().toISOString();
+        db.prepare(`
+            INSERT OR REPLACE INTO followers (did, handle, followed_at, last_seen)
+            VALUES (?, ?, ?, ?)
+        `).run(did, handle ?? null, followedAt ?? null, now);
+    }
+
+    recordFollowers(followers: Array<{ id?: string; name?: string; created_at?: string }>): void {
+        if (!followers?.length) return;
+        for (const follower of followers) {
+            if (!follower?.id) continue;
+            this.recordFollower(follower.id, follower.name ?? null, follower.created_at ?? null);
+        }
+    }
+
+    isFollower(did: string): boolean {
+        if (!did) return false;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT 1 FROM followers WHERE did = ?').get(did) as any;
+        return !!row;
+    }
+
+    getFollowerCount(): number {
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT COUNT(*) as count FROM followers').get() as { count: number };
+        return row?.count || 0;
     }
 
     getResonanceScore(username?: string | null): number {
@@ -662,6 +696,7 @@ export class StateManager {
             downvotesGiven: this.getKV('downvotes_given', 0),
             followsGiven: this.getKV('follows_given', 0),
             unfollowsGiven: this.getKV('unfollows_given', 0),
+            followersCount: this.getFollowerCount(),
             agentResonance: this.getNetworkTopology()
         };
     }
