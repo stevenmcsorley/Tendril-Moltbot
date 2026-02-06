@@ -13,6 +13,7 @@ interface DataStats {
         synthesis: number;
         posts: number;
         comments: number;
+        news: number;
         sovereignty: number;
         kvState: number;
     };
@@ -128,6 +129,10 @@ export default function DataManagement({ stats, onWipe, onRefresh }: DataManagem
                         <div className="status-row">
                             <span className="status-label">Comments</span>
                             <span className="status-value">{stats.counts.comments.toLocaleString()}</span>
+                        </div>
+                        <div className="status-row">
+                            <span className="status-label">News Items</span>
+                            <span className="status-value">{stats.counts.news.toLocaleString()}</span>
                         </div>
                         <div className="status-row">
                             <span className="status-label">Sovereignty Records</span>

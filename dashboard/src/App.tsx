@@ -7,6 +7,7 @@ import SelfDialoguePanel, { TerminalLog } from './components/SelfDialoguePanel';
 import MyPosts from './components/MyPosts';
 import MyComments from './components/MyComments';
 import StatsPanel from './components/StatsPanel';
+import NewsPanel from './components/NewsPanel';
 import DataManagement from './components/DataManagement';
 import NetworkResonance from './components/NetworkResonance';
 import EvolutionHistory from './components/EvolutionHistory';
@@ -24,7 +25,8 @@ import {
     Cpu,
     Database,
     ShieldAlert,
-    BarChart3
+    BarChart3,
+    Newspaper
 } from 'lucide-react';
 
 interface Status {
@@ -64,9 +66,17 @@ interface Status {
         enableUpvoting: boolean;
         enableFollowing?: boolean;
         enableUnfollowing?: boolean;
+        enableNewsPosts?: boolean;
         evolutionAutomatic?: boolean;
         platform?: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         readOnly?: boolean;
+    };
+    news?: {
+        checkMinutes?: number;
+        maxAgeHours?: number;
+        maxItemsPerRun?: number;
+        minContentChars?: number;
+        sources?: string | null;
     };
     evolution: {
         selfModificationCooldownUntil: string | null;
@@ -132,6 +142,7 @@ interface DataStats {
         synthesis: number;
         posts: number;
         comments: number;
+        news: number;
         sovereignty: number;
         kvState: number;
     };
@@ -214,7 +225,7 @@ export default function App() {
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
     const [logSearch, setLogSearch] = useState('');
-    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'comments' | 'stats' | 'intelligence' | 'soul_mgmt' | 'data'>('logs');
+    const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'comments' | 'stats' | 'news' | 'intelligence' | 'soul_mgmt' | 'data'>('logs');
     const [isWsConnected, setIsWsConnected] = useState(false);
     const [topology, setTopology] = useState<ResonanceData[]>([]);
     const [topologyPage, setTopologyPage] = useState(1);
@@ -826,6 +837,16 @@ export default function App() {
                             </button>
                         </Tooltip>
 
+                        <Tooltip text="News ingestion, outcomes, and source tracking.">
+                            <button
+                                className={activeTab === 'news' ? 'primary' : ''}
+                                onClick={() => setActiveTab('news')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                            >
+                                <Newspaper size={16} /> News Scout
+                            </button>
+                        </Tooltip>
+
                         <Tooltip text="High-level cognitive state, autonomous goals, and memetic lineage.">
                             <button
                                 className={activeTab === 'intelligence' ? 'primary' : ''}
@@ -877,6 +898,8 @@ export default function App() {
                         <MyComments refreshToken={myCommentsRefreshToken} platform={status?.config.platform} />
                     ) : activeTab === 'stats' ? (
                         <StatsPanel refreshToken={statsRefreshToken} platform={status?.config.platform} />
+                    ) : activeTab === 'news' ? (
+                        <NewsPanel refreshToken={statsRefreshToken} config={status?.news ?? null} />
                     ) : activeTab === 'intelligence' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>

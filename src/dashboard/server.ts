@@ -315,6 +315,7 @@ export function createDashboardServer(): express.Application {
                     synthesis: count('synthesis'),
                     posts: count('posts'),
                     comments: count('comments'),
+                    news: count('news_items'),
                     sovereignty: count('sovereignty'),
                     kvState: count('kv_state'),
                 },
@@ -323,6 +324,41 @@ export function createDashboardServer(): express.Application {
             });
         } catch (error) {
             res.status(500).json({ error: 'Failed to get data stats' });
+        }
+    });
+
+    /**
+     * GET /api/news/history
+     * Get RSS/news ingestion history (paginated)
+     */
+    app.get('/api/news/history', (req, res) => {
+        try {
+            const db = getDatabaseManager().getDb();
+            const maxLimit = 200;
+            const limit = Math.min(maxLimit, parseInt(String(req.query.limit)) || 50);
+            const offset = parseInt(String(req.query.offset)) || 0;
+            const items = db.prepare(`
+                SELECT url, title, source, published_at, status, created_at, posted_at
+                FROM news_items
+                ORDER BY datetime(created_at) DESC
+                LIMIT ? OFFSET ?
+            `).all(limit, offset) as Array<any>;
+            const totalRow = db.prepare('SELECT COUNT(*) as count FROM news_items').get() as { count: number };
+            const statusRows = db.prepare('SELECT status, COUNT(*) as count FROM news_items GROUP BY status').all() as Array<{ status: string; count: number }>;
+            const counts = statusRows.reduce((acc, row) => {
+                acc[row.status] = row.count;
+                return acc;
+            }, {} as Record<string, number>);
+            const lastCheck = getStateManager().getLastNewsCheck();
+
+            res.json({
+                items,
+                total: totalRow.count,
+                counts,
+                lastCheckAt: lastCheck ? lastCheck.toISOString() : null,
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get news history' });
         }
     });
 
