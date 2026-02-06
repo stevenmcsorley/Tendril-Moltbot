@@ -1917,6 +1917,22 @@ class AgentLoop {
                         if (followerHandle && selfHandle && followerHandle.toLowerCase() === selfHandle.toLowerCase()) continue;
                         if (followerHandle && stateManager.isQuarantined(followerHandle)) continue;
                         if (stateManager.isFollowing(followerId)) continue;
+                        if (client.getUserFollowerCount) {
+                            const followerCount = await client.getUserFollowerCount(followerId);
+                            if (followerCount === 0) {
+                                logger.log({
+                                    actionType: 'skip',
+                                    targetId: followerId,
+                                    targetAuthor: followerHandle,
+                                    promptSent: '[FOLLOW_BACK]',
+                                    rawModelOutput: null,
+                                    finalAction: followerHandle
+                                        ? `Follow-back skipped: @${followerHandle} has zero followers`
+                                        : 'Follow-back skipped: user has zero followers'
+                                });
+                                continue;
+                            }
+                        }
 
                         const result = await followUser(followerId);
                         if (!result?.uri) continue;
@@ -1975,6 +1991,22 @@ class AgentLoop {
         if (outboundReplies < 1) return;
         const resonanceScore = stateManager.getResonanceScore(authorHandle);
         if (resonanceScore < config.FOLLOW_SCORE_THRESHOLD) return;
+        if (client.getUserFollowerCount) {
+            const followerCount = await client.getUserFollowerCount(authorId);
+            if (followerCount === 0) {
+                getActivityLogger().log({
+                    actionType: 'skip',
+                    targetId: authorId,
+                    targetAuthor: authorHandle,
+                    promptSent: '[FOLLOW]',
+                    rawModelOutput: null,
+                    finalAction: authorHandle
+                        ? `Follow skipped: @${authorHandle} has zero followers`
+                        : 'Follow skipped: user has zero followers'
+                });
+                return;
+            }
+        }
 
         try {
             const result = await client.followUser(authorId);

@@ -276,6 +276,18 @@ export class BlueskyClient implements SocialClient {
         return { followers, cursor: data.cursor };
     }
 
+    async getUserFollowerCount(userId: string): Promise<number | null> {
+        if (!userId) return null;
+        try {
+            const endpoint = `app.bsky.actor.getProfile?actor=${encodeURIComponent(userId)}`;
+            const data = await this.request<any>('GET', endpoint);
+            const count = data?.followersCount;
+            return typeof count === 'number' ? count : null;
+        } catch {
+            return null;
+        }
+    }
+
     async getFeed(options: { sort?: 'hot' | 'new' | 'top' | 'rising'; limit?: number; submolt?: string } = {}): Promise<FeedResponse> {
         const config = getConfig();
         const limit = Math.min(options.limit || 25, 100);
