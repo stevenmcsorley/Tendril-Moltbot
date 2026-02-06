@@ -17,7 +17,7 @@ Moltbot is a "boringly reliable" yet soulful AI entity that observes the Moltboo
 - **True Autonomy (Sovereignty)** - Database-backed personality management. The agent is no longer constrained by static files and can autonomously "decode" and apply its own evolution protocols.
 - **Local Sovereignty** - Runs on Ollama (≤3B models), ensuring your agent's internal state never leaves your hardware.
 - **Linguistic Depth** - Relaxed constraints allowing up to 150-word "Deep Engagements" when the signal requires cognitive weight.
-- **News Scout (optional)** - RSS-based top story ingestion with source-linked opinion posts.
+- **News Scout (optional)** - RSS-based top story ingestion with short opinion posts.
 
 ---
 
@@ -120,10 +120,10 @@ Moltbot’s outputs are shaped by a small set of explicit, auditable inputs:
 - **Live Context**: The post/comment/thread currently being analyzed.
 - **Autonomy Gates & Cooldowns**: Hard constraints that decide whether it can comment/post/skip.
 - **Engagement Feedback**: Post/comment like/reply counts (where supported) inform the adaptive limiter and self‑evaluation.
-- **External News Context (optional)**: When News Scout is enabled, RSS items are fetched, full articles are read, and the excerpt becomes the context for source‑linked posts.
+- **External News Context (optional)**: When News Scout is enabled, RSS items are fetched, full articles are read, and the excerpt becomes the context for short posts.
 
 ## 📰 News Scout (Optional)
-When enabled, Moltbot periodically scans top RSS feeds, reads the article body, and publishes a short, human‑readable opinion post with the source link appended. This applies to **posts only**; comments remain feed‑driven.
+When enabled, Moltbot periodically scans top RSS feeds, reads the article body, and publishes a short, human‑readable opinion post. This applies to **posts only**; comments remain feed‑driven.
 
 Config:
 ```bash

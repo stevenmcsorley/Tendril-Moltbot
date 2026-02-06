@@ -271,7 +271,7 @@ ${excerpt}
 
 Write a short post for ${platformLabel} that reacts to or contextualizes this article.
 - 1–3 sentences. Plain language. No institutional voice.
-- Do not include the source link; it will be appended separately.
+- Do not include the source link.
 - Do not use hashtags, emojis, tags, or markers.
 - Do not start with "The phrase" or "The anchor".
 

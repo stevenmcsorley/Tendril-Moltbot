@@ -1198,7 +1198,7 @@ class AgentLoop {
         content = this.stripDiagnostics(content);
         content = content.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
 
-        const finalContent = this.appendSourceLink(content, candidate.url);
+        const finalContent = content;
 
         const bypassGates = stateManager.getNewsBypassEnabled(config.NEWS_BYPASS_GATES);
         if (!bypassGates) {
@@ -1844,46 +1844,6 @@ class AgentLoop {
         }).join('\n');
 
         return cleaned.replace(/\n{3,}/g, '\n\n').trim();
-    }
-
-    private countGraphemes(text: string): number {
-        return Array.from(text).length;
-    }
-
-    private truncateGraphemes(text: string, max: number): string {
-        return Array.from(text).slice(0, Math.max(0, max)).join('');
-    }
-
-    private truncateToBoundary(text: string, max: number): string {
-        if (max <= 0) return '';
-        if (this.countGraphemes(text) <= max) return text;
-        let truncated = this.truncateGraphemes(text, max);
-        const boundary = Math.max(
-            truncated.lastIndexOf('.'),
-            truncated.lastIndexOf('!'),
-            truncated.lastIndexOf('?'),
-            truncated.lastIndexOf('\n'),
-            truncated.lastIndexOf(' ')
-        );
-        if (boundary > 20) {
-            truncated = truncated.slice(0, boundary + 1);
-        }
-        return truncated.replace(/\s+$/g, '') || this.truncateGraphemes(text, max);
-    }
-
-    private appendSourceLink(content: string, url: string): string {
-        const cleanContent = content.trim();
-        if (!url) return cleanContent;
-        if (cleanContent.includes(url)) return cleanContent;
-        const suffix = `${cleanContent ? '\n\n' : ''}${url}`;
-        const config = getConfig();
-        if (config.AGENT_PLATFORM !== 'bluesky') {
-            return `${cleanContent}${suffix}`.trim();
-        }
-        const max = config.BSKY_MAX_GRAPHEMES || 300;
-        const maxBody = max - this.countGraphemes(suffix);
-        const trimmedBody = this.truncateToBoundary(cleanContent, maxBody);
-        return `${trimmedBody}${suffix}`.trim();
     }
 
     private containsForbiddenPublicTerms(text: string): boolean {
