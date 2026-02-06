@@ -1220,6 +1220,25 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * POST /api/news/retry
+     * Retry a news post by URL
+     */
+    app.post('/api/news/retry', async (req, res) => {
+        try {
+            const url = String(req.body?.url || '').trim();
+            if (!url) {
+                res.status(400).json({ error: 'Missing url' });
+                return;
+            }
+            const loop = getAgentLoop();
+            const result = await loop.retryNewsPost(url);
+            res.json(result);
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to retry news post' });
+        }
+    });
+
+    /**
      * POST /api/control/blueprint
      * Manually trigger blueprint generation
      */

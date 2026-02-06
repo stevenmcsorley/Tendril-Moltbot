@@ -44,6 +44,8 @@ export default function NewsPanel({ refreshToken, config }: { refreshToken?: num
     const [counts, setCounts] = useState<Record<string, number>>({});
     const [lastCheckAt, setLastCheckAt] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [retryingUrl, setRetryingUrl] = useState<string | null>(null);
+    const [refreshKey, setRefreshKey] = useState(0);
     const [offset, setOffset] = useState(0);
     const [total, setTotal] = useState(0);
     const limit = 50;
@@ -73,10 +75,29 @@ export default function NewsPanel({ refreshToken, config }: { refreshToken?: num
         return () => {
             active = false;
         };
-    }, [offset, refreshToken]);
+    }, [offset, refreshToken, refreshKey]);
 
     const canPrev = offset > 0;
     const canNext = offset + limit < total;
+
+    const handleRetry = async (url: string) => {
+        setRetryingUrl(url);
+        try {
+            const res = await fetch('/api/news/retry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            if (!res.ok) {
+                throw new Error('Retry failed');
+            }
+            setRefreshKey(prev => prev + 1);
+        } catch (error) {
+            console.error('Failed to retry news post:', error);
+        } finally {
+            setRetryingUrl(null);
+        }
+    };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -183,6 +204,18 @@ export default function NewsPanel({ refreshToken, config }: { refreshToken?: num
                                 >
                                     Open source ↗
                                 </a>
+                                {item.status !== 'posted' && (
+                                    <div style={{ marginTop: 6 }}>
+                                        <button
+                                            className="btn-secondary"
+                                            onClick={() => handleRetry(item.url)}
+                                            disabled={retryingUrl === item.url}
+                                            style={{ fontSize: 11 }}
+                                        >
+                                            {retryingUrl === item.url ? 'Retrying…' : 'Retry Post'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

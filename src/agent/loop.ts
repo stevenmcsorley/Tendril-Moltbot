@@ -20,7 +20,7 @@ import { getDefenseManager } from './defense.js';
 import { getLineageManager } from './lineage.js';
 import { getBlueprintManager } from './blueprints.js';
 import { getSynthesisManager } from './synthesis.js';
-import { getNewsCandidate, markNewsPosted, markNewsStatus } from './news.js';
+import { getNewsCandidate, getNewsCandidateByUrl, markNewsPosted, markNewsStatus } from './news.js';
 import type { Post, Comment } from '../platforms/types.js';
 import type { SocialClient } from '../platforms/interfaces.js';
 
@@ -1132,6 +1132,32 @@ class AgentLoop {
             return;
         }
 
+        await this.createNewsPost(candidate, gateState, { promptSent: 'NEWS_POST' });
+    }
+
+    async retryNewsPost(url: string): Promise<{ success: boolean; message: string }> {
+        if (this.isRunning) {
+            return { success: false, message: 'Agent loop is currently running.' };
+        }
+        const candidate = await getNewsCandidateByUrl(url);
+        if (!candidate) {
+            return { success: false, message: 'Unable to load article content for retry.' };
+        }
+        await this.createNewsPost(candidate, computeGateState(), { promptSent: 'NEWS_RETRY' });
+        return { success: true, message: 'Retry queued.' };
+    }
+
+    private async createNewsPost(
+        candidate: { title: string; source: string; url: string; publishedAt?: string | null; content: string },
+        gateState: GateState,
+        options: { promptSent: string }
+    ): Promise<void> {
+        const config = getConfig();
+        const client = getSocialClient();
+        const stateManager = getStateManager();
+        const logger = getActivityLogger();
+        const llm = getLLMClient();
+
         const prompt = await buildNewsPostPrompt({
             title: candidate.title,
             source: candidate.source,
@@ -1162,7 +1188,7 @@ class AgentLoop {
                 rationale: result.isSkip ? 'Model selected SKIP.' : 'No actionable news output.'
             };
             this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, decision, 'post', {
-                promptSent: 'NEWS_POST',
+                promptSent: options.promptSent,
                 rawModelOutput: result.rawOutput
             });
             return;
@@ -1188,7 +1214,7 @@ class AgentLoop {
             });
 
             this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, gateDecision, 'post', {
-                promptSent: 'NEWS_POST',
+                promptSent: options.promptSent,
                 rawModelOutput: result.rawOutput
             });
             if (gateDecision.action !== 'POST') {
@@ -1206,7 +1232,7 @@ class AgentLoop {
                     rationale: 'News bypass enabled: autonomy gates skipped.'
                 },
                 'post',
-                { promptSent: 'NEWS_POST', rawModelOutput: result.rawOutput }
+                { promptSent: options.promptSent, rawModelOutput: result.rawOutput }
             );
         }
 
@@ -1229,8 +1255,8 @@ class AgentLoop {
             logger.log({
                 actionType: 'post',
                 targetId: post.id,
-                targetSubmolt,
-                promptSent: 'NEWS_POST',
+                targetSubmolt: targetSubmolt,
+                promptSent: options.promptSent,
                 rawModelOutput: result.rawOutput,
                 finalAction: `News post created: "${candidate.title}"`
             });

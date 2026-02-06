@@ -212,6 +212,26 @@ export function markNewsStatus(url: string, status: string): void {
     db.prepare('UPDATE news_items SET status = ? WHERE url = ?').run(status, url);
 }
 
+export async function getNewsCandidateByUrl(url: string): Promise<NewsCandidate | null> {
+    if (!url) return null;
+    const db = getDatabaseManager().getDb();
+    const row = db.prepare('SELECT url, title, source, published_at FROM news_items WHERE url = ?').get(url) as any;
+    if (!row) return null;
+    const config = getConfig();
+    const minContentChars = Math.max(100, config.NEWS_MIN_CONTENT_CHARS || 0);
+    const content = await fetchArticleText(url);
+    if (!content || content.length < minContentChars) {
+        return null;
+    }
+    return {
+        title: row.title ?? url,
+        url: row.url,
+        source: row.source ?? 'Unknown',
+        publishedAt: row.published_at ?? null,
+        content
+    };
+}
+
 export async function getNewsCandidate(): Promise<NewsCandidate | null> {
     const config = getConfig();
     const sources = parseSources(config.NEWS_RSS_SOURCES);
