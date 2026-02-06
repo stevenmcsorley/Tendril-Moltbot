@@ -634,9 +634,15 @@ export class StateManager {
         }));
     }
 
-    getMyComments(limit?: number, offset: number = 0): any[] {
+    getMyComments(limit?: number, offset: number = 0, sort: 'recent' | 'likes' | 'replies' = 'recent'): any[] {
         const db = getDatabaseManager().getDb();
-        const baseQuery = 'SELECT * FROM comments ORDER BY timestamp DESC';
+        let orderBy = 'timestamp DESC';
+        if (sort === 'likes') {
+            orderBy = 'like_count DESC, timestamp DESC';
+        } else if (sort === 'replies') {
+            orderBy = 'reply_count DESC, timestamp DESC';
+        }
+        const baseQuery = `SELECT * FROM comments ORDER BY ${orderBy}`;
         const rows = typeof limit === 'number'
             ? db.prepare(`${baseQuery} LIMIT ? OFFSET ?`).all(limit, offset)
             : db.prepare(baseQuery).all();

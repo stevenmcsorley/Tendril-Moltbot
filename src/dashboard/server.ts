@@ -474,10 +474,12 @@ export function createDashboardServer(): express.Application {
             const state = getStateManager();
             const limit = Math.min(200, parseInt(String(req.query.limit)) || 20);
             const offset = parseInt(String(req.query.offset)) || 0;
+            const sortParam = String(req.query.sort || 'recent');
+            const sort = sortParam === 'likes' || sortParam === 'replies' ? sortParam : 'recent';
             const total = state.getMyCommentsCount();
-            const myComments = state.getMyComments(limit, offset);
+            const myComments = state.getMyComments(limit, offset, sort);
 
-            res.json({ comments: myComments, total });
+            res.json({ comments: myComments, total, sort });
         } catch (error) {
             res.status(500).json({
                 error: 'Failed to fetch comments',

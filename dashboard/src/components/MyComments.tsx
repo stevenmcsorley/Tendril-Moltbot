@@ -39,17 +39,18 @@ export default function MyComments({ refreshToken, platform }: { refreshToken?: 
     const [comments, setComments] = useState<CommentEntry[]>([]);
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
+    const [sort, setSort] = useState<'recent' | 'likes' | 'replies'>('recent');
     const [loading, setLoading] = useState(true);
     const limit = 20;
 
     useEffect(() => {
         fetchComments();
-    }, [refreshToken, page]);
+    }, [refreshToken, page, sort]);
 
     const fetchComments = async () => {
         try {
             const offset = (page - 1) * limit;
-            const res = await fetch(`/api/my-comments?limit=${limit}&offset=${offset}`);
+            const res = await fetch(`/api/my-comments?limit=${limit}&offset=${offset}&sort=${sort}`);
             const data = await res.json();
             setComments(data.comments || []);
             setTotal(data.total || 0);
@@ -84,7 +85,20 @@ export default function MyComments({ refreshToken, platform }: { refreshToken?: 
         <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <h2 style={{ margin: 0 }}>My Comments</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <select
+                        value={sort}
+                        onChange={(e) => {
+                            setSort(e.target.value as 'recent' | 'likes' | 'replies');
+                            setPage(1);
+                        }}
+                        className="btn-secondary"
+                        style={{ padding: '6px 8px', minWidth: 140 }}
+                    >
+                        <option value="recent">Sort: Recent</option>
+                        <option value="likes">Sort: Likes</option>
+                        <option value="replies">Sort: Replies</option>
+                    </select>
                     <button
                         className="btn-secondary"
                         onClick={() => setPage(prev => Math.max(1, prev - 1))}
