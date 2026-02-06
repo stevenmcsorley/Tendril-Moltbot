@@ -32,6 +32,10 @@ export interface SocialClient {
     upvotePost(postId: string): Promise<void>;
     downvotePost(postId: string): Promise<void>;
     upvoteComment(commentId: string): Promise<void>;
+    getPostStats?(postId: string): Promise<{ likes?: number; replies?: number } | null>;
+    getCommentStats?(commentId: string): Promise<{ likes?: number; replies?: number } | null>;
     createPost(options: { submolt: string; title: string; content?: string; url?: string }): Promise<Post>;
     createSubmolt?(options: { name: string; display_name: string; description: string }): Promise<Submolt>;
+    muteUser?(userId: string): Promise<void>;
+    unmuteUser?(userId: string): Promise<void>;
 }

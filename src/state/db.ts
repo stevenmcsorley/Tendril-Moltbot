@@ -134,6 +134,10 @@ export class DatabaseManager {
         this.ensureColumn('activity', 'evolution_id', 'TEXT');
         this.ensureColumn('activity', 'signal_type', 'TEXT');
         this.ensureColumn('activity', 'target_author', 'TEXT');
+        this.ensureColumn('posts', 'like_count', 'INTEGER DEFAULT 0');
+        this.ensureColumn('posts', 'reply_count', 'INTEGER DEFAULT 0');
+        this.ensureColumn('comments', 'like_count', 'INTEGER DEFAULT 0');
+        this.ensureColumn('comments', 'reply_count', 'INTEGER DEFAULT 0');
     }
 
     private ensureColumn(table: string, column: string, type: string): void {

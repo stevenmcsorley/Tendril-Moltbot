@@ -54,6 +54,7 @@ const configSchema = z.object({
     BSKY_APP_PASSWORD: z.string().optional(),
     BSKY_MAX_GRAPHEMES: z.coerce.number().positive().default(300),
     BSKY_FEED_URI: z.string().optional(),
+    BSKY_DEFENSE_MUTE: z.coerce.boolean().default(false),
 
     // Mastodon
     MASTODON_BASE_URL: optionalUrl.optional(),

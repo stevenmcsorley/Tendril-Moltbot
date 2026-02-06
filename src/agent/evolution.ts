@@ -36,7 +36,17 @@ const EVOLUTION_CADENCE: Record<'stable' | 'rapid', EvolutionCadence> = {
 
 function getEvolutionCadence(): EvolutionCadence {
     const mode = getConfig().EVOLUTION_MODE;
-    return EVOLUTION_CADENCE[mode] ?? EVOLUTION_CADENCE.rapid;
+    const base = EVOLUTION_CADENCE[mode] ?? EVOLUTION_CADENCE.rapid;
+    if (mode === 'rapid') {
+        const minutes = getConfig().SELF_MODIFICATION_COOLDOWN_MINUTES;
+        const hours = Math.max(0.05, minutes / 60);
+        return {
+            ...base,
+            minHoursBetween: hours,
+            nudgeAfterHours: hours,
+        };
+    }
+    return base;
 }
 const STABILIZATION_HOURS = 48;
 const CORRECTIVE_DOMINANCE_RATIO = 0.6;

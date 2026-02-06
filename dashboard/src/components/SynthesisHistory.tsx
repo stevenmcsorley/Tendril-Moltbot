@@ -59,7 +59,18 @@ export default function SynthesisHistory({ history, total, page, limit, onPageCh
                     </Tooltip>
                 </h2>
                 <div className="panel-subtitle">Periodic clustering of recent memories into a condensed convergence report.</div>
-                <div className="empty-state">No synthesis reports generated yet. Density threshold not reached.</div>
+                <div className="synthesis-empty">
+                    <div className="synthesis-scan">
+                        <div className="synthesis-scan-line" />
+                        <div className="synthesis-nodes">
+                            <span />
+                            <span />
+                            <span />
+                        </div>
+                    </div>
+                    <div className="empty-state">No synthesis reports generated yet. Density threshold not reached.</div>
+                    <div className="synthesis-empty-note">Accumulating signals. Convergence will trigger once density is met.</div>
+                </div>
             </div>
         );
     }

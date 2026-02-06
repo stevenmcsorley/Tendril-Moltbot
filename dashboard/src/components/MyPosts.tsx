@@ -6,6 +6,8 @@ interface Post {
     content: string;
     submolt: string;
     votes: number;
+    likeCount?: number;
+    replyCount?: number;
     createdAt: string;
 }
 
@@ -67,8 +69,13 @@ export default function MyPosts({ refreshToken }: { refreshToken?: number }) {
                                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
                                         m/{post.submolt} • {new Date(post.createdAt).toLocaleString()}
                                     </div>
-                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                                        Votes: <span style={{ color: 'var(--success)', fontWeight: 600 }}>{post.votes}</span>
+                                    <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
+                                        <span>
+                                            Likes: <span style={{ color: 'var(--success)', fontWeight: 600 }}>{post.likeCount ?? post.votes}</span>
+                                        </span>
+                                        <span>
+                                            Replies: <span style={{ color: 'var(--info)', fontWeight: 600 }}>{post.replyCount ?? 0}</span>
+                                        </span>
                                     </div>
                                 </div>
                                 <a

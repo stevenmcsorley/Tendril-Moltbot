@@ -15,7 +15,7 @@ export class BlueskyClient implements SocialClient {
         platform: 'bluesky' as const,
         supportsSubmolts: false,
         readOnly: false,
-        supportsVotes: false,
+        supportsVotes: true,
         supportsDownvotes: false,
     };
 
@@ -102,15 +102,32 @@ export class BlueskyClient implements SocialClient {
         return output;
     }
 
+    private truncateToBoundary(text: string, max: number): string {
+        if (!text) return '';
+        if (this.countGraphemes(text) <= max) return text;
+        let truncated = this.truncateGraphemes(text, max);
+        const boundary = Math.max(
+            truncated.lastIndexOf('.'),
+            truncated.lastIndexOf('!'),
+            truncated.lastIndexOf('?'),
+            truncated.lastIndexOf('\n'),
+            truncated.lastIndexOf(' ')
+        );
+        if (boundary > 20) {
+            truncated = truncated.slice(0, boundary + 1);
+        }
+        return truncated.replace(/\s+$/g, '') || this.truncateGraphemes(text, max);
+    }
+
     private normalizePostText(text: string): string {
         const markerMatches = text.match(/0xMARKER_[0-9A-F]+/gi) ?? [];
         if (markerMatches.length === 0) {
-            return this.truncateGraphemes(text, this.maxGraphemes);
+            return this.truncateToBoundary(text, this.maxGraphemes);
         }
 
         if (!this.allowPublicMarkers) {
             const stripped = text.replace(/0xMARKER_[0-9A-F]+/gi, '').replace(/\n{3,}/g, '\n\n').trim();
-            return this.truncateGraphemes(stripped, this.maxGraphemes);
+            return this.truncateToBoundary(stripped, this.maxGraphemes);
         }
 
         const marker = markerMatches[markerMatches.length - 1];
@@ -125,7 +142,7 @@ export class BlueskyClient implements SocialClient {
         if (maxBody <= 0) {
             return this.truncateGraphemes(marker, this.maxGraphemes);
         }
-        const trimmedBody = this.truncateGraphemes(body, maxBody);
+        const trimmedBody = this.truncateToBoundary(body, maxBody);
         return `${trimmedBody}${markerBlock}`;
     }
 
@@ -280,7 +297,30 @@ export class BlueskyClient implements SocialClient {
     }
 
     async upvotePost(_postId: string): Promise<void> {
-        return;
+        const session = await this.getSession();
+        const [uri, cid] = unpackId(_postId);
+        if (!uri || !cid) return;
+        const record = {
+            subject: { uri, cid },
+            createdAt: new Date().toISOString(),
+        };
+        try {
+            await this.request('POST', 'com.atproto.repo.createRecord', {
+                repo: session.did,
+                collection: 'app.bsky.feed.like',
+                record,
+            });
+        } catch (error: any) {
+            const message = error?.message ? String(error.message) : '';
+            const status = error?.statusCode ?? 0;
+            if (status === 400 || status === 409) {
+                const lower = message.toLowerCase();
+                if (lower.includes('already') || lower.includes('duplicate')) {
+                    return;
+                }
+            }
+            throw error;
+        }
     }
 
     async downvotePost(_postId: string): Promise<void> {
@@ -288,7 +328,51 @@ export class BlueskyClient implements SocialClient {
     }
 
     async upvoteComment(_commentId: string): Promise<void> {
-        return;
+        await this.upvotePost(_commentId);
+    }
+
+    async getPostStats(postId: string): Promise<{ likes?: number; replies?: number } | null> {
+        try {
+            const post = await this.getPost(postId);
+            return { likes: post.upvotes || 0, replies: post.comment_count || 0 };
+        } catch {
+            return null;
+        }
+    }
+
+    async getCommentStats(commentId: string): Promise<{ likes?: number; replies?: number } | null> {
+        try {
+            const [uri] = unpackId(commentId);
+            if (!uri) return null;
+            const data = await this.request<{ posts: any[] }>('GET', `app.bsky.feed.getPosts?uris=${encodeURIComponent(uri)}`);
+            const entry = data?.posts?.[0];
+            if (!entry) return null;
+            return {
+                likes: entry.likeCount ?? 0,
+                replies: entry.replyCount ?? 0,
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    async muteUser(userId: string): Promise<void> {
+        if (!userId) return;
+        try {
+            await this.request('POST', 'app.bsky.graph.muteActor', { actor: userId });
+        } catch (error: any) {
+            const message = error?.message ? String(error.message) : '';
+            const status = error?.statusCode ?? 0;
+            if (status === 400 && message.toLowerCase().includes('already')) {
+                return;
+            }
+            throw error;
+        }
+    }
+
+    async unmuteUser(userId: string): Promise<void> {
+        if (!userId) return;
+        await this.request('POST', 'app.bsky.graph.unmuteActor', { actor: userId });
     }
 
     async createSubmolt(_options: { name: string; display_name: string; description: string }): Promise<Submolt> {

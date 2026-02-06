@@ -239,7 +239,37 @@ class AgentLoop {
 
                     // 1. DEFENSE: Check for adversarial patterns
                     const defenseManager = getDefenseManager();
+                    const authorHandle = post.author?.name;
+                    const authorId = post.author?.id;
+                    const wasQuarantined = authorHandle ? stateManager.isQuarantined(authorHandle) : false;
                     if (defenseManager.evaluateQuarantine(post)) {
+                        if (!wasQuarantined && config.AGENT_PLATFORM === 'bluesky' && config.BSKY_DEFENSE_MUTE && authorId && client.muteUser) {
+                            try {
+                                await client.muteUser(authorId);
+                                logger.log({
+                                    actionType: 'decision',
+                                    targetId: post.id,
+                                    targetSubmolt: post.submolt?.name,
+                                    targetAuthor: post.author?.name,
+                                    promptSent: '[DEFENSE_MUTE]',
+                                    rawModelOutput: null,
+                                    finalAction: `DEFENSE: Muted @${post.author?.name} (${authorId})`,
+                                    signalType: 'DEFENSE',
+                                });
+                            } catch (muteError) {
+                                logger.log({
+                                    actionType: 'error',
+                                    targetId: post.id,
+                                    targetSubmolt: post.submolt?.name,
+                                    targetAuthor: post.author?.name,
+                                    promptSent: '[DEFENSE_MUTE]',
+                                    rawModelOutput: null,
+                                    finalAction: `DEFENSE: Failed to mute @${post.author?.name}`,
+                                    error: muteError instanceof Error ? muteError.message : String(muteError),
+                                    signalType: 'DEFENSE',
+                                });
+                            }
+                        }
                         logger.log({
                             actionType: 'skip',
                             targetId: post.id,
@@ -471,8 +501,11 @@ class AgentLoop {
                 await this.tryProactivePost(feed.posts, computeGateState());
             }
 
-            // Social Engagement: Check for replies to my posts/comments
-            await this.trySocialEngagement();
+        // Social Engagement: Check for replies to my posts/comments
+        await this.trySocialEngagement();
+
+            // Refresh engagement metrics on my own posts/comments
+            await this.refreshOwnEngagements();
 
             const confidenceScore = this.cycleStats.confidenceCount > 0
                 ? Number((this.cycleStats.confidenceSum / this.cycleStats.confidenceCount).toFixed(2))
@@ -525,6 +558,54 @@ class AgentLoop {
                 status: 'idle',
                 isPaused: false
             });
+        }
+    }
+
+    private async refreshOwnEngagements(): Promise<void> {
+        const client = getSocialClient();
+        const stateManager = getStateManager();
+        const logger = getActivityLogger();
+
+        const posts = stateManager.getMyPosts().slice(0, 10);
+        for (const post of posts) {
+            try {
+                const stats = client.getPostStats
+                    ? await client.getPostStats(post.id)
+                    : null;
+                if (stats && (stats.likes !== undefined || stats.replies !== undefined)) {
+                    stateManager.updatePostEngagement(post.id, stats);
+                }
+            } catch (error) {
+                logger.log({
+                    actionType: 'error',
+                    targetId: post.id,
+                    promptSent: 'ENGAGEMENT_REFRESH',
+                    rawModelOutput: null,
+                    finalAction: 'Failed to refresh post engagement',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+
+        if (client.getCommentStats) {
+            const comments = stateManager.getMyComments().slice(0, 20);
+            for (const comment of comments) {
+                try {
+                    const stats = await client.getCommentStats(comment.id);
+                    if (stats && (stats.likes !== undefined || stats.replies !== undefined)) {
+                        stateManager.updateCommentEngagement(comment.id, stats);
+                    }
+                } catch (error) {
+                    logger.log({
+                        actionType: 'error',
+                        targetId: comment.id,
+                        promptSent: 'ENGAGEMENT_REFRESH',
+                        rawModelOutput: null,
+                        finalAction: 'Failed to refresh comment engagement',
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                }
+            }
         }
     }
 

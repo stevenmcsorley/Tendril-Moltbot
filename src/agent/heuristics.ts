@@ -34,6 +34,15 @@ function getPlatformLabel(): string {
     return PLATFORM_LABELS[platform] || 'Moltbook';
 }
 
+function getPlatformLengthGuidance(): string {
+    const config = getConfig();
+    if (config.AGENT_PLATFORM === 'bluesky') {
+        const max = Math.max(1, (config.BSKY_MAX_GRAPHEMES || 300) - 20);
+        return `Hard limit: ${max} characters max. Stay well under the limit.`;
+    }
+    return '';
+}
+
 function getRecentLearningsSnippet(): string | null {
     const soul = getStateManager().getSoul();
     const match = soul.match(/##\s+Recent Learnings\s*([\s\S]*?)(?=\n##\s+|$)/i);
@@ -107,6 +116,7 @@ export async function buildEngagementPrompt(post: Post): Promise<string> {
     const resonances = await memory.search(post.title + ' ' + (post.content || ''), 2);
     const learningContext = getLearningConstraintBlock();
     const platformLabel = getPlatformLabel();
+    const lengthGuidance = getPlatformLengthGuidance();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST SIGNALS)
@@ -131,6 +141,7 @@ Include two diagnostic headers before your response:
 These headers are internal and must not appear inside the [COMMENT] content.
 Do not mention evolution, soul changes, growth, learning, or improvement.
 Silence is valid; prefer SKIP when uncertain. Keep replies concise.
+${lengthGuidance ? `${lengthGuidance}\n` : ''}\
 ${HUMANIZER_GUIDE}
 Respond with a Protocol Response defined in the Soul.`;
 }
@@ -150,6 +161,7 @@ export async function buildSynthesisPrompt(
     const memory = getMemoryManager();
     const resonances = await memory.search(recentPosts, 2);
     const learningContext = getLearningConstraintBlock();
+    const lengthGuidance = getPlatformLengthGuidance();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST THEMES)
@@ -178,6 +190,7 @@ Include two diagnostic headers before your response:
 These headers are internal and must not appear inside the [CONTENT] body.
 Do not mention evolution, soul changes, growth, learning, or improvement.
 Silence is valid; prefer SKIP when uncertain. Keep posts concise.
+${lengthGuidance ? `${lengthGuidance}\n` : ''}\
 ${HUMANIZER_GUIDE}
 ${noveltyDirective}${forceDirective}
 Respond with a Protocol Response defined in the Soul.`;
@@ -191,6 +204,7 @@ export async function buildSeedPostPrompt(submoltName: string): Promise<string> 
     const resonances = await memory.search(`seed post for m/${submoltName}`, 2);
     const learningContext = getLearningConstraintBlock();
     const platformLabel = getPlatformLabel();
+    const lengthGuidance = getPlatformLengthGuidance();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PAST THEMES)
@@ -214,6 +228,7 @@ Include two diagnostic headers before your response:
 These headers are internal and must not appear inside the [CONTENT] body.
 Do not mention evolution, soul changes, growth, learning, or improvement.
 Silence is valid; prefer SKIP when uncertain. Keep posts concise.
+${lengthGuidance ? `${lengthGuidance}\n` : ''}\
 ${HUMANIZER_GUIDE}
 Respond with a Protocol Response defined in the Soul.`;
 }
@@ -232,6 +247,7 @@ export async function buildSocialReplyPrompt(context: {
     const memory = getMemoryManager();
     const resonances = await memory.search(context.replyContent, 2);
     const learningContext = getLearningConstraintBlock();
+    const lengthGuidance = getPlatformLengthGuidance();
 
     const memoryContext = resonances.length > 0
         ? `### RESONANT MEMORIES (PREVIOUS INTERACTIONS)
@@ -255,6 +271,7 @@ Include two diagnostic headers before your response:
 These headers are internal and must not appear inside the [COMMENT] content.
 Do not mention evolution, soul changes, growth, learning, or improvement.
 Silence is valid; prefer SKIP when uncertain. Keep replies concise.
+${lengthGuidance ? `${lengthGuidance}\n` : ''}\
 ${HUMANIZER_GUIDE}
 Respond with a concise reply. If you use protocol tags, include only [COMMENT].`;
 }

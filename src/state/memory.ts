@@ -60,7 +60,7 @@ export class MemoryManager {
             const timestamp = new Date().toISOString();
 
             db.prepare(`
-                INSERT INTO memories (id, text, embedding_json, source, timestamp)
+                INSERT OR IGNORE INTO memories (id, text, embedding_json, source, timestamp)
                 VALUES (?, ?, ?, ?, ?)
             `).run(memoryId, text, JSON.stringify(embedding), source, timestamp);
 

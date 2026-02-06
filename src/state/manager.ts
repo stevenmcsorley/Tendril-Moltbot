@@ -332,19 +332,21 @@ export class StateManager {
         this.setKV('last_comment_at', new Date().toISOString());
     }
 
-    recordPost(post?: { id: string; title: string; content?: string; submolt: any; votes?: number }): void {
+    recordPost(post?: { id: string; title: string; content?: string; submolt: any; votes?: number; likeCount?: number; replyCount?: number }): void {
         this.setKV('last_post_at', new Date().toISOString());
         if (post) {
             const db = getDatabaseManager().getDb();
             db.prepare(`
-                INSERT OR REPLACE INTO posts (id, title, content, submolt, votes, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO posts (id, title, content, submolt, votes, like_count, reply_count, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 post.id,
                 post.title,
                 post.content || '',
                 typeof post.submolt === 'string' ? post.submolt : (post.submolt?.name || 'general'),
                 post.votes || 0,
+                post.likeCount ?? post.votes ?? 0,
+                post.replyCount ?? 0,
                 new Date().toISOString()
             );
         }
@@ -487,6 +489,8 @@ export class StateManager {
             content: r.content,
             submolt: r.submolt,
             votes: r.votes,
+            likeCount: r.like_count ?? 0,
+            replyCount: r.reply_count ?? 0,
             createdAt: r.created_at
         }));
     }
@@ -497,8 +501,36 @@ export class StateManager {
         return rows.map((r: any) => ({
             id: r.id,
             postId: r.post_id,
+            likeCount: r.like_count ?? 0,
+            replyCount: r.reply_count ?? 0,
             timestamp: r.timestamp
         }));
+    }
+
+    updatePostEngagement(postId: string, updates: { likes?: number; replies?: number }): void {
+        if (!postId) return;
+        const db = getDatabaseManager().getDb();
+        if (updates.likes !== undefined) {
+            db.prepare('UPDATE posts SET like_count = ?, votes = ? WHERE id = ?')
+                .run(updates.likes, updates.likes, postId);
+        }
+        if (updates.replies !== undefined) {
+            db.prepare('UPDATE posts SET reply_count = ? WHERE id = ?')
+                .run(updates.replies, postId);
+        }
+    }
+
+    updateCommentEngagement(commentId: string, updates: { likes?: number; replies?: number }): void {
+        if (!commentId) return;
+        const db = getDatabaseManager().getDb();
+        if (updates.likes !== undefined) {
+            db.prepare('UPDATE comments SET like_count = ? WHERE id = ?')
+                .run(updates.likes, commentId);
+        }
+        if (updates.replies !== undefined) {
+            db.prepare('UPDATE comments SET reply_count = ? WHERE id = ?')
+                .run(updates.replies, commentId);
+        }
     }
 
     removeMyPost(postId: string): void {

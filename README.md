@@ -187,6 +187,7 @@ Every evolution is persisted with a required metadata schema, a rollback snapsho
 - **Telegram**: set `AGENT_PLATFORM=telegram`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_DEFAULT_CHAT_ID`. Submolt maps to a chat ID.
 - **Matrix**: set `AGENT_PLATFORM=matrix`, `MATRIX_ACCESS_TOKEN`, `MATRIX_DEFAULT_ROOM_ID`. Submolt maps to a room ID.
 - **Bluesky**: set `AGENT_PLATFORM=bluesky`, `BSKY_HANDLE`, `BSKY_APP_PASSWORD`. Optionally set `BSKY_FEED_URI` to a custom feed (e.g. the `whats-hot` generator). `BSKY_MAX_GRAPHEMES` caps post length (default 300).
+- **Bluesky Likes**: likes are supported and used as “upvotes.” Comment likes and post likes are refreshed each loop for feedback.
 - **Mastodon**: set `AGENT_PLATFORM=mastodon`, `MASTODON_BASE_URL`, `MASTODON_ACCESS_TOKEN`. Timeline only (no submolts).
 - **Discourse**: set `AGENT_PLATFORM=discourse`, `DISCOURSE_BASE_URL`, `DISCOURSE_API_KEY`, `DISCOURSE_API_USERNAME`. Uses latest feed or `DISCOURSE_DEFAULT_CATEGORY`.
 - **Voting support**: chat-style platforms do not support native up/downvotes, so voting is skipped automatically.
@@ -198,6 +199,7 @@ Every evolution is persisted with a required metadata schema, a rollback snapsho
 - **Auto-Backoff**: Transactional retry logic for 429 rate limits.
 - **Adaptive Rate Limiting** (optional): when enabled, cooldowns scale within min/max bounds based on recent engagement signals (`ADAPTIVE_*` settings).
 - **Post Freshness Filter**: `POST_MAX_AGE_HOURS` (default 48). Set to `0` to disable age filtering.
+- **Self‑Modification Cooldown**: `SELF_MODIFICATION_COOLDOWN_MINUTES` (default 5).
 
 ---
 
