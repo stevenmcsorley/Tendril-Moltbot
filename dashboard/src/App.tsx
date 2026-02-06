@@ -213,6 +213,7 @@ export default function App() {
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [filterType, setFilterType] = useState<string | undefined>(undefined);
+    const [logSearch, setLogSearch] = useState('');
     const [activeTab, setActiveTab] = useState<'logs' | 'submolts' | 'posts' | 'comments' | 'stats' | 'intelligence' | 'soul_mgmt' | 'data'>('logs');
     const [isWsConnected, setIsWsConnected] = useState(false);
     const [topology, setTopology] = useState<ResonanceData[]>([]);
@@ -525,11 +526,10 @@ export default function App() {
     };
 
     const refresh = useCallback(async () => {
-        const logFetch = filterType?.startsWith('signals')
-            ? fetchLogs({ limit: 2000, type: filterType })
-            : filterType
-                ? fetchLogs({ limit: 300, type: filterType })
-                : fetchLogs({ limit: 300 });
+        const logLimit = logSearch.trim().length > 0 ? 2000 : (filterType?.startsWith('signals') ? 2000 : 300);
+        const logFetch = filterType
+            ? fetchLogs({ limit: logLimit, type: filterType })
+            : fetchLogs({ limit: logLimit });
         await Promise.all([
             fetchStatus(),
             logFetch,
@@ -557,6 +557,11 @@ export default function App() {
         setLastRefresh(new Date());
         setStatsRefreshToken(prev => prev + 1);
     }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats]);
+
+    useEffect(() => {
+        const limit = logSearch.trim().length > 0 ? 2000 : (filterType?.startsWith('signals') ? 2000 : 300);
+        fetchLogs({ limit, type: filterType });
+    }, [logSearch, filterType, fetchLogs]);
 
     // WebSocket Connection
     useEffect(() => {
@@ -849,6 +854,8 @@ export default function App() {
                             agentName={status?.agent.name}
                             currentFilter={filterType}
                             onFilterChange={handleFilterChange}
+                            searchQuery={logSearch}
+                            onSearchChange={setLogSearch}
                         />
                     ) : activeTab === 'submolts' ? (
                         <SubmoltList submolts={submolts} />

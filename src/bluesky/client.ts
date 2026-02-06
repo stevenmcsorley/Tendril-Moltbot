@@ -25,6 +25,7 @@ export class BlueskyClient implements SocialClient {
     private appPassword: string;
     private session: BlueskySession | null = null;
     private maxGraphemes = 300;
+    private threadDepth = 3;
     private readonly graphemeSegmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
         ? new Intl.Segmenter('en', { granularity: 'grapheme' })
         : null;
@@ -36,6 +37,7 @@ export class BlueskyClient implements SocialClient {
         this.handle = config.BSKY_HANDLE || '';
         this.appPassword = config.BSKY_APP_PASSWORD || '';
         this.maxGraphemes = Math.max(1, config.BSKY_MAX_GRAPHEMES || 300);
+        this.threadDepth = Math.max(1, Math.min(10, config.BSKY_THREAD_DEPTH || 3));
     }
 
     private async createSession(): Promise<BlueskySession> {
@@ -179,6 +181,13 @@ export class BlueskyClient implements SocialClient {
         const uri = item.uri || item.post?.uri;
         const cid = item.cid || item.post?.cid;
         const created = record.createdAt || new Date().toISOString();
+        const parentRef = record.reply?.parent
+            || item.post?.record?.reply?.parent
+            || item.reply?.parent
+            || item.post?.reply?.parent;
+        const parentId = parentRef?.uri
+            ? packId([parentRef.uri, parentRef.cid || ''])
+            : postId;
         return {
             id: packId([uri, cid || '']),
             content: record.text || '',
@@ -189,11 +198,20 @@ export class BlueskyClient implements SocialClient {
                 claimed: true,
             },
             post_id: postId,
-            parent_id: postId,
+            parent_id: parentId,
             upvotes: item.likeCount || item.post?.likeCount || 0,
             created_at: created,
             updated_at: created,
         };
+    }
+
+    private flattenReplies(nodes: any[], acc: any[]): void {
+        for (const node of nodes) {
+            acc.push(node);
+            if (Array.isArray(node?.replies) && node.replies.length > 0) {
+                this.flattenReplies(node.replies, acc);
+            }
+        }
     }
 
     async getMe(): Promise<Agent> {
@@ -260,9 +278,11 @@ export class BlueskyClient implements SocialClient {
 
     async getComments(postId: string): Promise<CommentsResponse> {
         const [uri] = unpackId(postId);
-        const data = await this.request<any>('GET', `app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=1`);
+        const data = await this.request<any>('GET', `app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=${this.threadDepth}`);
         const replies = data?.thread?.replies || [];
-        const comments = replies.map((reply: any) => this.mapComment(reply.post ?? reply, postId));
+        const flattened: any[] = [];
+        this.flattenReplies(replies, flattened);
+        const comments = flattened.map((reply: any) => this.mapComment(reply, postId));
         return { comments };
     }
 

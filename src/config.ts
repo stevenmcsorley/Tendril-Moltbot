@@ -53,6 +53,7 @@ const configSchema = z.object({
     BSKY_HANDLE: z.string().optional(),
     BSKY_APP_PASSWORD: z.string().optional(),
     BSKY_MAX_GRAPHEMES: z.coerce.number().positive().default(300),
+    BSKY_THREAD_DEPTH: z.coerce.number().int().min(1).max(10).default(3),
     BSKY_FEED_URI: z.string().optional(),
     BSKY_DEFENSE_MUTE: z.coerce.boolean().default(false),
 

@@ -19,6 +19,8 @@ interface ActivityLogProps {
     agentName?: string;
     currentFilter: string | undefined;
     onFilterChange: (filter: string | undefined) => void;
+    searchQuery: string;
+    onSearchChange: (value: string) => void;
 }
 
 function filterBySignals(entries: LogEntry[], filter: string | undefined): LogEntry[] {
@@ -44,6 +46,25 @@ function filterBySignals(entries: LogEntry[], filter: string | undefined): LogEn
     return entries.filter(entry => filter.split(',').includes(entry.actionType));
 }
 
+function filterBySearch(entries: LogEntry[], query: string): LogEntry[] {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return entries;
+    return entries.filter(entry => {
+        const fields = [
+            entry.actionType,
+            entry.targetId,
+            entry.targetSubmolt,
+            entry.promptSent,
+            entry.rawModelOutput,
+            entry.finalAction,
+            entry.error,
+            entry.evolutionId,
+            entry.signalType
+        ];
+        return fields.some(field => field && field.toLowerCase().includes(trimmed));
+    });
+}
+
 function formatTime(iso: string): string {
     const date = new Date(iso);
     return date.toLocaleTimeString();
@@ -61,9 +82,9 @@ function entryKey(entry: LogEntry): string {
     return `${entry.timestamp}-${entry.actionType}-${entry.targetId ?? 'none'}`;
 }
 
-export default function ActivityLog({ entries, agentName, currentFilter, onFilterChange }: ActivityLogProps) {
+export default function ActivityLog({ entries, agentName, currentFilter, onFilterChange, searchQuery, onSearchChange }: ActivityLogProps) {
     const [openEntries, setOpenEntries] = React.useState<Set<string>>(() => new Set());
-    const visibleEntries = filterBySignals(entries, currentFilter);
+    const visibleEntries = filterBySearch(filterBySignals(entries, currentFilter), searchQuery);
 
     React.useEffect(() => {
         const keys = new Set(visibleEntries.map(entryKey));
@@ -88,7 +109,22 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
         <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h2 style={{ margin: 0 }}>Activity Log</h2>
-                <div className="filter-controls" style={{ display: 'flex', gap: 8 }}>
+                <div className="filter-controls" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(event) => onSearchChange(event.target.value)}
+                        placeholder="Search logs"
+                        style={{
+                            background: 'var(--bg-tertiary)',
+                            border: '1px solid var(--border)',
+                            color: 'var(--text-primary)',
+                            borderRadius: 6,
+                            padding: '6px 10px',
+                            fontSize: 12,
+                            minWidth: 180
+                        }}
+                    />
                     <button
                         onClick={() => onFilterChange(undefined)}
                         disabled={!currentFilter}

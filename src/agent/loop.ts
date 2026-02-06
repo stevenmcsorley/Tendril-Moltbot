@@ -1117,6 +1117,7 @@ class AgentLoop {
                 let repliesInThisPost = 0;
                 for (const comment of comments) {
                     if (repliesInThisPost >= 5) break; // Limit per post to prevent flood
+                    if (comment.parent_id && comment.parent_id !== post.id) continue; // Only direct replies to the post
                     const replied = await this.processPotentialSocialReply(
                         comment,
                         post.id,
@@ -1530,6 +1531,27 @@ class AgentLoop {
                 && client.capabilities.supportsVotes !== false
                 && reply.id
                 && confidenceRank[confidence] >= confidenceRank[minConfidence];
+
+            if (!shouldUpvoteReply) {
+                let reason = 'Not eligible for reply upvote.';
+                if (!config.ENABLE_REPLY_UPVOTING) {
+                    reason = 'Reply upvotes disabled.';
+                } else if (client.capabilities.supportsVotes === false) {
+                    reason = 'Platform does not support votes.';
+                } else if (!reply.id) {
+                    reason = 'Missing reply id.';
+                } else if (confidenceRank[confidence] < confidenceRank[minConfidence]) {
+                    reason = `Confidence below ${minConfidence}.`;
+                }
+                logger.log({
+                    actionType: 'decision',
+                    targetId: reply.id,
+                    targetAuthor: reply.author?.name,
+                    promptSent: 'SOCIAL_REPLY_UPVOTE',
+                    rawModelOutput: result.rawOutput,
+                    finalAction: `decision: context=reply_like | action=SKIP | rationale=${reason}`
+                });
+            }
 
             if (shouldUpvoteReply) {
                 try {
