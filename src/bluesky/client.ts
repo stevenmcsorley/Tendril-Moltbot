@@ -278,12 +278,29 @@ export class BlueskyClient implements SocialClient {
 
     async getComments(postId: string): Promise<CommentsResponse> {
         const [uri] = unpackId(postId);
-        const data = await this.request<any>('GET', `app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=${this.threadDepth}`);
-        const replies = data?.thread?.replies || [];
-        const flattened: any[] = [];
-        this.flattenReplies(replies, flattened);
-        const comments = flattened.map((reply: any) => this.mapComment(reply, postId));
-        return { comments };
+        const endpoint = `app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=${this.threadDepth}`;
+        const maxAttempts = 3;
+        let lastError: unknown;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            try {
+                const data = await this.request<any>('GET', endpoint);
+                const replies = data?.thread?.replies || [];
+                const flattened: any[] = [];
+                this.flattenReplies(replies, flattened);
+                const comments = flattened.map((reply: any) => this.mapComment(reply, postId));
+                return { comments };
+            } catch (error) {
+                lastError = error;
+                const statusCode = error instanceof PlatformApiError ? error.statusCode : undefined;
+                const isUpstream = statusCode === 502 || statusCode === 503;
+                if (!isUpstream || attempt === maxAttempts) {
+                    throw error;
+                }
+                const delayMs = 400 * attempt;
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+        }
+        throw lastError ?? new PlatformApiError('UpstreamFailure', 502, 'bluesky');
     }
 
     async createComment(postId: string, content: string, parentId?: string): Promise<Comment> {

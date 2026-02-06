@@ -1136,6 +1136,16 @@ class AgentLoop {
                 if (err instanceof PlatformApiError && err.statusCode === 404) {
                     console.warn(`Post ${post.id} no longer exists, removing from tracking.`);
                     stateManager.removeMyPost(post.id);
+                } else if (err instanceof PlatformApiError && (err.statusCode === 502 || err.statusCode === 503)) {
+                    console.warn(`Upstream failure fetching comments for post ${post.id}. Will retry later.`);
+                    logger.log({
+                        actionType: 'skip',
+                        targetId: post.id,
+                        promptSent: null,
+                        rawModelOutput: null,
+                        finalAction: 'UpstreamFailure while checking social engagement; deferred.',
+                        error: err.message,
+                    });
                 } else {
                     console.error(`Failed to fetch comments for post ${post.id}:`, err);
                     logger.log({
@@ -1188,6 +1198,16 @@ class AgentLoop {
                     for (const commentId of commentIds) {
                         stateManager.removeMyComment(commentId);
                     }
+                } else if (err instanceof PlatformApiError && (err.statusCode === 502 || err.statusCode === 503)) {
+                    console.warn(`Upstream failure fetching comments for post ${postId}. Will retry later.`);
+                    logger.log({
+                        actionType: 'skip',
+                        targetId: postId,
+                        promptSent: null,
+                        rawModelOutput: null,
+                        finalAction: 'UpstreamFailure while checking social engagement; deferred.',
+                        error: err.message,
+                    });
                 } else {
                     console.error(`Failed to fetch comments for post ${postId}:`, err);
                     logger.log({
