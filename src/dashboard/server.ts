@@ -447,6 +447,25 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * GET /api/my-comments
+     * Get comments created by this agent
+     */
+    app.get('/api/my-comments', async (req, res) => {
+        try {
+            const state = getStateManager();
+            const stateData = state.getState();
+            const myComments = stateData.myComments || [];
+
+            res.json({ comments: myComments });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to fetch comments',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
      * GET /api/submolts
      * Get list of submolts created by the agent
      */

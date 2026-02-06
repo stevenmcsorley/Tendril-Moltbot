@@ -614,7 +614,7 @@ class AgentLoop {
         }
 
         if (client.getCommentStats) {
-            const comments = stateManager.getMyComments().slice(0, 20);
+            const comments = stateManager.getMyComments().slice(0, 100);
             for (const comment of comments) {
                 try {
                     const stats = await client.getCommentStats(comment.id);
