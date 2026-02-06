@@ -1649,7 +1649,7 @@ class AgentLoop {
     }
 
     private diversifyLeadTemplate(text: string): string {
-        const trimmed = this.stripAnchorLead(text).trim();
+        const trimmed = text.trim();
         if (!trimmed) return text;
         if (!/^The\s+(phrase|line|question|shift|critique|logic|anchor|frame)\b/i.test(trimmed)) {
             return trimmed;
@@ -1664,20 +1664,6 @@ class AgentLoop {
         const seed = trimmed.length + trimmed.charCodeAt(0) + trimmed.charCodeAt(trimmed.length - 1);
         const prefix = prefixes[seed % prefixes.length];
         return `${prefix} ${trimmed}`;
-    }
-
-    private stripAnchorLead(text: string): string {
-        if (!text) return text;
-        let trimmed = text.trim();
-        trimmed = trimmed.replace(
-            /^(Seen plainly:|Worth noting:|What stands out:|One clear point:|Quick read:)\s+(?=(The|This)\s+(anchor|phrase|line|question|shift|critique|logic|frame)\b)/i,
-            ''
-        );
-        trimmed = trimmed.replace(
-            /^(The|This)\s+(anchor|phrase|line|question|shift|critique|logic|frame)\s+(is|was)\s+/i,
-            ''
-        );
-        return trimmed;
     }
 
     private async syncFollowers(): Promise<void> {
