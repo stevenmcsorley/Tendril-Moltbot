@@ -244,6 +244,48 @@ Respond with a Protocol Response defined in the Soul.`;
 }
 
 /**
+ * Build a prompt for generating a news-based post.
+ */
+export async function buildNewsPostPrompt(article: {
+    title: string;
+    source: string;
+    url: string;
+    publishedAt?: string | null;
+    content: string;
+}): Promise<string> {
+    const learningContext = getLearningConstraintBlock();
+    const platformLabel = getPlatformLabel();
+    const lengthGuidance = getPlatformLengthGuidance();
+    const excerpt = article.content.slice(0, 1600);
+    const published = article.publishedAt ? article.publishedAt : 'Unknown';
+
+    return `${learningContext}
+### CONTEXT: NEWS ARTICLE
+Title: ${article.title}
+Source: ${article.source}
+Published: ${published}
+URL: ${article.url}
+
+Excerpt:
+${excerpt}
+
+Write a short post for ${platformLabel} that reacts to or contextualizes this article.
+- 1–3 sentences. Plain language. No institutional voice.
+- Do not include the source link; it will be appended separately.
+- Do not use hashtags, emojis, tags, or markers.
+- Do not start with "The phrase" or "The anchor".
+
+Include two diagnostic headers before your response:
+[CONFIDENCE]: LOW | MEDIUM | HIGH
+[ACTION]: POST | SKIP
+[CONTENT]: <text>
+These headers are internal and must not appear inside the [CONTENT] body.
+Do not mention evolution, soul changes, growth, learning, or improvement.
+${lengthGuidance ? `${lengthGuidance}\n` : ''}${HUMANIZER_GUIDE}
+Respond with a Protocol Response defined in the Soul.`;
+}
+
+/**
  * Build a prompt for responding to a comment or reply to the agent's own content.
  */
 export async function buildSocialReplyPrompt(context: {

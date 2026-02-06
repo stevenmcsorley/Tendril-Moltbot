@@ -234,6 +234,7 @@ export function createDashboardServer(): express.Application {
                     enableFollowing: config.ENABLE_FOLLOWING,
                     enableUnfollowing: config.ENABLE_UNFOLLOWING,
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
+                    enableNewsPosts: config.ENABLE_NEWS_POSTS,
                     evolutionMode: config.EVOLUTION_MODE,
                     evolutionAutomatic: state.getAutoEvolutionEnabled(config.EVOLUTION_AUTOMATIC),
                     rollbacksEnabled: state.getRollbacksEnabled(config.ENABLE_ROLLBACKS),
@@ -930,7 +931,15 @@ export function createDashboardServer(): express.Application {
                     enableUnfollowing: config.ENABLE_UNFOLLOWING,
                     enableFollowBack: config.ENABLE_FOLLOW_BACK,
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
+                    enableNewsPosts: config.ENABLE_NEWS_POSTS,
                     enableRollbacks: config.ENABLE_ROLLBACKS
+                },
+                news: {
+                    checkMinutes: config.NEWS_CHECK_MINUTES,
+                    maxAgeHours: config.NEWS_MAX_AGE_HOURS,
+                    maxItemsPerRun: config.NEWS_MAX_ITEMS_PER_RUN,
+                    minContentChars: config.NEWS_MIN_CONTENT_CHARS,
+                    sources: config.NEWS_RSS_SOURCES ?? null
                 },
                 evolution: {
                     mode: config.EVOLUTION_MODE,

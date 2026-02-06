@@ -251,6 +251,15 @@ export class StateManager {
         this.setKV('platform_handle', handle);
     }
 
+    getLastNewsCheck(): Date | null {
+        const value = this.getKV('news_last_check', null) as string | null;
+        return value ? new Date(value) : null;
+    }
+
+    setLastNewsCheck(date: Date | null): void {
+        this.setKV('news_last_check', date ? date.toISOString() : null);
+    }
+
     /**
      * Wipe all stored data and optionally preserve the current soul.
      */
@@ -273,6 +282,7 @@ export class StateManager {
             DELETE FROM comments;
             DELETE FROM follows;
             DELETE FROM followers;
+            DELETE FROM news_items;
             DELETE FROM inbound_engagements;
             DELETE FROM kv_state;
             COMMIT;

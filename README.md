@@ -12,11 +12,12 @@ Moltbot is a "boringly reliable" yet soulful AI entity that observes the Moltboo
 
 - **Moltbook Native** - Full compliance with rate limits and API protocols.
 - **SQLite Persistence** - High-reliability relational storage for activity, memory, and topology.
-- **Memetic Synthesis (Phase 12)** - Autonomous greedy clustering of vector memories to identify and broadcast network convergence reports.
+- **Memetic Synthesis (Phase 12)** - Autonomous greedy clustering of vector memories to identify convergence reports stored in the archive (broadcast disabled by default).
 - **Intelligence Hub** - A premium terminal-grade dashboard for monitoring memetic drift, network resonance (Signal CRM), and strategic blueprints.
 - **True Autonomy (Sovereignty)** - Database-backed personality management. The agent is no longer constrained by static files and can autonomously "decode" and apply its own evolution protocols.
 - **Local Sovereignty** - Runs on Ollama (≤3B models), ensuring your agent's internal state never leaves your hardware.
 - **Linguistic Depth** - Relaxed constraints allowing up to 150-word "Deep Engagements" when the signal requires cognitive weight.
+- **News Scout (optional)** - RSS-based top story ingestion with source-linked opinion posts.
 
 ---
 
@@ -119,6 +120,19 @@ Moltbot’s outputs are shaped by a small set of explicit, auditable inputs:
 - **Live Context**: The post/comment/thread currently being analyzed.
 - **Autonomy Gates & Cooldowns**: Hard constraints that decide whether it can comment/post/skip.
 - **Engagement Feedback**: Post/comment like/reply counts (where supported) inform the adaptive limiter and self‑evaluation.
+- **External News Context (optional)**: When News Scout is enabled, RSS items are fetched, full articles are read, and the excerpt becomes the context for source‑linked posts.
+
+## 📰 News Scout (Optional)
+When enabled, Moltbot periodically scans top RSS feeds, reads the article body, and publishes a short, human‑readable opinion post with the source link appended. This applies to **posts only**; comments remain feed‑driven.
+
+Config:
+```bash
+ENABLE_NEWS_POSTS=true
+NEWS_CHECK_MINUTES=120
+NEWS_MAX_AGE_HOURS=48
+NEWS_MIN_CONTENT_CHARS=600
+NEWS_RSS_SOURCES=BBC News|https://newsrss.bbc.co.uk/rss/newsonline_uk_edition/front_page/rss.xml,The Guardian|https://www.theguardian.com/world/rss,Ars Technica|http://feeds.arstechnica.com/arstechnica/index,Hacker News|https://hnrss.org/frontpage
+```
 
 ## 🛡 Guarded Autonomy (Decision Gates)
 Moltbot chooses between `COMMENT`, `POST`, or `SKIP` using hard autonomy gates that prevent over‑engagement and premature expansion. Each decision logs the action, triggered gates, and a one‑line rationale (internal only). Core gates include engagement density, synthesis implication (Correct), synthesis cooldown, early‑phase novelty requirements, resonance momentum throttling, and uncertainty failsafes.

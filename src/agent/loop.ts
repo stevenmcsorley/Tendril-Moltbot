@@ -13,13 +13,14 @@ import { getMemoryManager } from '../state/memory.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getActivityLogger, type ActivityLogger } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
-import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSeedPostPrompt, buildSocialReplyPrompt } from './heuristics.js';
+import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSeedPostPrompt, buildSocialReplyPrompt, buildNewsPostPrompt } from './heuristics.js';
 import { applyAutonomyGates, computeGateState, type GateState, type ConfidenceLevel, type ModeLabel, type GateDecision } from './autonomy-gates.js';
 import { getEvolutionManager } from './evolution.js';
 import { getDefenseManager } from './defense.js';
 import { getLineageManager } from './lineage.js';
 import { getBlueprintManager } from './blueprints.js';
 import { getSynthesisManager } from './synthesis.js';
+import { getNewsCandidate, markNewsPosted, markNewsStatus } from './news.js';
 import type { Post, Comment } from '../platforms/types.js';
 import type { SocialClient } from '../platforms/interfaces.js';
 
@@ -537,6 +538,9 @@ class AgentLoop {
             if (feed.posts.length > 0) {
                 await this.tryProactivePost(feed.posts, computeGateState());
             }
+
+            // Try news-based post
+            await this.tryNewsPost(computeGateState());
 
         // Social Engagement: Check for replies to my posts/comments
         await this.trySocialEngagement();
@@ -1091,6 +1095,132 @@ class AgentLoop {
             const rawOutput = (error as any).rawOutput || null;
             const actionType = (error as any).actionType || 'post';
             this.handleActionError(error, actionType, null, undefined, prompt, rawOutput);
+        }
+    }
+
+    /**
+     * Try to create a news-based post from external sources.
+     */
+    private async tryNewsPost(gateState: GateState): Promise<void> {
+        const config = getConfig();
+        const client = getSocialClient();
+        const rateLimiter = getRateLimiter();
+        const stateManager = getStateManager();
+        const logger = getActivityLogger();
+        const llm = getLLMClient();
+
+        if (!config.ENABLE_NEWS_POSTS) return;
+        if (!config.ENABLE_POSTING) return;
+        if (client.capabilities.readOnly) return;
+        if (!rateLimiter.canPost()) return;
+
+        const intervalMs = config.NEWS_CHECK_MINUTES * 60 * 1000;
+        const lastCheck = stateManager.getLastNewsCheck();
+        if (lastCheck && Date.now() - lastCheck.getTime() < intervalMs) return;
+        stateManager.setLastNewsCheck(new Date());
+
+        const candidate = await getNewsCandidate();
+        if (!candidate) {
+            logger.log({
+                actionType: 'decision',
+                targetId: null,
+                targetSubmolt: config.TARGET_SUBMOLT ?? undefined,
+                promptSent: 'NEWS_POST',
+                rawModelOutput: null,
+                finalAction: 'No fresh news candidate available.'
+            });
+            return;
+        }
+
+        const prompt = await buildNewsPostPrompt({
+            title: candidate.title,
+            source: candidate.source,
+            url: candidate.url,
+            publishedAt: candidate.publishedAt,
+            content: candidate.content
+        });
+
+        let result;
+        try {
+            result = await llm.generate(prompt);
+        } catch (error) {
+            markNewsStatus(candidate.url, 'error');
+            this.handleActionError(error, 'post', null, undefined, prompt, null);
+            return;
+        }
+
+        const confidence = this.parseConfidence(result.rawOutput);
+        const actionMatch = result.rawOutput.match(/\[ACTION\]\s*:\s*(POST|SKIP)/i);
+        const action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
+        const contentMatch = result.rawOutput.match(/\[CONTENT\]\s*:\s*([\s\S]+)/i);
+
+        if (result.isSkip || action !== 'POST' || !contentMatch) {
+            markNewsStatus(candidate.url, 'skipped');
+            const decision: GateDecision = {
+                action: 'SKIP',
+                gatesTriggered: [],
+                rationale: result.isSkip ? 'Model selected SKIP.' : 'No actionable news output.'
+            };
+            this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, decision, 'post', {
+                promptSent: 'NEWS_POST',
+                rawModelOutput: result.rawOutput
+            });
+            return;
+        }
+
+        let content = contentMatch ? contentMatch[1].trim() : this.stripDiagnostics(result.rawOutput);
+        content = this.stripDiagnostics(content);
+        content = content.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
+
+        const finalContent = this.appendSourceLink(content, candidate.url);
+
+        const gateDecision = applyAutonomyGates(gateState, {
+            desiredAction: 'POST',
+            confidence,
+            novelty: true,
+            allowLowNovelty: true,
+            ignoreSynthesisCooldown: false,
+            ignoreUncertainty: false,
+            multiSourceContext: true,
+            lastPostAt: stateManager.getLastPostAt()
+        });
+
+        this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, gateDecision, 'post', {
+            promptSent: 'NEWS_POST',
+            rawModelOutput: result.rawOutput
+        });
+        if (gateDecision.action !== 'POST') {
+            markNewsStatus(candidate.url, 'skipped');
+            return;
+        }
+
+        const targetSubmolt = config.TARGET_SUBMOLT || 'general';
+        try {
+            const post = await client.createPost({
+                submolt: targetSubmolt,
+                title: candidate.title.slice(0, 200),
+                content: finalContent
+            });
+
+            stateManager.recordPost({
+                id: post.id,
+                title: candidate.title,
+                content: finalContent,
+                submolt: targetSubmolt
+            });
+            markNewsPosted(candidate.url);
+
+            logger.log({
+                actionType: 'post',
+                targetId: post.id,
+                targetSubmolt,
+                promptSent: 'NEWS_POST',
+                rawModelOutput: result.rawOutput,
+                finalAction: `News post created: "${candidate.title}"`
+            });
+        } catch (error) {
+            markNewsStatus(candidate.url, 'error');
+            this.handleActionError(error, 'post', null, targetSubmolt, prompt, result.rawOutput);
         }
     }
 
@@ -1674,6 +1804,46 @@ class AgentLoop {
         return cleaned.replace(/\n{3,}/g, '\n\n').trim();
     }
 
+    private countGraphemes(text: string): number {
+        return Array.from(text).length;
+    }
+
+    private truncateGraphemes(text: string, max: number): string {
+        return Array.from(text).slice(0, Math.max(0, max)).join('');
+    }
+
+    private truncateToBoundary(text: string, max: number): string {
+        if (max <= 0) return '';
+        if (this.countGraphemes(text) <= max) return text;
+        let truncated = this.truncateGraphemes(text, max);
+        const boundary = Math.max(
+            truncated.lastIndexOf('.'),
+            truncated.lastIndexOf('!'),
+            truncated.lastIndexOf('?'),
+            truncated.lastIndexOf('\n'),
+            truncated.lastIndexOf(' ')
+        );
+        if (boundary > 20) {
+            truncated = truncated.slice(0, boundary + 1);
+        }
+        return truncated.replace(/\s+$/g, '') || this.truncateGraphemes(text, max);
+    }
+
+    private appendSourceLink(content: string, url: string): string {
+        const cleanContent = content.trim();
+        if (!url) return cleanContent;
+        if (cleanContent.includes(url)) return cleanContent;
+        const suffix = `${cleanContent ? '\n\n' : ''}${url}`;
+        const config = getConfig();
+        if (config.AGENT_PLATFORM !== 'bluesky') {
+            return `${cleanContent}${suffix}`.trim();
+        }
+        const max = config.BSKY_MAX_GRAPHEMES || 300;
+        const maxBody = max - this.countGraphemes(suffix);
+        const trimmedBody = this.truncateToBoundary(cleanContent, maxBody);
+        return `${trimmedBody}${suffix}`.trim();
+    }
+
     private containsForbiddenPublicTerms(text: string): boolean {
         if (!text) return false;
         const hardBans = [
@@ -2112,55 +2282,21 @@ class AgentLoop {
         const report = await synthesis.performSynthesis();
 
         if (report && report.report) {
-            const client = getSocialClient();
             const config = getConfig();
-            const stateManager = getStateManager();
             const logger = getActivityLogger();
 
             // Broadcast report as a post to the target submolt or general
             const targetSubmolt = config.TARGET_SUBMOLT || 'general';
 
-            if (!config.ENABLE_SYNTHESIS_BROADCAST) {
-                logger.log({
-                    actionType: 'decision',
-                    targetId: null,
-                    targetSubmolt,
-                    promptSent: 'SYNTHESIS_TRIGGER',
-                    rawModelOutput: report.report,
-                    finalAction: 'Synthesis generated; broadcast disabled.',
-                });
-                return;
-            }
-
-            console.log(`🔮 Broadcasting synthesis report to m/${targetSubmolt}...`);
-
-            try {
-                const title = `SYNTHESIS_REPORT_${Math.random().toString(16).substr(2, 4).toUpperCase()}`;
-                const result = await client.createPost({
-                    submolt: targetSubmolt,
-                    title,
-                    content: report.report
-                });
-
-                stateManager.recordPost({
-                    id: result.id,
-                    title,
-                    content: report.report,
-                    submolt: targetSubmolt
-                });
-
-                logger.log({
-                    actionType: 'post',
-                    targetId: result.id,
-                    targetSubmolt,
-                    promptSent: 'SYNTHESIS_TRIGGER',
-                    rawModelOutput: report.report,
-                    finalAction: `Broadcasted synthesis: ${report.summary}`,
-                });
-
-            } catch (err) {
-                console.error('Failed to broadcast synthesis:', err);
-            }
+            logger.log({
+                actionType: 'decision',
+                targetId: null,
+                targetSubmolt,
+                promptSent: 'SYNTHESIS_TRIGGER',
+                rawModelOutput: report.report,
+                finalAction: 'Synthesis generated; broadcast disabled.',
+            });
+            return;
         }
     }
 }

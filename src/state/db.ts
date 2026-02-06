@@ -144,6 +144,16 @@ export class DatabaseManager {
                 delta_replies INTEGER DEFAULT 0
             );
 
+            CREATE TABLE IF NOT EXISTS news_items (
+                url TEXT PRIMARY KEY,
+                title TEXT,
+                source TEXT,
+                published_at TEXT,
+                status TEXT DEFAULT 'seen',
+                created_at TEXT NOT NULL,
+                posted_at TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS personas (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
