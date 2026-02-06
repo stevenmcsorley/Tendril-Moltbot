@@ -925,7 +925,7 @@ export default function App() {
                     ) : activeTab === 'submolts' ? (
                         <SubmoltList submolts={submolts} />
                     ) : activeTab === 'posts' ? (
-                        <MyPosts refreshToken={myPostsRefreshToken} />
+                        <MyPosts refreshToken={myPostsRefreshToken} platform={status?.config.platform} />
                     ) : activeTab === 'comments' ? (
                         <MyComments refreshToken={myCommentsRefreshToken} platform={status?.config.platform} />
                     ) : activeTab === 'stats' ? (

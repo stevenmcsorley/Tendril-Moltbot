@@ -36,6 +36,8 @@ export interface SocialClient {
     getPostStats?(postId: string): Promise<{ likes?: number; replies?: number } | null>;
     getCommentStats?(commentId: string): Promise<{ likes?: number; replies?: number } | null>;
     createPost(options: { submolt: string; title: string; content?: string; url?: string }): Promise<Post>;
+    deletePost?(postId: string): Promise<void>;
+    deleteComment?(commentId: string): Promise<void>;
     createSubmolt?(options: { name: string; display_name: string; description: string }): Promise<Submolt>;
     updateProfile?(profile: { description?: string; displayName?: string }): Promise<void>;
     muteUser?(userId: string): Promise<void>;

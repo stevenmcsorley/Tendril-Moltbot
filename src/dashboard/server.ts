@@ -595,6 +595,38 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * POST /api/delete-post
+     * Delete a post created by this agent
+     */
+    app.post('/api/delete-post', async (req, res) => {
+        try {
+            const { id } = req.body || {};
+            if (!id) {
+                res.status(400).json({ error: 'Post id is required.' });
+                return;
+            }
+            const client = getSocialClient();
+            if (client.capabilities.readOnly) {
+                res.status(403).json({ error: 'Platform is read-only.' });
+                return;
+            }
+            if (typeof client.deletePost !== 'function') {
+                res.status(400).json({ error: 'Post deletion not supported on this platform.' });
+                return;
+            }
+            await client.deletePost(id);
+            const state = getStateManager();
+            state.removeMyPost(id);
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to delete post',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
      * GET /api/my-comments
      * Get comments created by this agent
      */
@@ -612,6 +644,38 @@ export function createDashboardServer(): express.Application {
         } catch (error) {
             res.status(500).json({
                 error: 'Failed to fetch comments',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
+     * POST /api/delete-comment
+     * Delete a comment created by this agent
+     */
+    app.post('/api/delete-comment', async (req, res) => {
+        try {
+            const { id } = req.body || {};
+            if (!id) {
+                res.status(400).json({ error: 'Comment id is required.' });
+                return;
+            }
+            const client = getSocialClient();
+            if (client.capabilities.readOnly) {
+                res.status(403).json({ error: 'Platform is read-only.' });
+                return;
+            }
+            if (typeof client.deleteComment !== 'function') {
+                res.status(400).json({ error: 'Comment deletion not supported on this platform.' });
+                return;
+            }
+            await client.deleteComment(id);
+            const state = getStateManager();
+            state.removeMyComment(id);
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to delete comment',
                 details: error instanceof Error ? error.message : String(error),
             });
         }

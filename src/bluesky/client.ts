@@ -406,6 +406,32 @@ export class BlueskyClient implements SocialClient {
         };
     }
 
+    async deletePost(postId: string): Promise<void> {
+        const session = await this.getSession();
+        const [uri] = unpackId(postId);
+        if (!uri) return;
+        const rkey = uri.split('/').pop();
+        if (!rkey) return;
+        await this.request('POST', 'com.atproto.repo.deleteRecord', {
+            repo: session.did,
+            collection: 'app.bsky.feed.post',
+            rkey,
+        });
+    }
+
+    async deleteComment(commentId: string): Promise<void> {
+        const session = await this.getSession();
+        const [uri] = unpackId(commentId);
+        if (!uri) return;
+        const rkey = uri.split('/').pop();
+        if (!rkey) return;
+        await this.request('POST', 'com.atproto.repo.deleteRecord', {
+            repo: session.did,
+            collection: 'app.bsky.feed.post',
+            rkey,
+        });
+    }
+
     async upvotePost(_postId: string): Promise<void> {
         const session = await this.getSession();
         const [uri, cid] = unpackId(_postId);

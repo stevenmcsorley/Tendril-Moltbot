@@ -41,6 +41,7 @@ export default function MyComments({ refreshToken, platform }: { refreshToken?: 
     const [total, setTotal] = useState(0);
     const [sort, setSort] = useState<'recent' | 'likes' | 'replies'>('recent');
     const [loading, setLoading] = useState(true);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const limit = 100;
 
     useEffect(() => {
@@ -58,6 +59,29 @@ export default function MyComments({ refreshToken, platform }: { refreshToken?: 
             console.error('Failed to fetch comments:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDelete = async (commentId: string) => {
+        const ok = window.confirm('Delete this comment? This cannot be undone.');
+        if (!ok) return;
+        setDeletingId(commentId);
+        try {
+            const res = await fetch('/api/delete-comment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: commentId })
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || 'Delete failed');
+            }
+            await fetchComments();
+        } catch (error) {
+            console.error('Failed to delete comment:', error);
+            alert(error instanceof Error ? error.message : 'Failed to delete comment');
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -150,33 +174,43 @@ export default function MyComments({ refreshToken, platform }: { refreshToken?: 
                                         </span>
                                     </div>
                                 </div>
-                                {link && (
-                                    <a
-                                        href={link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{
-                                            fontSize: 11,
-                                            color: 'var(--primary)',
-                                            textDecoration: 'none',
-                                            padding: '4px 8px',
-                                            border: '1px solid var(--primary)',
-                                            borderRadius: 4,
-                                            transition: 'all 0.2s',
-                                            whiteSpace: 'nowrap'
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.currentTarget.style.background = 'var(--primary)';
-                                            e.currentTarget.style.color = 'white';
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.currentTarget.style.background = 'transparent';
-                                            e.currentTarget.style.color = 'var(--primary)';
-                                        }}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                                    {link && (
+                                        <a
+                                            href={link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{
+                                                fontSize: 11,
+                                                color: 'var(--primary)',
+                                                textDecoration: 'none',
+                                                padding: '4px 8px',
+                                                border: '1px solid var(--primary)',
+                                                borderRadius: 4,
+                                                transition: 'all 0.2s',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            onMouseOver={(e) => {
+                                                e.currentTarget.style.background = 'var(--primary)';
+                                                e.currentTarget.style.color = 'white';
+                                            }}
+                                            onMouseOut={(e) => {
+                                                e.currentTarget.style.background = 'transparent';
+                                                e.currentTarget.style.color = 'var(--primary)';
+                                            }}
+                                        >
+                                            View ↗
+                                        </a>
+                                    )}
+                                    <button
+                                        className="danger"
+                                        onClick={() => handleDelete(comment.id)}
+                                        disabled={deletingId === comment.id}
+                                        style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap' }}
                                     >
-                                        View ↗
-                                    </a>
-                                )}
+                                        {deletingId === comment.id ? 'Deleting…' : 'Delete'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     );
