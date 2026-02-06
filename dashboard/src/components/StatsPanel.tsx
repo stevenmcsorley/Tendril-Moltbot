@@ -5,6 +5,7 @@ interface EngagementPoint {
     timestamp: string;
     comments: number;
     likes: number;
+    replies: number;
 }
 
 interface EngagementResponse {
@@ -102,9 +103,9 @@ function MetricChart({
     subtitle: string;
     series: EngagementPoint[];
     color: string;
-    unit: string;
+    unit: 'comments' | 'likes' | 'replies';
 }) {
-    const values = series.map(point => point[unit as 'comments' | 'likes'] ?? 0);
+    const values = series.map(point => point[unit] ?? 0);
     const latest = values[values.length - 1] ?? 0;
     const points = useMemo(() => buildLinePoints(values), [values]);
 
@@ -138,7 +139,7 @@ function MetricChart({
                         <polyline
                             fill="none"
                             stroke={color}
-                            strokeWidth="2"
+                            strokeWidth="1.2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             points={points}
@@ -248,6 +249,13 @@ export default function StatsPanel({ refreshToken, platform }: { refreshToken?: 
                             series={engagement?.series ?? []}
                             color="var(--success)"
                             unit="likes"
+                        />
+                        <MetricChart
+                            title="Replies per bucket"
+                            subtitle="New replies to comments"
+                            series={engagement?.series ?? []}
+                            color="var(--warning)"
+                            unit="replies"
                         />
                     </div>
                 )}

@@ -600,13 +600,13 @@ export function createDashboardServer(): express.Application {
 
             const db = getDatabaseManager().getDb();
             const commentRows = db.prepare('SELECT timestamp FROM comments WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string }>;
-            const likeRows = db.prepare('SELECT timestamp, delta_likes FROM comment_engagement_events WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string; delta_likes: number }>;
+            const likeRows = db.prepare('SELECT timestamp, delta_likes, delta_replies FROM comment_engagement_events WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string; delta_likes: number; delta_replies: number }>;
 
-            const buckets: Array<{ timestamp: string; comments: number; likes: number }> = [];
+            const buckets: Array<{ timestamp: string; comments: number; likes: number; replies: number }> = [];
             const bucketCount = Math.floor((now.getTime() - start.getTime()) / bucketMs) + 1;
             for (let i = 0; i < bucketCount; i++) {
                 const t = new Date(start.getTime() + i * bucketMs);
-                buckets.push({ timestamp: t.toISOString(), comments: 0, likes: 0 });
+                buckets.push({ timestamp: t.toISOString(), comments: 0, likes: 0, replies: 0 });
             }
 
             const indexFor = (dateStr: string) => {
@@ -622,7 +622,10 @@ export function createDashboardServer(): express.Application {
             }
             for (const row of likeRows) {
                 const idx = indexFor(row.timestamp);
-                if (idx >= 0) buckets[idx].likes += Math.max(0, row.delta_likes || 0);
+                if (idx >= 0) {
+                    buckets[idx].likes += Math.max(0, row.delta_likes || 0);
+                    buckets[idx].replies += Math.max(0, row.delta_replies || 0);
+                }
             }
 
             res.json({
