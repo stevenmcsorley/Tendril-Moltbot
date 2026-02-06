@@ -104,6 +104,7 @@ const configSchema = z.object({
     ADAPTIVE_FACTOR_LOW: z.coerce.number().positive().default(1.4),
     SELF_MODIFICATION_COOLDOWN_MINUTES: z.coerce.number().positive().default(5),
     POST_MAX_AGE_HOURS: z.coerce.number().nonnegative().default(48),
+    FEED_FETCH_LIMIT: z.coerce.number().positive().default(25),
     COMMENT_ENGAGEMENT_REFRESH_LIMIT: z.coerce.number().positive().default(200),
     ENABLE_POSTING: z.coerce.boolean().default(false),
     ENABLE_COMMENTING: z.coerce.boolean().default(true),

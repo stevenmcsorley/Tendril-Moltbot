@@ -214,7 +214,8 @@ class AgentLoop {
 
             // Fetch feed
             console.log('Fetching feed...');
-            const feed = await client.getFeed({ sort: 'new', limit: 25 });
+            const feedLimit = Math.max(1, config.FEED_FETCH_LIMIT || 25);
+            const feed = await client.getFeed({ sort: 'new', limit: feedLimit });
 
             logger.log({
                 actionType: 'read',
@@ -1262,7 +1263,7 @@ class AgentLoop {
         try {
             const feed = await client.getFeed({
                 sort: 'new',
-                limit: 25,
+                limit: Math.max(1, config.FEED_FETCH_LIMIT || 25),
                 submolt: targetSubmolt || undefined
             });
             const gateState = computeGateState();
