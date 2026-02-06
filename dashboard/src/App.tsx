@@ -603,6 +603,10 @@ export default function App() {
                             }
                             break;
 
+                        case 'comment_engagement':
+                            setMyCommentsRefreshToken(prev => prev + 1);
+                            break;
+
                         case 'stats_update':
                             // Partial update of status
                             setStatus(prev => prev ? { ...prev, status: msg.payload.status } : null);

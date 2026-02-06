@@ -255,6 +255,14 @@ export class StateManager {
         this.setKV('auto_evolution_enabled', enabled);
     }
 
+    getCommentEngagementOffset(): number {
+        return this.getKV('comment_engagement_offset', 0);
+    }
+
+    setCommentEngagementOffset(offset: number): void {
+        this.setKV('comment_engagement_offset', Math.max(0, offset));
+    }
+
     getSelfModificationCooldownUntil(): Date | null {
         const value = this.getKV('self_modification_cooldown_until', null) as string | null;
         return value ? new Date(value) : null;

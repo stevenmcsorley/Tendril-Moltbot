@@ -624,12 +624,27 @@ class AgentLoop {
         }
 
         if (client.getCommentStats) {
-            const comments = stateManager.getMyComments().slice(0, 100);
+            const limit = Math.max(1, getConfig().COMMENT_ENGAGEMENT_REFRESH_LIMIT || 100);
+            const total = stateManager.getMyCommentsCount();
+            const offset = stateManager.getCommentEngagementOffset();
+            const comments = stateManager.getMyComments(limit, offset);
             for (const comment of comments) {
                 try {
                     const stats = await client.getCommentStats(comment.id);
                     if (stats && (stats.likes !== undefined || stats.replies !== undefined)) {
+                        const currentLikes = comment.likeCount ?? 0;
+                        const currentReplies = comment.replyCount ?? 0;
+                        const nextLikes = stats.likes ?? currentLikes;
+                        const nextReplies = stats.replies ?? currentReplies;
+                        const changed = nextLikes !== currentLikes || nextReplies !== currentReplies;
                         stateManager.updateCommentEngagement(comment.id, stats);
+                        if (changed) {
+                            getWebSocketBroadcaster().broadcast('comment_engagement', {
+                                id: comment.id,
+                                likes: nextLikes,
+                                replies: nextReplies
+                            });
+                        }
                     }
                 } catch (error) {
                     logger.log({
@@ -641,6 +656,10 @@ class AgentLoop {
                         error: error instanceof Error ? error.message : String(error),
                     });
                 }
+            }
+            if (total > 0) {
+                const nextOffset = offset + comments.length;
+                stateManager.setCommentEngagementOffset(nextOffset >= total ? 0 : nextOffset);
             }
         }
     }
