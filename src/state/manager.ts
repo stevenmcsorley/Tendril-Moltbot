@@ -329,7 +329,7 @@ export class StateManager {
         return commented.includes(postId);
     }
 
-    recordComment(postId: string, commentId?: string): void {
+    recordComment(postId: string, commentId?: string, content?: string): void {
         const commented = this.getKV('posts_commented', []) as string[];
         if (!commented.includes(postId)) {
             commented.push(postId);
@@ -337,8 +337,8 @@ export class StateManager {
         }
         if (commentId) {
             const db = getDatabaseManager().getDb();
-            db.prepare('INSERT OR REPLACE INTO comments (id, post_id, timestamp) VALUES (?, ?, ?)')
-                .run(commentId, postId, new Date().toISOString());
+            db.prepare('INSERT OR REPLACE INTO comments (id, post_id, content, timestamp) VALUES (?, ?, ?, ?)')
+                .run(commentId, postId, content || '', new Date().toISOString());
         }
         const todayCount = this.getKV('comments_made_today', 0);
         this.setKV('comments_made_today', todayCount + 1);
@@ -617,16 +617,26 @@ export class StateManager {
         }));
     }
 
-    getMyComments(): any[] {
+    getMyComments(limit?: number, offset: number = 0): any[] {
         const db = getDatabaseManager().getDb();
-        const rows = db.prepare('SELECT * FROM comments ORDER BY timestamp DESC').all();
+        const baseQuery = 'SELECT * FROM comments ORDER BY timestamp DESC';
+        const rows = typeof limit === 'number'
+            ? db.prepare(`${baseQuery} LIMIT ? OFFSET ?`).all(limit, offset)
+            : db.prepare(baseQuery).all();
         return rows.map((r: any) => ({
             id: r.id,
             postId: r.post_id,
+            content: r.content ?? '',
             likeCount: r.like_count ?? 0,
             replyCount: r.reply_count ?? 0,
             timestamp: r.timestamp
         }));
+    }
+
+    getMyCommentsCount(): number {
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT COUNT(*) as count FROM comments').get() as { count: number };
+        return row?.count || 0;
     }
 
     updatePostEngagement(postId: string, updates: { likes?: number; replies?: number }): void {

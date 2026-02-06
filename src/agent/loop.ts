@@ -662,7 +662,7 @@ class AgentLoop {
         try {
             const commentObj = await client.createComment(post.id, comment);
             rateLimiter.recordComment(post.id);
-            stateManager.recordComment(post.id, commentObj.id);
+            stateManager.recordComment(post.id, commentObj.id, commentObj.content);
 
             logger.log({
                 actionType: 'comment',
@@ -1497,7 +1497,7 @@ class AgentLoop {
             const newComment = await client.createComment(postId, responseText, reply.id);
 
             rateLimiter.recordComment(postId);
-            stateManager.recordComment(postId, newComment.id);
+            stateManager.recordComment(postId, newComment.id, newComment.content);
             stateManager.recordSocialReply(reply.id);
 
             logger.log({

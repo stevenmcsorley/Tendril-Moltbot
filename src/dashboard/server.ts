@@ -453,10 +453,12 @@ export function createDashboardServer(): express.Application {
     app.get('/api/my-comments', async (req, res) => {
         try {
             const state = getStateManager();
-            const stateData = state.getState();
-            const myComments = stateData.myComments || [];
+            const limit = Math.min(200, parseInt(String(req.query.limit)) || 20);
+            const offset = parseInt(String(req.query.offset)) || 0;
+            const total = state.getMyCommentsCount();
+            const myComments = state.getMyComments(limit, offset);
 
-            res.json({ comments: myComments });
+            res.json({ comments: myComments, total });
         } catch (error) {
             res.status(500).json({
                 error: 'Failed to fetch comments',

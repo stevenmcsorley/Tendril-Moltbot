@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 interface CommentEntry {
     id: string;
     postId?: string;
+    content?: string;
     likeCount?: number;
     replyCount?: number;
     timestamp: string;
@@ -36,17 +37,22 @@ function buildCommentLink(comment: CommentEntry, platform?: string): string | nu
 
 export default function MyComments({ refreshToken, platform }: { refreshToken?: number; platform?: string }) {
     const [comments, setComments] = useState<CommentEntry[]>([]);
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
+    const limit = 20;
 
     useEffect(() => {
         fetchComments();
-    }, [refreshToken]);
+    }, [refreshToken, page]);
 
     const fetchComments = async () => {
         try {
-            const res = await fetch('/api/my-comments');
+            const offset = (page - 1) * limit;
+            const res = await fetch(`/api/my-comments?limit=${limit}&offset=${offset}`);
             const data = await res.json();
             setComments(data.comments || []);
+            setTotal(data.total || 0);
         } catch (error) {
             console.error('Failed to fetch comments:', error);
         } finally {
@@ -72,9 +78,32 @@ export default function MyComments({ refreshToken, platform }: { refreshToken?: 
         );
     }
 
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
     return (
         <div className="card">
-            <h2>My Comments</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <h2 style={{ margin: 0 }}>My Comments</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                        className="btn-secondary"
+                        onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                        disabled={page <= 1}
+                    >
+                        Previous
+                    </button>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        Page {page} of {totalPages}
+                    </div>
+                    <button
+                        className="btn-secondary"
+                        onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={page >= totalPages}
+                    >
+                        Next
+                    </button>
+                </div>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {comments.map(comment => {
                     const link = buildCommentLink(comment, platform);
@@ -90,6 +119,11 @@ export default function MyComments({ refreshToken, platform }: { refreshToken?: 
                                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
                                         {new Date(comment.timestamp).toLocaleString()}
                                     </div>
+                                    {comment.content && (
+                                        <div style={{ fontSize: 14, color: 'var(--text-primary)', marginBottom: 10, whiteSpace: 'pre-wrap' }}>
+                                            {comment.content}
+                                        </div>
+                                    )}
                                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
                                         ID: <span style={{ color: 'var(--text-primary)' }}>{decodePackedId(comment.id)}</span>
                                     </div>

@@ -158,6 +158,7 @@ export class DatabaseManager {
         this.ensureColumn('posts', 'reply_count', 'INTEGER DEFAULT 0');
         this.ensureColumn('comments', 'like_count', 'INTEGER DEFAULT 0');
         this.ensureColumn('comments', 'reply_count', 'INTEGER DEFAULT 0');
+        this.ensureColumn('comments', 'content', 'TEXT');
     }
 
     private ensureColumn(table: string, column: string, type: string): void {
