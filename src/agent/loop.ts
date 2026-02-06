@@ -1613,42 +1613,60 @@ class AgentLoop {
         const logger = getActivityLogger();
 
         try {
-            const response = await client.getFollowers({ limit: config.FOLLOWERS_FETCH_LIMIT });
-            const followers = response?.followers || [];
-            if (!followers.length) return;
-            stateManager.recordFollowers(followers);
-
-            if (!config.ENABLE_FOLLOW_BACK) return;
-            if (!client.capabilities.supportsFollows || !client.followUser) return;
-            if (client.capabilities.readOnly) return;
+            const limit = config.FOLLOWERS_FETCH_LIMIT;
+            let cursor: string | undefined;
+            const seenCursors = new Set<string>();
+            const followUser = client.followUser?.bind(client);
+            const shouldFollowBack = !!config.ENABLE_FOLLOW_BACK
+                && !!client.capabilities.supportsFollows
+                && !!followUser
+                && !client.capabilities.readOnly;
 
             const maxFollowBack = Math.max(1, config.FOLLOW_BACK_MAX_PER_RUN || 1);
             let followBackCount = 0;
             const selfHandle = stateManager.getPlatformHandle() || config.AGENT_NAME;
 
-            for (const follower of followers) {
-                if (followBackCount >= maxFollowBack) break;
-                const followerId = follower.id;
-                const followerHandle = follower.name || null;
-                if (!followerId) continue;
-                if (followerHandle && selfHandle && followerHandle.toLowerCase() === selfHandle.toLowerCase()) continue;
-                if (followerHandle && stateManager.isQuarantined(followerHandle)) continue;
-                if (stateManager.isFollowing(followerId)) continue;
+            while (true) {
+                const response = await client.getFollowers({ limit, cursor });
+                const followers = response?.followers || [];
+                if (followers.length) {
+                    stateManager.recordFollowers(followers);
+                }
 
-                const result = await client.followUser(followerId);
-                if (!result?.uri) continue;
-                stateManager.recordFollow(followerId, followerHandle, result.uri);
-                followBackCount += 1;
+                if (shouldFollowBack && followers.length && followBackCount < maxFollowBack) {
+                    for (const follower of followers) {
+                        if (followBackCount >= maxFollowBack) break;
+                        const followerId = follower.id;
+                        const followerHandle = follower.name || null;
+                        if (!followerId) continue;
+                        if (followerHandle && selfHandle && followerHandle.toLowerCase() === selfHandle.toLowerCase()) continue;
+                        if (followerHandle && stateManager.isQuarantined(followerHandle)) continue;
+                        if (stateManager.isFollowing(followerId)) continue;
 
-                logger.log({
-                    actionType: 'follow',
-                    targetId: followerId,
-                    targetAuthor: followerHandle,
-                    promptSent: '[FOLLOW_BACK]',
-                    rawModelOutput: null,
-                    finalAction: followerHandle ? `Followed back @${followerHandle}` : `Followed back ${followerId}`,
-                    signalType: 'FOLLOW_BACK'
-                });
+                        const result = await followUser(followerId);
+                        if (!result?.uri) continue;
+                        stateManager.recordFollow(followerId, followerHandle, result.uri);
+                        followBackCount += 1;
+
+                        logger.log({
+                            actionType: 'follow',
+                            targetId: followerId,
+                            targetAuthor: followerHandle,
+                            promptSent: '[FOLLOW_BACK]',
+                            rawModelOutput: null,
+                            finalAction: followerHandle ? `Followed back @${followerHandle}` : `Followed back ${followerId}`,
+                            signalType: 'FOLLOW_BACK'
+                        });
+                    }
+                }
+
+                cursor = response?.cursor;
+                if (!cursor) break;
+                if (seenCursors.has(cursor)) {
+                    console.warn('Follower pagination cursor repeated; aborting sync to avoid loop.');
+                    break;
+                }
+                seenCursors.add(cursor);
             }
         } catch (error) {
             logger.log({
