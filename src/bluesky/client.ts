@@ -215,10 +215,23 @@ export class BlueskyClient implements SocialClient {
         const config = getConfig();
         const limit = Math.min(options.limit || 25, 100);
         const feedUri = config.BSKY_FEED_URI;
-        const endpoint = feedUri
-            ? `app.bsky.feed.getFeed?feed=${encodeURIComponent(feedUri)}&limit=${limit}`
-            : `app.bsky.feed.getTimeline?limit=${limit}`;
-        const data = await this.request<{ feed: any[] }>('GET', endpoint);
+        const timelineEndpoint = `app.bsky.feed.getTimeline?limit=${limit}`;
+        let data: { feed: any[] };
+        if (feedUri) {
+            const feedEndpoint = `app.bsky.feed.getFeed?feed=${encodeURIComponent(feedUri)}&limit=${limit}`;
+            try {
+                data = await this.request<{ feed: any[] }>('GET', feedEndpoint);
+            } catch (err) {
+                if (err instanceof PlatformApiError && ![401, 403].includes(err.statusCode)) {
+                    console.warn(`Bluesky feed "${feedUri}" failed (${err.statusCode}). Falling back to timeline.`);
+                    data = await this.request<{ feed: any[] }>('GET', timelineEndpoint);
+                } else {
+                    throw err;
+                }
+            }
+        } else {
+            data = await this.request<{ feed: any[] }>('GET', timelineEndpoint);
+        }
         const posts = (data.feed || []).map((item) => this.mapPost(item.post ?? item));
         return { posts, count: posts.length, has_more: false, authenticated: true };
     }
