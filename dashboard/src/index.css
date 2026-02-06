@@ -368,6 +368,15 @@ button.btn-secondary:hover {
   background: #2b313a;
 }
 
+button.btn-secondary.warning {
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fda4af;
+}
+
+button.btn-secondary.warning:hover {
+  background: rgba(244, 63, 94, 0.12);
+}
+
 .activity-log {
   max-height: 600px;
   overflow-y: auto;

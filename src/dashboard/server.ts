@@ -231,6 +231,7 @@ export function createDashboardServer(): express.Application {
                     enableUnfollowing: config.ENABLE_UNFOLLOWING,
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
                     evolutionMode: config.EVOLUTION_MODE,
+                    evolutionAutomatic: state.getAutoEvolutionEnabled(config.EVOLUTION_AUTOMATIC),
                     rollbacksEnabled: state.getRollbacksEnabled(config.ENABLE_ROLLBACKS),
                     platform: config.AGENT_PLATFORM,
                     readOnly: !!client.capabilities.readOnly,
@@ -422,6 +423,24 @@ export function createDashboardServer(): express.Application {
         } catch (error) {
             res.status(500).json({
                 error: 'Failed to reload configuration',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
+     * POST /api/evolution/auto
+     * Toggle automatic evolution (manual-only mode when false)
+     */
+    app.post('/api/evolution/auto', (req, res) => {
+        try {
+            const state = getStateManager();
+            const enabled = Boolean(req.body?.enabled);
+            state.setAutoEvolutionEnabled(enabled);
+            res.json({ success: true, enabled });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to update auto evolution',
                 details: error instanceof Error ? error.message : String(error),
             });
         }

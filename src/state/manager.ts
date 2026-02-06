@@ -246,6 +246,15 @@ export class StateManager {
         this.setKV('rollbacks_enabled', enabled);
     }
 
+    getAutoEvolutionEnabled(defaultValue: boolean = true): boolean {
+        const value = this.getKV('auto_evolution_enabled', null) as boolean | null;
+        return typeof value === 'boolean' ? value : defaultValue;
+    }
+
+    setAutoEvolutionEnabled(enabled: boolean): void {
+        this.setKV('auto_evolution_enabled', enabled);
+    }
+
     getSelfModificationCooldownUntil(): Date | null {
         const value = this.getKV('self_modification_cooldown_until', null) as string | null;
         return value ? new Date(value) : null;

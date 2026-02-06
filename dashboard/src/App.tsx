@@ -62,6 +62,7 @@ interface Status {
         enableUpvoting: boolean;
         enableFollowing?: boolean;
         enableUnfollowing?: boolean;
+        evolutionAutomatic?: boolean;
         platform?: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         readOnly?: boolean;
     };
@@ -259,6 +260,7 @@ export default function App() {
     const [soulRefreshToken, setSoulRefreshToken] = useState(0);
     const [hubMessage, setHubMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [dataStats, setDataStats] = useState<DataStats | null>(null);
+    const [autoEvolutionUpdating, setAutoEvolutionUpdating] = useState(false);
 
     // WebSocket reference + pagination refs
     const wsRef = useRef<WebSocket | null>(null);
@@ -288,6 +290,36 @@ export default function App() {
             console.error('Failed to fetch data stats:', err);
         }
     }, []);
+
+    const toggleAutoEvolution = useCallback(async () => {
+        if (!status?.config) return;
+        const nextValue = !status.config.evolutionAutomatic;
+        try {
+            setAutoEvolutionUpdating(true);
+            const res = await fetch('/api/evolution/auto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: nextValue }),
+            });
+            if (!res.ok) throw new Error('Failed to update auto evolution');
+            const data = await res.json();
+            setStatus(prev => prev ? {
+                ...prev,
+                config: { ...prev.config, evolutionAutomatic: data.enabled }
+            } : prev);
+            setHubMessage({
+                type: 'success',
+                text: `Auto evolution ${data.enabled ? 'enabled' : 'disabled'}`
+            });
+        } catch (err) {
+            setHubMessage({
+                type: 'error',
+                text: err instanceof Error ? err.message : 'Failed to update auto evolution'
+            });
+        } finally {
+            setAutoEvolutionUpdating(false);
+        }
+    }, [status]);
 
     const fetchLogs = useCallback(async (options?: { limit?: number; type?: string }) => {
         try {
@@ -824,6 +856,18 @@ export default function App() {
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                                     <button onClick={handleForceBlueprint} className="btn-secondary">Force Blueprint</button>
                                     <button onClick={handleForceSynthesis} className="btn-secondary">Force Synthesis</button>
+                                    <button
+                                        onClick={toggleAutoEvolution}
+                                        className={status?.config.evolutionAutomatic ? 'btn-secondary' : 'btn-secondary warning'}
+                                        disabled={autoEvolutionUpdating || !status}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                                    >
+                                        {autoEvolutionUpdating
+                                            ? 'Updating...'
+                                            : status?.config.evolutionAutomatic
+                                                ? 'Auto Evolution: ON'
+                                                : 'Auto Evolution: OFF'}
+                                    </button>
                                     <select
                                         value={autonomousPostTarget}
                                         onChange={(e) => setAutonomousPostTarget(e.target.value)}

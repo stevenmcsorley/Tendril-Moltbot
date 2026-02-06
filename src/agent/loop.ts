@@ -515,7 +515,17 @@ class AgentLoop {
 
             // Continuously check for evolution (Phase 5: always on)
             const evolution = getEvolutionManager();
-            evolution.evaluateSoul().catch(err => console.error('Evolution check failed:', err));
+            if (stateManager.getAutoEvolutionEnabled(config.EVOLUTION_AUTOMATIC)) {
+                evolution.evaluateSoul().catch(err => console.error('Evolution check failed:', err));
+            } else {
+                logger.log({
+                    actionType: 'decision',
+                    targetId: null,
+                    promptSent: 'AUTO_EVOLUTION_DISABLED',
+                    rawModelOutput: null,
+                    finalAction: 'Automatic evolution disabled (manual only).',
+                });
+            }
 
             // Periodically run synthesis sequence (every 5 runs)
             if (this.runCount % 5 === 0) {
