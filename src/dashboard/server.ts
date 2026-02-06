@@ -173,6 +173,8 @@ export function createDashboardServer(): express.Application {
             const evolution = getEvolutionManager();
             const readiness = evolution.getReadinessSnapshot();
             const synthesisCooldown = getSynthesisCooldownState();
+            const activePersonaId = state.getActivePersonaId();
+            const activePersona = activePersonaId ? state.getPersonaById(activePersonaId) : null;
 
             const llmHealthy = await llm.healthCheck();
             const loopStatus = loop.getStatus();
@@ -236,6 +238,9 @@ export function createDashboardServer(): express.Application {
                     platform: config.AGENT_PLATFORM,
                     readOnly: !!client.capabilities.readOnly,
                     selfModificationCooldownMinutes: config.SELF_MODIFICATION_COOLDOWN_MINUTES,
+                    activePersonaId,
+                    activePersonaName: activePersona?.name ?? null,
+                    activePersonaDefault: activePersona?.isDefault ?? false,
                 },
                 evolution: {
                     selfModificationCooldownUntil: cooldownUntil?.toISOString() ?? null,
@@ -441,6 +446,90 @@ export function createDashboardServer(): express.Application {
         } catch (error) {
             res.status(500).json({
                 error: 'Failed to update auto evolution',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
+     * GET /api/personas
+     * List available personas
+     */
+    app.get('/api/personas', (req, res) => {
+        try {
+            const state = getStateManager();
+            const personas = state.getPersonas();
+            res.json({
+                personas: personas.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    source: p.source,
+                    isDefault: p.isDefault
+                })),
+                activeId: state.getActivePersonaId()
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to fetch personas',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
+     * POST /api/personas
+     * Save a custom persona
+     */
+    app.post('/api/personas', (req, res) => {
+        try {
+            const state = getStateManager();
+            const name = String(req.body?.name || '').trim();
+            const soul = String(req.body?.soul || '').trim();
+            if (!name) {
+                res.status(400).json({ error: 'Persona name is required.' });
+                return;
+            }
+            if (!soul) {
+                res.status(400).json({ error: 'Persona soul is required.' });
+                return;
+            }
+            if (!state.validateSoul(soul)) {
+                res.status(400).json({ error: 'Soul is missing required headers/sections.' });
+                return;
+            }
+            const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'persona';
+            const id = `${slug}-${Date.now().toString(36)}`;
+            const persona = state.savePersona({ id, name, soul, source: 'user', isDefault: false });
+            res.json({ success: true, persona });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to save persona',
+                details: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /**
+     * POST /api/personas/activate
+     * Activate a persona (sets the live soul)
+     */
+    app.post('/api/personas/activate', (req, res) => {
+        try {
+            const state = getStateManager();
+            const id = String(req.body?.id || '').trim();
+            if (!id) {
+                res.status(400).json({ error: 'Persona id is required.' });
+                return;
+            }
+            const result = state.activatePersona(id);
+            if (!result.success || !result.persona) {
+                res.status(404).json({ error: result.reason || 'Persona not found.' });
+                return;
+            }
+            res.json({ success: true, persona: result.persona, autoEvolutionEnabled: result.autoEvolutionEnabled });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to activate persona',
                 details: error instanceof Error ? error.message : String(error),
             });
         }

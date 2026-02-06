@@ -134,6 +134,16 @@ export class DatabaseManager {
                 last_seen TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS personas (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                soul TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'user',
+                is_default INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS inbound_engagements (
                 username TEXT PRIMARY KEY,
                 replies INTEGER DEFAULT 0,

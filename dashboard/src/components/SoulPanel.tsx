@@ -14,6 +14,12 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
     const [submoltDescription, setSubmoltDescription] = useState('');
     const [creatingSubmolt, setCreatingSubmolt] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [personas, setPersonas] = useState<Array<{ id: string; name: string; source: string; isDefault: boolean }>>([]);
+    const [activePersonaId, setActivePersonaId] = useState<string | null>(null);
+    const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
+    const [newPersonaName, setNewPersonaName] = useState<string>('');
+    const [savingPersona, setSavingPersona] = useState(false);
+    const [activatingPersona, setActivatingPersona] = useState(false);
 
     const fetchSoul = async () => {
         setLoading(true);
@@ -32,6 +38,20 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
             console.error('Failed to fetch soul:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchPersonas = async () => {
+        try {
+            const res = await fetch('/api/personas');
+            const data = await res.json();
+            setPersonas(data.personas || []);
+            setActivePersonaId(data.activeId || null);
+            if (data.activeId) {
+                setSelectedPersonaId(data.activeId);
+            }
+        } catch (error) {
+            console.error('Failed to fetch personas:', error);
         }
     };
 
@@ -170,12 +190,116 @@ export default function SoulPanel({ refreshToken = 0 }: { refreshToken?: number 
 
     useEffect(() => {
         fetchSoul();
+        fetchPersonas();
     }, [refreshToken]);
+
+    const handleActivatePersona = async () => {
+        if (!selectedPersonaId) return;
+        setActivatingPersona(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/personas/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: selectedPersonaId })
+            });
+            const result = await res.json();
+            if (result.success) {
+                setMessage({ type: 'success', text: `Persona activated: ${result.persona?.name || selectedPersonaId}` });
+                await fetchSoul();
+                await fetchPersonas();
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Failed to activate persona.' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to activate persona.' });
+        } finally {
+            setActivatingPersona(false);
+        }
+    };
+
+    const handleSavePersona = async () => {
+        if (!newPersonaName.trim()) {
+            setMessage({ type: 'error', text: 'Persona name is required.' });
+            return;
+        }
+        setSavingPersona(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/personas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newPersonaName, soul })
+            });
+            const result = await res.json();
+            if (result.success) {
+                setMessage({ type: 'success', text: `Persona saved: ${result.persona?.name || newPersonaName}` });
+                setNewPersonaName('');
+                await fetchPersonas();
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Failed to save persona.' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to save persona.' });
+        } finally {
+            setSavingPersona(false);
+        }
+    };
 
     if (loading) return <div className="card">Loading cognitive foundations...</div>;
 
     return (
         <div className="card" style={{ border: '1px solid rgba(88, 166, 255, 0.2)' }}>
+            <div style={{ marginBottom: 16, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-tertiary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Persona Library</div>
+                    {activePersonaId && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                            Active: {personas.find(p => p.id === activePersonaId)?.name || activePersonaId}
+                        </div>
+                    )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <select
+                        value={selectedPersonaId}
+                        onChange={(e) => setSelectedPersonaId(e.target.value)}
+                        className="btn-secondary"
+                        style={{ padding: '6px 8px', minWidth: 200 }}
+                    >
+                        {personas.map((p) => (
+                            <option key={p.id} value={p.id}>
+                                {p.name}{p.isDefault ? ' (Default)' : p.source === 'repo' ? ' (Preset)' : ''}
+                            </option>
+                        ))}
+                    </select>
+                    <button
+                        onClick={handleActivatePersona}
+                        disabled={activatingPersona || !selectedPersonaId || selectedPersonaId === activePersonaId}
+                        className="btn-secondary"
+                    >
+                        {activatingPersona ? 'Activating...' : 'Activate'}
+                    </button>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                            value={newPersonaName}
+                            onChange={(e) => setNewPersonaName(e.target.value)}
+                            placeholder="New persona name"
+                            className="btn-secondary"
+                            style={{ padding: '6px 8px', minWidth: 180 }}
+                        />
+                        <button
+                            onClick={handleSavePersona}
+                            disabled={savingPersona || !newPersonaName.trim()}
+                            className="btn-secondary"
+                        >
+                            {savingPersona ? 'Saving...' : 'Save Current'}
+                        </button>
+                    </div>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Custom personas are stored in the database. Presets are stored in the repo and synced to the DB.
+                </div>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                     <Zap size={20} color="#58a6ff" /> Autonomous Sovereignty & Evolution

@@ -7,6 +7,7 @@
 
 import { getDatabaseManager } from './db.js';
 import { DEFAULT_SOUL } from '../agent/default-soul.js';
+import { PERSONA_PRESETS } from '../agent/personas.js';
 import { getConfig } from '../config.js';
 
 export interface AgentState {
@@ -42,12 +43,23 @@ export interface AgentState {
     }>;
 }
 
+export interface PersonaRecord {
+    id: string;
+    name: string;
+    soul: string;
+    source: string;
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export class StateManager {
     constructor() {
         this.checkDailyReset();
         this.migrateSoulIfNeeded();
         this.cleanupDeprecatedKeys();
         this.handlePlatformChange();
+        this.seedPersonasIfNeeded();
     }
 
     private getKV(key: string, defaultValue: any): any {
@@ -59,6 +71,38 @@ export class StateManager {
     private setKV(key: string, value: any): void {
         const db = getDatabaseManager().getDb();
         db.prepare('INSERT OR REPLACE INTO kv_state (key, value) VALUES (?, ?)').run(key, JSON.stringify(value));
+    }
+
+    private seedPersonasIfNeeded(): void {
+        try {
+            const db = getDatabaseManager().getDb();
+            const existing = db.prepare('SELECT id, source, is_default FROM personas').all() as Array<{ id: string; source: string; is_default: number }>;
+            const existingMap = new Map(existing.map(p => [p.id, p]));
+            const now = new Date().toISOString();
+            const currentSoul = this.getKV('agent_soul', null) ?? DEFAULT_SOUL;
+
+            for (const preset of PERSONA_PRESETS) {
+                const record = existingMap.get(preset.id);
+                const isDefault = preset.isDefault ? 1 : 0;
+                const soul = preset.isDefault ? currentSoul : preset.soul;
+                if (!record) {
+                    db.prepare(`
+                        INSERT INTO personas (id, name, soul, source, is_default, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `).run(preset.id, preset.name, soul, preset.source ?? 'repo', isDefault, now, now);
+                } else if (record.source === 'repo' && !preset.isDefault) {
+                    db.prepare('UPDATE personas SET name = ?, soul = ?, is_default = ?, updated_at = ? WHERE id = ?')
+                        .run(preset.name, preset.soul, isDefault, now, preset.id);
+                }
+            }
+
+            const activeId = this.getKV('active_persona_id', null);
+            if (!activeId) {
+                this.setKV('active_persona_id', 'default');
+            }
+        } catch (error) {
+            console.error('Failed to seed personas:', error);
+        }
     }
 
     private checkDailyReset(): void {
@@ -97,6 +141,10 @@ export class StateManager {
      */
     setSoul(content: string): void {
         this.setKV('agent_soul', content);
+        const activeId = this.getActivePersonaId();
+        if (activeId) {
+            this.updatePersonaSoul(activeId, content);
+        }
 
         // Broadcast that the soul has evolved
         import('../dashboard/websocket.js').then(m => {
@@ -131,6 +179,10 @@ export class StateManager {
         ];
         if (content.length < 220) return false;
         return checks.every((pattern) => pattern.test(content));
+    }
+
+    validateSoul(content: string): boolean {
+        return this.isSoulValid(content);
     }
 
     private migrateSoulIfNeeded(): void {
@@ -253,6 +305,98 @@ export class StateManager {
 
     setAutoEvolutionEnabled(enabled: boolean): void {
         this.setKV('auto_evolution_enabled', enabled);
+    }
+
+    getAutoEvolutionBackup(): boolean | null {
+        const value = this.getKV('auto_evolution_enabled_backup', null) as boolean | null;
+        return typeof value === 'boolean' ? value : null;
+    }
+
+    setAutoEvolutionBackup(value: boolean | null): void {
+        this.setKV('auto_evolution_enabled_backup', value);
+    }
+
+    getActivePersonaId(): string | null {
+        return this.getKV('active_persona_id', null);
+    }
+
+    getPersonas(): PersonaRecord[] {
+        const db = getDatabaseManager().getDb();
+        const rows = db.prepare('SELECT * FROM personas ORDER BY created_at DESC').all() as Array<any>;
+        return rows.map(r => ({
+            id: r.id,
+            name: r.name,
+            soul: r.soul,
+            source: r.source,
+            isDefault: Boolean(r.is_default),
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+        }));
+    }
+
+    getPersonaById(id: string): PersonaRecord | null {
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT * FROM personas WHERE id = ?').get(id) as any;
+        if (!row) return null;
+        return {
+            id: row.id,
+            name: row.name,
+            soul: row.soul,
+            source: row.source,
+            isDefault: Boolean(row.is_default),
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+        };
+    }
+
+    savePersona(input: { id: string; name: string; soul: string; source?: string; isDefault?: boolean }): PersonaRecord {
+        const db = getDatabaseManager().getDb();
+        const now = new Date().toISOString();
+        const existing = this.getPersonaById(input.id);
+        if (existing) {
+            db.prepare('UPDATE personas SET name = ?, soul = ?, source = ?, is_default = ?, updated_at = ? WHERE id = ?')
+                .run(input.name, input.soul, input.source ?? existing.source, input.isDefault ? 1 : 0, now, input.id);
+        } else {
+            db.prepare(`
+                INSERT INTO personas (id, name, soul, source, is_default, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(input.id, input.name, input.soul, input.source ?? 'user', input.isDefault ? 1 : 0, now, now);
+        }
+        return this.getPersonaById(input.id)!;
+    }
+
+    updatePersonaSoul(id: string, soul: string): void {
+        const db = getDatabaseManager().getDb();
+        db.prepare('UPDATE personas SET soul = ?, updated_at = ? WHERE id = ?')
+            .run(soul, new Date().toISOString(), id);
+    }
+
+    activatePersona(id: string): { success: boolean; persona?: PersonaRecord; autoEvolutionEnabled?: boolean; reason?: string } {
+        const persona = this.getPersonaById(id);
+        if (!persona) return { success: false, reason: 'Persona not found' };
+
+        this.setKV('active_persona_id', persona.id);
+        this.setSoul(persona.soul);
+
+        const config = getConfig();
+        let autoEvolutionEnabled = this.getAutoEvolutionEnabled(config.EVOLUTION_AUTOMATIC);
+
+        if (!persona.isDefault) {
+            if (autoEvolutionEnabled) {
+                this.setAutoEvolutionBackup(true);
+                this.setAutoEvolutionEnabled(false);
+                autoEvolutionEnabled = false;
+            }
+        } else {
+            const backup = this.getAutoEvolutionBackup();
+            if (backup !== null) {
+                this.setAutoEvolutionEnabled(backup);
+                this.setAutoEvolutionBackup(null);
+                autoEvolutionEnabled = backup;
+            }
+        }
+
+        return { success: true, persona, autoEvolutionEnabled };
     }
 
     getCommentEngagementOffset(): number {
