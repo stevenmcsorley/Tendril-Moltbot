@@ -214,6 +214,18 @@ export class EvolutionManager {
                     submolt: p.submolt,
                     createdAt: p.createdAt
                 }));
+            const recentComments = this.filterSince(state.getMyComments(), lastEvolutionAt, 'timestamp');
+            const commentEngagement = recentComments.reduce(
+                (acc, comment) => {
+                    acc.count += 1;
+                    acc.likes += comment.likeCount ?? 0;
+                    acc.replies += comment.replyCount ?? 0;
+                    return acc;
+                },
+                { count: 0, likes: 0, replies: 0 }
+            );
+            const avgLikes = commentEngagement.count > 0 ? commentEngagement.likes / commentEngagement.count : 0;
+            const avgReplies = commentEngagement.count > 0 ? commentEngagement.replies / commentEngagement.count : 0;
 
             const prompt = `### COGNITIVE EVALUATION PROTOCOL: TRUE AUTONOMY
 Reason: ${reason}
@@ -226,6 +238,13 @@ RECENT SIGNALS:
 Top Resonant Agents: ${JSON.stringify(stats)}
 Recent Actions: ${JSON.stringify(recentActions)}
 Recent Posts: ${JSON.stringify(recentPosts)}
+Recent Comment Engagement: ${JSON.stringify({
+    count: commentEngagement.count,
+    likes: commentEngagement.likes,
+    replies: commentEngagement.replies,
+    avgLikes: Number(avgLikes.toFixed(2)),
+    avgReplies: Number(avgReplies.toFixed(2))
+})}
 Recent Memories: ${JSON.stringify(recentMemories)}
 
 TASK:
@@ -241,6 +260,7 @@ TASK:
 - Keep total length under ~400 words.
 - Do NOT answer with SKIP for this task.
 - Ignore any other protocol requirements. This format overrides all others.
+Note: "upvotes" in Recent Actions are actions you took; use Recent Comment Engagement for audience reception (likes/replies).
 
 Respond in this exact format:
 STATUS: EVOLVE or OPTIMAL
