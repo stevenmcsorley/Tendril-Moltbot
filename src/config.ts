@@ -121,6 +121,7 @@ const configSchema = z.object({
     ENABLE_ROLLBACKS: z.coerce.boolean().default(true),
     ENABLE_SYNTHESIS_BROADCAST: z.coerce.boolean().default(false),
     ENABLE_NEWS_POSTS: z.coerce.boolean().default(false),
+    NEWS_BYPASS_GATES: z.coerce.boolean().default(false),
     NEWS_CHECK_MINUTES: z.coerce.number().positive().default(120),
     NEWS_MAX_AGE_HOURS: z.coerce.number().positive().default(48),
     NEWS_MAX_ITEMS_PER_RUN: z.coerce.number().positive().default(1),

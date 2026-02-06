@@ -251,6 +251,15 @@ export class StateManager {
         this.setKV('platform_handle', handle);
     }
 
+    getNewsBypassEnabled(defaultValue: boolean = false): boolean {
+        const value = this.getKV('news_bypass_gates', null) as boolean | null;
+        return typeof value === 'boolean' ? value : defaultValue;
+    }
+
+    setNewsBypassEnabled(enabled: boolean): void {
+        this.setKV('news_bypass_gates', enabled);
+    }
+
     getLastNewsCheck(): Date | null {
         const value = this.getKV('news_last_check', null) as string | null;
         return value ? new Date(value) : null;

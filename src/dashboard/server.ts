@@ -235,6 +235,7 @@ export function createDashboardServer(): express.Application {
                     enableUnfollowing: config.ENABLE_UNFOLLOWING,
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
                     enableNewsPosts: config.ENABLE_NEWS_POSTS,
+                    newsBypassGates: state.getNewsBypassEnabled(config.NEWS_BYPASS_GATES),
                     evolutionMode: config.EVOLUTION_MODE,
                     evolutionAutomatic: state.getAutoEvolutionEnabled(config.EVOLUTION_AUTOMATIC),
                     rollbacksEnabled: state.getRollbacksEnabled(config.ENABLE_ROLLBACKS),
@@ -933,6 +934,7 @@ export function createDashboardServer(): express.Application {
     app.get('/api/data-export', async (req, res) => {
         try {
             const config = getConfig();
+            const state = getStateManager();
             const db = getDatabaseManager().getDb();
             const dbPath = (db as any).name as string | undefined;
             if (!dbPath || !existsSync(dbPath)) {
@@ -968,6 +970,7 @@ export function createDashboardServer(): express.Application {
                     enableFollowBack: config.ENABLE_FOLLOW_BACK,
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
                     enableNewsPosts: config.ENABLE_NEWS_POSTS,
+                    newsBypassGates: state.getNewsBypassEnabled(config.NEWS_BYPASS_GATES),
                     enableRollbacks: config.ENABLE_ROLLBACKS
                 },
                 news: {
@@ -1198,6 +1201,21 @@ export function createDashboardServer(): express.Application {
             res.json({ success: true, enabled });
         } catch (error) {
             res.status(500).json({ error: 'Failed to update rollback setting' });
+        }
+    });
+
+    /**
+     * POST /api/control/news-bypass
+     * Enable/disable bypassing autonomy gates for news posts
+     */
+    app.post('/api/control/news-bypass', (req, res) => {
+        try {
+            const enabled = Boolean(req.body?.enabled);
+            const state = getStateManager();
+            state.setNewsBypassEnabled(enabled);
+            res.json({ success: true, enabled });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to update news bypass setting' });
         }
     });
 

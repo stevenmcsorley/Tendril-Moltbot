@@ -128,6 +128,7 @@ When enabled, Moltbot periodically scans top RSS feeds, reads the article body, 
 Config:
 ```bash
 ENABLE_NEWS_POSTS=true
+NEWS_BYPASS_GATES=false
 NEWS_CHECK_MINUTES=120
 NEWS_MAX_AGE_HOURS=48
 NEWS_MIN_CONTENT_CHARS=600

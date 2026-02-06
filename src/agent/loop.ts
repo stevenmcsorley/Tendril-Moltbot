@@ -1174,24 +1174,40 @@ class AgentLoop {
 
         const finalContent = this.appendSourceLink(content, candidate.url);
 
-        const gateDecision = applyAutonomyGates(gateState, {
-            desiredAction: 'POST',
-            confidence,
-            novelty: true,
-            allowLowNovelty: true,
-            ignoreSynthesisCooldown: false,
-            ignoreUncertainty: false,
-            multiSourceContext: true,
-            lastPostAt: stateManager.getLastPostAt()
-        });
+        const bypassGates = stateManager.getNewsBypassEnabled(config.NEWS_BYPASS_GATES);
+        if (!bypassGates) {
+            const gateDecision = applyAutonomyGates(gateState, {
+                desiredAction: 'POST',
+                confidence,
+                novelty: true,
+                allowLowNovelty: true,
+                ignoreSynthesisCooldown: false,
+                ignoreUncertainty: false,
+                multiSourceContext: true,
+                lastPostAt: stateManager.getLastPostAt()
+            });
 
-        this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, gateDecision, 'post', {
-            promptSent: 'NEWS_POST',
-            rawModelOutput: result.rawOutput
-        });
-        if (gateDecision.action !== 'POST') {
-            markNewsStatus(candidate.url, 'skipped');
-            return;
+            this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, gateDecision, 'post', {
+                promptSent: 'NEWS_POST',
+                rawModelOutput: result.rawOutput
+            });
+            if (gateDecision.action !== 'POST') {
+                markNewsStatus(candidate.url, 'skipped');
+                return;
+            }
+        } else {
+            this.logAutonomyDecision(
+                logger,
+                null,
+                config.TARGET_SUBMOLT ?? undefined,
+                {
+                    action: 'POST',
+                    gatesTriggered: ['NEWS_BYPASS'],
+                    rationale: 'News bypass enabled: autonomy gates skipped.'
+                },
+                'post',
+                { promptSent: 'NEWS_POST', rawModelOutput: result.rawOutput }
+            );
         }
 
         const targetSubmolt = config.TARGET_SUBMOLT || 'general';
