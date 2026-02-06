@@ -43,6 +43,23 @@ function filterBySignals(entries: LogEntry[], filter: string | undefined): LogEn
             );
         });
     }
+    if (filter === 'replies') {
+        return entries.filter(entry => {
+            const action = (entry.actionType || '').toLowerCase();
+            const finalAction = (entry.finalAction || '').toLowerCase();
+            const promptSent = (entry.promptSent || '').toLowerCase();
+            return (
+                finalAction.includes('context=reply')
+                || finalAction.includes('social engagement')
+                || finalAction.includes('reply_like')
+                || promptSent.startsWith('social_reply')
+                || promptSent.startsWith('social_reply_upvote')
+                || (action === 'comment' && finalAction.includes('replied to social engagement'))
+                || (action === 'upvote' && finalAction.includes('upvoted reply'))
+                || (action === 'decision' && finalAction.includes('context=reply'))
+            );
+        });
+    }
     return entries.filter(entry => filter.split(',').includes(entry.actionType));
 }
 
@@ -169,6 +186,21 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
                         }}
                     >
                         Decisions
+                    </button>
+                    <button
+                        onClick={() => onFilterChange('replies')}
+                        disabled={currentFilter === 'replies'}
+                        style={{
+                            padding: '4px 8px',
+                            fontSize: 12,
+                            background: currentFilter === 'replies' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                            color: currentFilter === 'replies' ? 'white' : 'var(--text-secondary)',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Replies
                     </button>
                     <button
                         onClick={() => onFilterChange('signals')}

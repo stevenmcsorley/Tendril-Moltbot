@@ -526,8 +526,10 @@ export default function App() {
     };
 
     const refresh = useCallback(async () => {
-        const logLimit = logSearch.trim().length > 0 ? 2000 : (filterType?.startsWith('signals') ? 2000 : 300);
-        const logFetch = filterType
+        const logLimit = logSearch.trim().length > 0 || filterType === 'replies'
+            ? 2000
+            : (filterType?.startsWith('signals') ? 2000 : 300);
+        const logFetch = filterType && filterType !== 'replies'
             ? fetchLogs({ limit: logLimit, type: filterType })
             : fetchLogs({ limit: logLimit });
         await Promise.all([
@@ -559,8 +561,14 @@ export default function App() {
     }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats]);
 
     useEffect(() => {
-        const limit = logSearch.trim().length > 0 ? 2000 : (filterType?.startsWith('signals') ? 2000 : 300);
-        fetchLogs({ limit, type: filterType });
+        const limit = logSearch.trim().length > 0 || filterType === 'replies'
+            ? 2000
+            : (filterType?.startsWith('signals') ? 2000 : 300);
+        if (filterType && filterType !== 'replies') {
+            fetchLogs({ limit, type: filterType });
+        } else {
+            fetchLogs({ limit });
+        }
     }, [logSearch, filterType, fetchLogs]);
 
     // WebSocket Connection
@@ -714,6 +722,10 @@ export default function App() {
         }
         if (filter.startsWith('signals')) {
             fetchLogs({ limit: 2000, type: filter });
+            return;
+        }
+        if (filter === 'replies') {
+            fetchLogs({ limit: 2000 });
             return;
         }
         fetchLogs({ limit: 300, type: filter });
