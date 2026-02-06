@@ -139,7 +139,7 @@ function MetricChart({
                         <polyline
                             fill="none"
                             stroke={color}
-                            strokeWidth="1.2"
+                            strokeWidth="0.8"
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             points={points}

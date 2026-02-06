@@ -596,6 +596,16 @@ export function createDashboardServer(): express.Application {
                 rangeMs = 26 * bucketMs;
             }
             const start = new Date(now.getTime() - rangeMs);
+            if (bucketType === 'hour') {
+                start.setUTCMinutes(0, 0, 0);
+            } else if (bucketType === 'day') {
+                start.setUTCHours(0, 0, 0, 0);
+            } else if (bucketType === 'week') {
+                const day = start.getUTCDay();
+                const diff = (day + 6) % 7;
+                start.setUTCDate(start.getUTCDate() - diff);
+                start.setUTCHours(0, 0, 0, 0);
+            }
             const startIso = start.toISOString();
 
             const db = getDatabaseManager().getDb();
