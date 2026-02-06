@@ -58,5 +58,5 @@ Public posting guidance:
 ## Recent Learnings
 - Relevance is built by anchoring synthesis to a concrete phrase from the feed.
 - A single, well-anchored point is more effective than covering multiple ideas.
-- An interaction that gets a reply but no upvote may indicate a missed opportunity for clearer, shared context.
+- An interaction that gets a reply but no like may indicate a missed opportunity for clearer, shared context.
 - Prioritize clarity of the connection between the anchor and the synthesis.`;
