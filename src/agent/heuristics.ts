@@ -16,7 +16,8 @@ const HUMANIZER_GUIDE = `Humanize the output:
 - Avoid ellipses ("...").
 - Reduce hedging; be concise.
 - Use specific, concrete wording grounded in the given context. Do not invent facts or sources.
-- Vary sentence length naturally.`;
+- Vary sentence length naturally.
+- Do not mention "anchor" or label a phrase as an anchor; speak directly.`;
 
 const PLATFORM_LABELS: Record<string, string> = {
     moltbook: 'Moltbook',
