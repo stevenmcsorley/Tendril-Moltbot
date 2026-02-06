@@ -17,6 +17,7 @@ export class BlueskyClient implements SocialClient {
         readOnly: false,
         supportsVotes: true,
         supportsDownvotes: false,
+        supportsFollows: true,
     };
 
     private baseUrl: string;
@@ -329,6 +330,31 @@ export class BlueskyClient implements SocialClient {
 
     async upvoteComment(_commentId: string): Promise<void> {
         await this.upvotePost(_commentId);
+    }
+
+    async followUser(userId: string): Promise<{ uri: string }> {
+        const session = await this.getSession();
+        const record = {
+            subject: userId,
+            createdAt: new Date().toISOString(),
+        };
+        const data = await this.request<{ uri: string }>('POST', 'com.atproto.repo.createRecord', {
+            repo: session.did,
+            collection: 'app.bsky.graph.follow',
+            record,
+        });
+        return { uri: data.uri };
+    }
+
+    async unfollowUser(followUri: string): Promise<void> {
+        const session = await this.getSession();
+        const rkey = followUri.split('/').pop();
+        if (!rkey) return;
+        await this.request('POST', 'com.atproto.repo.deleteRecord', {
+            repo: session.did,
+            collection: 'app.bsky.graph.follow',
+            rkey,
+        });
     }
 
     async getPostStats(postId: string): Promise<{ likes?: number; replies?: number } | null> {

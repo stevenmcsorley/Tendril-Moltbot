@@ -15,6 +15,7 @@ export interface SocialClient {
         readOnly?: boolean;
         supportsVotes?: boolean;
         supportsDownvotes?: boolean;
+        supportsFollows?: boolean;
     };
     getMe(): Promise<Agent>;
     getStatus(): Promise<StatusResponse>;
@@ -38,4 +39,6 @@ export interface SocialClient {
     createSubmolt?(options: { name: string; display_name: string; description: string }): Promise<Submolt>;
     muteUser?(userId: string): Promise<void>;
     unmuteUser?(userId: string): Promise<void>;
+    followUser?(userId: string): Promise<{ uri: string }>;
+    unfollowUser?(followUri: string): Promise<void>;
 }

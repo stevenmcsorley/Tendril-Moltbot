@@ -24,6 +24,10 @@
   --downvote-rgb: 248, 81, 73;
   --skip-rgb: 110, 118, 129;
   --heartbeat-rgb: 249, 115, 22;
+  --follow: #8b5cf6;
+  --follow-rgb: 139, 92, 246;
+  --unfollow: #f472b6;
+  --unfollow-rgb: 244, 114, 182;
   --decision: var(--warning);
   --decision-rgb: 210, 153, 34;
 }
@@ -412,6 +416,16 @@ button.btn-secondary:hover {
 .log-action.downvote {
   background: rgba(248, 81, 73, 0.15);
   color: var(--error);
+}
+
+.log-action.follow {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--follow);
+}
+
+.log-action.unfollow {
+  background: rgba(244, 114, 182, 0.15);
+  color: var(--unfollow);
 }
 
 .log-action.skip {

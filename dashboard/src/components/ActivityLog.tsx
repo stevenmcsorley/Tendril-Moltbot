@@ -105,13 +105,13 @@ export default function ActivityLog({ entries, agentName, currentFilter, onFilte
                         All
                     </button>
                     <button
-                        onClick={() => onFilterChange('comment,post,upvote,downvote')}
-                        disabled={currentFilter === 'comment,post,upvote,downvote'}
+                        onClick={() => onFilterChange('comment,post,upvote,downvote,follow,unfollow')}
+                        disabled={currentFilter === 'comment,post,upvote,downvote,follow,unfollow'}
                         style={{
                             padding: '4px 8px',
                             fontSize: 12,
-                            background: currentFilter === 'comment,post,upvote,downvote' ? 'var(--primary)' : 'var(--bg-tertiary)',
-                            color: currentFilter === 'comment,post,upvote,downvote' ? 'white' : 'var(--text-secondary)',
+                            background: currentFilter === 'comment,post,upvote,downvote,follow,unfollow' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                            color: currentFilter === 'comment,post,upvote,downvote,follow,unfollow' ? 'white' : 'var(--text-secondary)',
                             border: 'none',
                             borderRadius: 4,
                             cursor: 'pointer'

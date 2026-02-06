@@ -77,6 +77,7 @@ const configSchema = z.object({
     OLLAMA_MAX_TOKENS: z.coerce.number().positive().default(120),
     OLLAMA_EMBED_MODEL: z.string().optional(),
     OLLAMA_EMBED_TIMEOUT_MS: z.coerce.number().positive().default(60000),
+    ENGAGEMENT_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.35),
 
     // DeepSeek
     DEEPSEEK_API_KEY: z.string().optional(),
@@ -105,6 +106,9 @@ const configSchema = z.object({
     ENABLE_POSTING: z.coerce.boolean().default(false),
     ENABLE_COMMENTING: z.coerce.boolean().default(true),
     ENABLE_UPVOTING: z.coerce.boolean().default(true),
+    ENABLE_FOLLOWING: z.coerce.boolean().default(false),
+    ENABLE_UNFOLLOWING: z.coerce.boolean().default(false),
+    FOLLOW_SCORE_THRESHOLD: z.coerce.number().nonnegative().default(30),
     EVOLUTION_MODE: z.enum(['stable', 'rapid']).default('rapid'),
     ENABLE_ROLLBACKS: z.coerce.boolean().default(true),
     ENABLE_SYNTHESIS_BROADCAST: z.coerce.boolean().default(true),

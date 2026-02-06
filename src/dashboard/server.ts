@@ -194,6 +194,9 @@ export function createDashboardServer(): express.Application {
                 metrics: {
                     upvotesGiven: stateData.upvotesGiven || 0,
                     downvotesGiven: stateData.downvotesGiven || 0,
+                    followsGiven: stateData.followsGiven || 0,
+                    unfollowsGiven: stateData.unfollowsGiven || 0,
+                    followsActive: state.getFollowCount(),
                     submoltsCreated: stateData.createdSubmolts?.length || 0,
                     totalComments: state.getMyComments().length,
                     totalPosts: state.getMyPosts().length,
@@ -223,6 +226,8 @@ export function createDashboardServer(): express.Application {
                     enablePosting: config.ENABLE_POSTING,
                     enableCommenting: config.ENABLE_COMMENTING,
                     enableUpvoting: config.ENABLE_UPVOTING,
+                    enableFollowing: config.ENABLE_FOLLOWING,
+                    enableUnfollowing: config.ENABLE_UNFOLLOWING,
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
                     evolutionMode: config.EVOLUTION_MODE,
                     rollbacksEnabled: state.getRollbacksEnabled(config.ENABLE_ROLLBACKS),

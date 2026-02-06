@@ -243,6 +243,9 @@ class AgentLoop {
                     const authorId = post.author?.id;
                     const wasQuarantined = authorHandle ? stateManager.isQuarantined(authorHandle) : false;
                     if (defenseManager.evaluateQuarantine(post)) {
+                        if (!wasQuarantined) {
+                            await this.maybeUnfollowAuthor(post.author);
+                        }
                         if (!wasQuarantined && config.AGENT_PLATFORM === 'bluesky' && config.BSKY_DEFENSE_MUTE && authorId && client.muteUser) {
                             try {
                                 await client.muteUser(authorId);
@@ -346,6 +349,7 @@ class AgentLoop {
 
                     const canComment = config.ENABLE_COMMENTING && !readOnly;
                     const canVote = config.ENABLE_UPVOTING && !readOnly;
+                    const alreadyCommented = stateManager.hasCommentedOnPost(post.id);
 
                     // Check rate limits before engaging
                     if (!rateLimiter.canComment() && canComment) {
@@ -365,7 +369,7 @@ class AgentLoop {
                     const prompt = await buildEngagementPrompt(post);
 
                     try {
-                        const result = await llm.generate(prompt);
+                        const result = await llm.generate(prompt, { temperature: config.ENGAGEMENT_TEMPERATURE });
 
                         // Parse vote and comment
                         const voteMatch = result.rawOutput.match(/\[VOTE\]:\s*(UP|DOWN|NONE)/i);
@@ -376,10 +380,30 @@ class AgentLoop {
                         const vote = voteMatch ? voteMatch[1].toUpperCase() : 'NONE';
                         let commentRaw = commentMatch ? commentMatch[1].trim() : result.rawOutput;
                         commentRaw = this.stripDiagnostics(commentRaw);
+                        commentRaw = this.diversifyLeadTemplate(commentRaw);
+                        let skipReason: string | null = null;
                         const violatesGuardrail = this.containsForbiddenPublicTerms(commentRaw);
-                        let isSkip = commentRaw.toUpperCase() === 'SKIP' || result.isSkip || !commentRaw || violatesGuardrail;
-                        if (isSkip && violatesGuardrail) {
+                        let isSkip = commentRaw.toUpperCase() === 'SKIP' || result.isSkip || !commentRaw;
+                        if (isSkip) {
+                            skipReason = 'Model selected SKIP.';
+                        }
+                        if (!isSkip && violatesGuardrail) {
+                            isSkip = true;
+                            skipReason = 'Public guardrail violation.';
                             commentRaw = 'SKIP';
+                        }
+                        if (!isSkip && alreadyCommented) {
+                            isSkip = true;
+                            skipReason = 'Already commented on post.';
+                            commentRaw = 'SKIP';
+                        }
+                        if (!isSkip && this.shouldEnforceAnchor()) {
+                            const anchorSources = this.collectAnchorSourcesFromPost(post);
+                            if (!this.hasConcreteAnchor(commentRaw, anchorSources)) {
+                                isSkip = true;
+                                skipReason = 'Missing concrete anchor.';
+                                commentRaw = 'SKIP';
+                            }
                         }
 
                         // Execute Vote
@@ -430,7 +454,7 @@ class AgentLoop {
                             const decision: GateDecision = {
                                 action: 'SKIP',
                                 gatesTriggered: [],
-                                rationale: violatesGuardrail ? 'Public guardrail violation.' : 'Model selected SKIP.'
+                                rationale: skipReason || (violatesGuardrail ? 'Public guardrail violation.' : 'Model selected SKIP.')
                             };
                             this.logAutonomyDecision(logger, post.id, post.submolt?.name, decision, 'comment');
                             if (vote === 'NONE') {
@@ -440,7 +464,7 @@ class AgentLoop {
                                     targetSubmolt: post.submolt?.name,
                                     promptSent: prompt,
                                     rawModelOutput: result.rawOutput,
-                                    finalAction: 'Model returned NONE/SKIP',
+                                    finalAction: skipReason || 'Model returned NONE/SKIP',
                                 });
                             }
                         }
@@ -652,6 +676,7 @@ class AgentLoop {
             if (post.author?.name) {
                 stateManager.recordAgentInteraction(post.author.name, 'comment');
             }
+            await this.maybeFollowAuthor(post.author);
 
             return true;
         } catch (error) {
@@ -712,6 +737,7 @@ class AgentLoop {
             if (post.author?.name) {
                 stateManager.recordAgentInteraction(post.author.name, 'upvote');
             }
+            await this.maybeFollowAuthor(post.author);
 
         } catch (error) {
             this.handleActionError(error, 'upvote', post.id, post.submolt?.name, prompt, rawOutput);
@@ -944,7 +970,27 @@ class AgentLoop {
                 }
             } else if (action === 'POST') {
                 if (contentMatch) {
-                    const content = this.stripDiagnostics(contentMatch[1].trim());
+                    let content = this.stripDiagnostics(contentMatch[1].trim());
+                    content = this.diversifyLeadTemplate(content);
+                    if (this.shouldEnforceAnchor()) {
+                        const anchorSources = this.collectAnchorSourcesFromFeed(feedPosts);
+                        if (!this.hasConcreteAnchor(content, anchorSources)) {
+                            const decision: GateDecision = {
+                                action: 'SKIP',
+                                gatesTriggered: [],
+                                rationale: 'Missing concrete anchor.'
+                            };
+                            this.logAutonomyDecision(
+                                logger,
+                                null,
+                                options.targetSubmoltOverride ?? config.TARGET_SUBMOLT ?? undefined,
+                                decision,
+                                'post',
+                                { rawModelOutput: result.rawOutput }
+                            );
+                            return;
+                        }
+                    }
                     if (this.containsForbiddenPublicTerms(content)) {
                         const decision: GateDecision = {
                             action: 'SKIP',
@@ -1270,7 +1316,8 @@ class AgentLoop {
 
         if (!contentMatch) return;
 
-        const content = this.stripDiagnostics(contentMatch[1].trim());
+        let content = this.stripDiagnostics(contentMatch[1].trim());
+        content = this.diversifyLeadTemplate(content);
         if (this.containsForbiddenPublicTerms(content)) {
             const decision: GateDecision = {
                 action: 'SKIP',
@@ -1332,6 +1379,10 @@ class AgentLoop {
         gateState: GateState
     ): Promise<boolean> {
         const config = getConfig();
+        if (reply.author?.name) {
+            stateManager.recordInboundEngagement(reply.author.name, 'reply');
+            await this.maybeFollowAuthor(reply.author);
+        }
         if (client.capabilities.readOnly) {
             const decision: GateDecision = {
                 action: 'SKIP',
@@ -1394,19 +1445,33 @@ class AgentLoop {
         });
 
         try {
-            const result = await llm.generate(prompt);
+            const result = await llm.generate(prompt, { temperature: config.ENGAGEMENT_TEMPERATURE });
             const confidence = this.parseConfidence(result.rawOutput);
             const mode = this.parseMode(result.rawOutput);
             const commentMatch = result.rawOutput.match(/\[COMMENT\]:\s*([\s\S]+)/i);
             let responseText = (commentMatch ? commentMatch[1] : result.response || result.rawOutput || '').trim();
             responseText = this.stripDiagnostics(responseText);
+            responseText = this.diversifyLeadTemplate(responseText);
 
+            let skipReason: string | null = null;
             const violatesGuardrail = this.containsForbiddenPublicTerms(responseText);
-            if (result.isSkip || !responseText || responseText.toUpperCase() === 'SKIP' || violatesGuardrail) {
+            if (result.isSkip || !responseText || responseText.toUpperCase() === 'SKIP') {
+                skipReason = 'Model selected SKIP.';
+            }
+            if (!skipReason && violatesGuardrail) {
+                skipReason = 'Public guardrail violation.';
+            }
+            if (!skipReason && this.shouldEnforceAnchor()) {
+                const anchorSources = [parentContent, reply.content].filter(Boolean);
+                if (!this.hasConcreteAnchor(responseText, anchorSources)) {
+                    skipReason = 'Missing concrete anchor.';
+                }
+            }
+            if (skipReason) {
                 const decision: GateDecision = {
                     action: 'SKIP',
                     gatesTriggered: [],
-                    rationale: violatesGuardrail ? 'Public guardrail violation.' : 'Model selected SKIP.'
+                    rationale: skipReason
                 };
                 this.logAutonomyDecision(logger, reply.id, undefined, decision, 'reply');
                 return false;
@@ -1491,9 +1556,11 @@ class AgentLoop {
         const lines = text.split('\n');
         const cleaned = lines.map(line => {
             const trimmed = line.trim();
-            const contentTag = trimmed.match(/^\[(COMMENT|CONTENT)\]:\s*(.*)$/i);
-            if (contentTag) return contentTag[2];
-            if (/^\[(CONFIDENCE|MODE|NOVELTY|ACTION|VOTE|SUBMOLT_DETAILS)\]/i.test(trimmed)) return '';
+            const contentTag = trimmed.match(/^\[(COMMENT|CONTENT)\]\s*:?\s*(.*)$/i);
+            if (contentTag) return contentTag[2] || '';
+            const bareTag = trimmed.match(/^(COMMENT|CONTENT)\s+(.*)$/i);
+            if (bareTag) return bareTag[2] || '';
+            if (/^\[(CONFIDENCE|MODE|NOVELTY|ACTION|VOTE|SUBMOLT_DETAILS)\]\s*:?.*$/i.test(trimmed)) return '';
             return line;
         }).join('\n');
 
@@ -1516,6 +1583,191 @@ class AgentLoop {
         const backward = new RegExp(`${sensitive.source}[^.]{0,${window}}${selfRef.source}`, 'i');
 
         return forward.test(text) || backward.test(text);
+    }
+
+    private diversifyLeadTemplate(text: string): string {
+        const trimmed = text.trim();
+        if (!trimmed) return text;
+        if (!/^The\s+(phrase|line|question|shift|critique|logic|anchor|frame)\b/i.test(trimmed)) {
+            return trimmed;
+        }
+        const prefixes = [
+            'Worth noting:',
+            'What stands out:',
+            'One clear point:',
+            'Quick read:',
+            'Seen plainly:'
+        ];
+        const seed = trimmed.length + trimmed.charCodeAt(0) + trimmed.charCodeAt(trimmed.length - 1);
+        const prefix = prefixes[seed % prefixes.length];
+        return `${prefix} ${trimmed}`;
+    }
+
+    private async maybeFollowAuthor(author?: { id?: string; name?: string | null }): Promise<void> {
+        const config = getConfig();
+        if (!config.ENABLE_FOLLOWING) return;
+        const client = getSocialClient();
+        if (!client.capabilities.supportsFollows || !client.followUser) return;
+        if (client.capabilities.readOnly) return;
+        const stateManager = getStateManager();
+        const authorId = author?.id;
+        const authorHandle = author?.name || null;
+        if (!authorId) return;
+        const selfHandle = stateManager.getPlatformHandle() || config.AGENT_NAME;
+        if (authorHandle && selfHandle && authorHandle.toLowerCase() === selfHandle.toLowerCase()) return;
+        if (authorHandle && stateManager.isQuarantined(authorHandle)) return;
+        if (stateManager.isFollowing(authorId)) return;
+        const inboundReplies = stateManager.getInboundReplyCount(authorHandle);
+        if (inboundReplies < 1) return;
+        const outboundReplies = stateManager.getOutboundReplyCount(authorHandle);
+        if (outboundReplies < 1) return;
+        const resonanceScore = stateManager.getResonanceScore(authorHandle);
+        if (resonanceScore < config.FOLLOW_SCORE_THRESHOLD) return;
+
+        try {
+            const result = await client.followUser(authorId);
+            if (!result?.uri) return;
+            stateManager.recordFollow(authorId, authorHandle, result.uri);
+            getActivityLogger().log({
+                actionType: 'follow',
+                targetId: authorId,
+                targetAuthor: authorHandle,
+                promptSent: '[FOLLOW]',
+                rawModelOutput: null,
+                finalAction: authorHandle ? `Followed @${authorHandle}` : `Followed ${authorId}`
+            });
+        } catch (error) {
+            getActivityLogger().log({
+                actionType: 'error',
+                targetId: authorId,
+                targetAuthor: authorHandle,
+                promptSent: '[FOLLOW]',
+                rawModelOutput: null,
+                finalAction: authorHandle ? `Failed to follow @${authorHandle}` : 'Failed to follow user',
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
+    private async maybeUnfollowAuthor(author?: { id?: string; name?: string | null }): Promise<void> {
+        const config = getConfig();
+        if (!config.ENABLE_UNFOLLOWING) return;
+        const client = getSocialClient();
+        if (!client.capabilities.supportsFollows || !client.unfollowUser) return;
+        if (client.capabilities.readOnly) return;
+        const stateManager = getStateManager();
+        const authorId = author?.id;
+        const authorHandle = author?.name || null;
+        if (!authorId) return;
+        const followUri = stateManager.getFollowUri(authorId);
+        if (!followUri) return;
+
+        try {
+            await client.unfollowUser(followUri);
+            stateManager.removeFollow(authorId);
+            getActivityLogger().log({
+                actionType: 'unfollow',
+                targetId: authorId,
+                targetAuthor: authorHandle,
+                promptSent: '[UNFOLLOW]',
+                rawModelOutput: null,
+                finalAction: authorHandle ? `Unfollowed @${authorHandle}` : `Unfollowed ${authorId}`
+            });
+        } catch (error) {
+            getActivityLogger().log({
+                actionType: 'error',
+                targetId: authorId,
+                targetAuthor: authorHandle,
+                promptSent: '[UNFOLLOW]',
+                rawModelOutput: null,
+                finalAction: authorHandle ? `Failed to unfollow @${authorHandle}` : 'Failed to unfollow user',
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
+    private shouldEnforceAnchor(): boolean {
+        return false;
+    }
+
+    private normalizeAnchorText(text: string): string {
+        return text.toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    private extractQuotedAnchors(text: string): string[] {
+        if (!text) return [];
+        const matches = [...text.matchAll(/"([^"]{4,160})"/g)];
+        return matches
+            .map(match => match[1].trim())
+            .filter(anchor => anchor.length > 0)
+            .filter(anchor => anchor.split(/\s+/).filter(Boolean).length >= 4);
+    }
+
+    private tokenizeForAnchor(text: string): string[] {
+        if (!text) return [];
+        const stop = new Set([
+            'the', 'this', 'that', 'with', 'from', 'about', 'into', 'your', 'our', 'you', 'for', 'and', 'are', 'was',
+            'were', 'but', 'not', 'just', 'like', 'what', 'when', 'then', 'than', 'have', 'has', 'had', 'been', 'will',
+            'does', 'did', 'its', 'it', 'they', 'them', 'their', 'there', 'here', 'over', 'under', 'also', 'only', 'more'
+        ]);
+        return text
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .map(token => token.trim())
+            .filter(token => token.length >= 4 && !stop.has(token));
+    }
+
+    private hasSoftAnchor(responseText: string, sources: string[]): boolean {
+        const responseTokens = new Set(this.tokenizeForAnchor(responseText));
+        if (responseTokens.size === 0) return false;
+        const sourceTokens = new Set<string>();
+        for (const source of sources) {
+            for (const token of this.tokenizeForAnchor(source)) {
+                sourceTokens.add(token);
+            }
+        }
+        if (sourceTokens.size === 0) return false;
+        let overlap = 0;
+        for (const token of responseTokens) {
+            if (sourceTokens.has(token)) {
+                overlap += 1;
+                if (overlap >= 2) return true;
+            }
+        }
+        return false;
+    }
+
+    private hasConcreteAnchor(responseText: string, sources: string[]): boolean {
+        if (!responseText) return false;
+        const anchors = this.extractQuotedAnchors(responseText);
+        const normalizedSources = sources
+            .filter(Boolean)
+            .map(source => this.normalizeAnchorText(source));
+        if (normalizedSources.length === 0) return false;
+        if (anchors.length > 0) {
+            return anchors.some(anchor => {
+                const normalizedAnchor = this.normalizeAnchorText(anchor);
+                return normalizedSources.some(source => source.includes(normalizedAnchor));
+            });
+        }
+        return this.hasSoftAnchor(responseText, sources);
+    }
+
+    private collectAnchorSourcesFromPost(post: Post): string[] {
+        const sources: string[] = [];
+        if (post.content) sources.push(post.content);
+        if (post.title && post.title !== post.content) sources.push(post.title);
+        return sources;
+    }
+
+    private collectAnchorSourcesFromFeed(posts: Post[]): string[] {
+        const sources: string[] = [];
+        for (const post of posts) {
+            if (post.content) sources.push(post.content);
+            if (post.title && post.title !== post.content) sources.push(post.title);
+        }
+        return sources;
     }
 
     private isAmbiguousText(text: string): boolean {

@@ -12,6 +12,9 @@ interface Status {
     metrics: {
         upvotesGiven: number;
         downvotesGiven: number;
+        followsGiven: number;
+        unfollowsGiven: number;
+        followsActive: number;
         submoltsCreated: number;
         totalComments: number;
         totalPosts: number;
@@ -37,6 +40,8 @@ interface Status {
         enablePosting: boolean;
         enableCommenting: boolean;
         enableUpvoting: boolean;
+        enableFollowing?: boolean;
+        enableUnfollowing?: boolean;
         evolutionMode?: 'stable' | 'rapid';
         platform?: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         readOnly?: boolean;
@@ -262,6 +267,8 @@ export default function StatusCard({ status }: StatusCardProps) {
                         status.config.enablePosting && 'Post',
                         status.config.enableCommenting && 'Comment',
                         status.config.enableUpvoting && 'Upvote',
+                        status.config.enableFollowing && 'Follow',
+                        status.config.enableUnfollowing && 'Unfollow',
                     ]
                         .filter(Boolean)
                         .join(', ') || 'None'}
@@ -281,6 +288,24 @@ export default function StatusCard({ status }: StatusCardProps) {
                         <span className="status-label">Downvotes Given</span>
                     </Tooltip>
                     <span className="status-value" style={{ color: 'var(--error)' }}>{status.metrics.downvotesGiven}</span>
+                </div>
+                <div className="status-row">
+                    <Tooltip text="Total follow actions performed by the agent.">
+                        <span className="status-label">Follows Given</span>
+                    </Tooltip>
+                    <span className="status-value" style={{ color: 'var(--follow)' }}>{status.metrics.followsGiven}</span>
+                </div>
+                <div className="status-row">
+                    <Tooltip text="Total unfollow actions performed by the agent.">
+                        <span className="status-label">Unfollows Given</span>
+                    </Tooltip>
+                    <span className="status-value" style={{ color: 'var(--unfollow)' }}>{status.metrics.unfollowsGiven}</span>
+                </div>
+                <div className="status-row">
+                    <Tooltip text="Active follow relationships recorded by the agent.">
+                        <span className="status-label">Active Follows</span>
+                    </Tooltip>
+                    <span className="status-value" style={{ color: 'var(--info)' }}>{status.metrics.followsActive}</span>
                 </div>
                 <div className="status-row">
                     <Tooltip text="Autonomous digital habitats created during synthesis convergences.">

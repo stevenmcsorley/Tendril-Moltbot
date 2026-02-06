@@ -120,6 +120,19 @@ export class DatabaseManager {
                 timestamp TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS follows (
+                did TEXT PRIMARY KEY,
+                handle TEXT,
+                uri TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS inbound_engagements (
+                username TEXT PRIMARY KEY,
+                replies INTEGER DEFAULT 0,
+                last_seen TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS kv_state (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL

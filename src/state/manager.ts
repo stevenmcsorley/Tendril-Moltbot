@@ -24,6 +24,8 @@ export interface AgentState {
     createdSubmolts: { id: string; name: string; display_name: string; created_at: string }[];
     upvotesGiven: number;
     downvotesGiven: number;
+    followsGiven: number;
+    unfollowsGiven: number;
     agentResonance: Array<{
         username: string;
         interactions: number;
@@ -165,6 +167,8 @@ export class StateManager {
                 db.prepare('DELETE FROM posts').run();
                 db.prepare('DELETE FROM comments').run();
                 db.prepare('DELETE FROM topology').run();
+                db.prepare('DELETE FROM follows').run();
+                db.prepare('DELETE FROM inbound_engagements').run();
                 this.setKV('posts_seen', []);
                 this.setKV('posts_commented', []);
                 this.setKV('social_replied_to', []);
@@ -173,6 +177,8 @@ export class StateManager {
                 this.setKV('last_comment_at', null);
                 this.setKV('upvotes_given', 0);
                 this.setKV('downvotes_given', 0);
+                this.setKV('follows_given', 0);
+                this.setKV('unfollows_given', 0);
                 this.setKV('platform_handle', null);
                 console.warn(`⚠️ Platform changed from ${last} to ${current}. Cleared platform-specific state.`);
             }
@@ -211,6 +217,8 @@ export class StateManager {
             DELETE FROM synthesis;
             DELETE FROM posts;
             DELETE FROM comments;
+            DELETE FROM follows;
+            DELETE FROM inbound_engagements;
             DELETE FROM kv_state;
             COMMIT;
         `);
@@ -222,6 +230,8 @@ export class StateManager {
         this.setKV('comments_made_today', 0);
         this.setKV('upvotes_given', 0);
         this.setKV('downvotes_given', 0);
+        this.setKV('follows_given', 0);
+        this.setKV('unfollows_given', 0);
     }
 
     getRollbacksEnabled(defaultValue: boolean = true): boolean {
@@ -332,6 +342,52 @@ export class StateManager {
         this.setKV('last_comment_at', new Date().toISOString());
     }
 
+    isFollowing(did: string): boolean {
+        if (!did) return false;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT 1 FROM follows WHERE did = ?').get(did) as any;
+        return !!row;
+    }
+
+    getFollowUri(did: string): string | null {
+        if (!did) return null;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT uri FROM follows WHERE did = ?').get(did) as { uri: string } | undefined;
+        return row?.uri ?? null;
+    }
+
+    recordFollow(did: string, handle: string | null, uri: string): void {
+        if (!did || !uri) return;
+        const db = getDatabaseManager().getDb();
+        db.prepare(`
+            INSERT OR REPLACE INTO follows (did, handle, uri, created_at)
+            VALUES (?, ?, ?, ?)
+        `).run(did, handle || null, uri, new Date().toISOString());
+        const count = this.getKV('follows_given', 0);
+        this.setKV('follows_given', count + 1);
+    }
+
+    removeFollow(did: string): void {
+        if (!did) return;
+        const db = getDatabaseManager().getDb();
+        db.prepare('DELETE FROM follows WHERE did = ?').run(did);
+        const count = this.getKV('unfollows_given', 0);
+        this.setKV('unfollows_given', count + 1);
+    }
+
+    getFollowCount(): number {
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT COUNT(*) as count FROM follows').get() as { count: number };
+        return row.count;
+    }
+
+    getResonanceScore(username?: string | null): number {
+        if (!username) return 0;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT score FROM topology WHERE username = ?').get(username) as { score: number } | undefined;
+        return row?.score ?? 0;
+    }
+
     recordPost(post?: { id: string; title: string; content?: string; submolt: any; votes?: number; likeCount?: number; replyCount?: number }): void {
         this.setKV('last_post_at', new Date().toISOString());
         if (post) {
@@ -431,6 +487,38 @@ export class StateManager {
             INSERT OR REPLACE INTO topology (username, interactions, score, upvotes, downvotes, replies, last_seen, handshake_step, is_quarantined)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(username, res.interactions, res.score, res.upvotes, res.downvotes, res.replies, res.last_seen, res.handshake_step, res.is_quarantined);
+    }
+
+    recordInboundEngagement(username: string, type: 'reply'): void {
+        if (!username) return;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT * FROM inbound_engagements WHERE username = ?').get(username) as any || {
+            username,
+            replies: 0,
+            last_seen: new Date().toISOString()
+        };
+        if (type === 'reply') {
+            row.replies = (row.replies || 0) + 1;
+        }
+        row.last_seen = new Date().toISOString();
+        db.prepare(`
+            INSERT OR REPLACE INTO inbound_engagements (username, replies, last_seen)
+            VALUES (?, ?, ?)
+        `).run(username, row.replies, row.last_seen);
+    }
+
+    getInboundReplyCount(username?: string | null): number {
+        if (!username) return 0;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT replies FROM inbound_engagements WHERE username = ?').get(username) as { replies: number } | undefined;
+        return row?.replies ?? 0;
+    }
+
+    getOutboundReplyCount(username?: string | null): number {
+        if (!username) return 0;
+        const db = getDatabaseManager().getDb();
+        const row = db.prepare('SELECT replies FROM topology WHERE username = ?').get(username) as { replies: number } | undefined;
+        return row?.replies ?? 0;
     }
 
     recordHandshakeStep(username: string, step: 'detected' | 'requested' | 'established'): void {
@@ -572,6 +660,8 @@ export class StateManager {
             createdSubmolts: this.getKV('created_submolts', []),
             upvotesGiven: this.getKV('upvotes_given', 0),
             downvotesGiven: this.getKV('downvotes_given', 0),
+            followsGiven: this.getKV('follows_given', 0),
+            unfollowsGiven: this.getKV('unfollows_given', 0),
             agentResonance: this.getNetworkTopology()
         };
     }

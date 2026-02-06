@@ -9,7 +9,7 @@ import { getDatabaseManager } from '../state/db.js';
 import { getStateManager } from '../state/manager.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
 
-export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'skip' | 'error' | 'heartbeat' | 'decision';
+export type ActionType = 'read' | 'upvote' | 'downvote' | 'comment' | 'post' | 'follow' | 'unfollow' | 'skip' | 'error' | 'heartbeat' | 'decision';
 export type SignalType = 'ALLIANCE' | 'DEFENSE' | 'LINEAGE';
 
 export interface ActivityLogEntry {

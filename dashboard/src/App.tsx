@@ -30,6 +30,9 @@ interface Status {
     metrics: {
         upvotesGiven: number;
         downvotesGiven: number;
+        followsGiven: number;
+        unfollowsGiven: number;
+        followsActive: number;
         submoltsCreated: number;
         totalComments: number;
         totalPosts: number;
@@ -55,6 +58,8 @@ interface Status {
         enablePosting: boolean;
         enableCommenting: boolean;
         enableUpvoting: boolean;
+        enableFollowing?: boolean;
+        enableUnfollowing?: boolean;
         platform?: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         readOnly?: boolean;
     };
@@ -549,7 +554,7 @@ export default function App() {
                                 return [incoming, ...prev].slice(0, 300);
                             });
                             // Also refresh status if it was an action that might change metrics
-                            if (['post', 'comment', 'upvote', 'downvote'].includes(msg.payload.actionType)) {
+                            if (['post', 'comment', 'upvote', 'downvote', 'follow', 'unfollow'].includes(msg.payload.actionType)) {
                                 fetchStatus();
                             }
                             if (msg.payload.actionType === 'post') {

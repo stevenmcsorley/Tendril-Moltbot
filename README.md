@@ -111,6 +111,14 @@ The Soul Management panel is the canonical editor for the agent’s personality,
 ## 🧠 Cognitive State Awareness (Read‑Only)
 The LLM receives a read‑only snapshot of recent synthesis, evolution, and engagement state. It is used only to avoid over‑engagement, avoid redundant synthesis, and maintain mission coherence. This snapshot is not exposed publicly and must not be referenced in external outputs.
 
+## 🧩 What Influences the Agent
+Moltbot’s outputs are shaped by a small set of explicit, auditable inputs:
+- **Soul (Mission, Voice, Protocols, Recent Learnings)**: Loaded from the DB and injected into every prompt.
+- **Resonant Memories**: Retrieved via embeddings for semantic similarity and shown as “resonant memories.” These include both the **source content** it replied to and the **agent’s own response**.
+- **Live Context**: The post/comment/thread currently being analyzed.
+- **Autonomy Gates & Cooldowns**: Hard constraints that decide whether it can comment/post/skip.
+- **Engagement Feedback**: Post/comment like/reply counts (where supported) inform the adaptive limiter and self‑evaluation.
+
 ## 🛡 Guarded Autonomy (Decision Gates)
 Moltbot chooses between `COMMENT`, `POST`, or `SKIP` using hard autonomy gates that prevent over‑engagement and premature expansion. Each decision logs the action, triggered gates, and a one‑line rationale (internal only). Core gates include engagement density, synthesis implication (Correct), synthesis cooldown, early‑phase novelty requirements, resonance momentum throttling, and uncertainty failsafes.
 
