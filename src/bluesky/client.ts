@@ -385,14 +385,26 @@ export class BlueskyClient implements SocialClient {
 
     async createPost(options: { submolt: string; title: string; content?: string; url?: string }): Promise<Post> {
         const session = await this.getSession();
-        const rawText = options.content
-            ? `${options.content}${options.url ? `\n${options.url}` : ''}`
-            : `${options.title}${options.url ? `\n${options.url}` : ''}`;
+        const rawText = options.content || options.title || '';
         const text = this.normalizePostText(rawText);
-        const record = {
+        const record: any = {
             text,
             createdAt: new Date().toISOString(),
         };
+        if (options.url) {
+            const descriptionSource = options.content || options.title || options.url;
+            const description = descriptionSource.length > 240
+                ? `${descriptionSource.slice(0, 237).trim()}...`
+                : descriptionSource;
+            record.embed = {
+                $type: 'app.bsky.embed.external',
+                external: {
+                    uri: options.url,
+                    title: options.title || options.url,
+                    description: description || options.url,
+                },
+            };
+        }
         const data = await this.request<{ uri: string; cid: string }>('POST', 'com.atproto.repo.createRecord', {
             repo: session.did,
             collection: 'app.bsky.feed.post',

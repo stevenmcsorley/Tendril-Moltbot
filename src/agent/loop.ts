@@ -1183,6 +1183,7 @@ class AgentLoop {
         let content = contentMatch ? contentMatch[1].trim() : this.stripDiagnostics(result.rawOutput);
         content = this.stripDiagnostics(content);
         content = this.sanitizePublicText(content);
+        content = this.truncateGraphemes(content, 200);
         content = content.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
 
         const finalContent = content;
@@ -1228,7 +1229,8 @@ class AgentLoop {
             const post = await client.createPost({
                 submolt: targetSubmolt,
                 title: candidate.title.slice(0, 200),
-                content: finalContent
+                content: finalContent,
+                url: candidate.url
             });
 
             stateManager.recordPost({
@@ -1835,6 +1837,12 @@ class AgentLoop {
         cleaned = cleaned.replace(/\banchor(ed|ing|s)?\b/gi, 'detail');
         cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
         return cleaned;
+    }
+
+    private truncateGraphemes(text: string, max: number): string {
+        if (!text) return '';
+        if (max <= 0) return '';
+        return Array.from(text).slice(0, max).join('').trim();
     }
 
     private containsForbiddenPublicTerms(text: string): boolean {

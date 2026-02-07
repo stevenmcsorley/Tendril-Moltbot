@@ -274,6 +274,7 @@ Write a short post for ${platformLabel} that reacts to or contextualizes this ar
 - Do not include the source link.
 - Do not use hashtags, emojis, tags, or markers.
 - Do not start with "The phrase" or "The anchor".
+- Hard limit: 200 characters.
 
 Include two diagnostic headers before your response:
 [CONFIDENCE]: LOW | MEDIUM | HIGH
