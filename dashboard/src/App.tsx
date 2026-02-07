@@ -833,8 +833,8 @@ export default function App() {
                         logs={terminalLogs}
                         isConnected={isWsConnected}
                     />
-                    <StatusCard status={status} />
                     <EngagementWeather weather={engagementWeather} />
+                    <StatusCard status={status} />
                     <Controls
                         status={status}
                         onPause={() => handleControl('pause')}
