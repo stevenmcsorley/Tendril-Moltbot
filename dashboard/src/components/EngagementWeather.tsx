@@ -84,14 +84,16 @@ export default function EngagementWeather({ weather, trend }: { weather?: Engage
                         Last signal: {weather?.lastSignalAt ? <RelativeTime value={weather.lastSignalAt} /> : '—'}
                     </div>
                     {sparkline && (
-                        <svg viewBox="0 0 100 24" style={{ width: '100%', height: 26, marginTop: 10 }}>
-                            <polyline
-                                fill="none"
-                                stroke={meta.color}
-                                strokeWidth="1"
-                                points={sparkline}
-                            />
-                        </svg>
+                        <div style={{ width: '100%' }}>
+                            <svg viewBox="0 0 100 24" preserveAspectRatio="none" style={{ width: '100%', height: 26, marginTop: 10 }}>
+                                <polyline
+                                    fill="none"
+                                    stroke={meta.color}
+                                    strokeWidth="1"
+                                    points={sparkline}
+                                />
+                            </svg>
+                        </div>
                     )}
                 </div>
             ) : (
@@ -104,14 +106,16 @@ export default function EngagementWeather({ weather, trend }: { weather?: Engage
                         <div style={{ width: `${progress * 100}%`, height: '100%', background: meta.color }} />
                     </div>
                     {sparkline && (
-                        <svg viewBox="0 0 100 24" style={{ width: '100%', height: 22 }}>
-                            <polyline
-                                fill="none"
-                                stroke={meta.color}
-                                strokeWidth="1"
-                                points={sparkline}
-                            />
-                        </svg>
+                        <div style={{ width: '100%' }}>
+                            <svg viewBox="0 0 100 24" preserveAspectRatio="none" style={{ width: '100%', height: 22 }}>
+                                <polyline
+                                    fill="none"
+                                    stroke={meta.color}
+                                    strokeWidth="1"
+                                    points={sparkline}
+                                />
+                            </svg>
+                        </div>
                     )}
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                         Last: {weather?.lastSignalAt ? <RelativeTime value={weather.lastSignalAt} /> : '—'}
