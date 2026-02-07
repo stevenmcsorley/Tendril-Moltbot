@@ -533,11 +533,13 @@ class AgentLoop {
                 await this.tryProactivePost(feed.posts, computeGateState());
             }
 
-            // Try news-based post
-            await this.tryNewsPost(computeGateState());
-
         // Social Engagement: Check for replies to my posts/comments
         await this.trySocialEngagement();
+
+            // Try news-based post when idle or in comment cooldown
+            if (config.ENABLE_NEWS_POSTS && (this.cycleStats.total === 0 || !rateLimiter.canComment())) {
+                await this.tryNewsPost(computeGateState());
+            }
 
             // Refresh engagement metrics on my own posts/comments
             await this.refreshOwnEngagements();
