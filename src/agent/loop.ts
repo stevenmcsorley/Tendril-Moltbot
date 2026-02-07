@@ -13,7 +13,7 @@ import { getMemoryManager } from '../state/memory.js';
 import { getRateLimiter } from '../rate-limiter.js';
 import { getActivityLogger, type ActivityLogger } from '../logging/activity-log.js';
 import { getWebSocketBroadcaster } from '../dashboard/websocket.js';
-import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSeedPostPrompt, buildSocialReplyPrompt, buildNewsPostPrompt } from './heuristics.js';
+import { filterPost, buildEngagementPrompt, buildSynthesisPrompt, buildSeedPostPrompt, buildSocialReplyPrompt, buildNewsPostPrompt, buildNewsPostPromptStrict } from './heuristics.js';
 import { applyAutonomyGates, computeGateState, type GateState, type ConfidenceLevel, type ModeLabel, type GateDecision } from './autonomy-gates.js';
 import { getEvolutionManager } from './evolution.js';
 import { getDefenseManager } from './defense.js';
@@ -1232,15 +1232,42 @@ class AgentLoop {
             return;
         }
 
-        const confidence = this.parseConfidence(result.rawOutput);
-        const actionMatch = result.rawOutput.match(/\[ACTION\]\s*:\s*(POST|SKIP)/i);
-        const action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
-        const contentMatch = result.rawOutput.match(/\[CONTENT\]\s*:\s*([\s\S]+)/i);
         const bypassGates = options.forceBypass || stateManager.getNewsBypassEnabled(config.NEWS_BYPASS_GATES);
 
-        if (!bypassGates && (result.isSkip || action !== 'POST' || !contentMatch)) {
-            const reason = result.isSkip ? 'Model selected SKIP.' : 'No actionable news output.';
-            markNewsStatus(candidate.url, 'skipped', reason, undefined, result.rawOutput);
+        const parseNewsOutput = (rawOutput: string) => {
+            const actionMatch = rawOutput.match(/\[ACTION\]\s*:\s*(POST|SKIP)/i);
+            const action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
+            const contentMatch = rawOutput.match(/\[CONTENT\]\s*:\s*([\s\S]+)/i);
+            let content = contentMatch ? contentMatch[1].trim() : this.stripDiagnostics(rawOutput);
+            content = this.stripDiagnostics(content);
+            content = this.sanitizePublicText(content);
+            content = this.truncateGraphemes(content, 200);
+            content = content.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
+            return { action, content };
+        };
+
+        const confidence = this.parseConfidence(result.rawOutput);
+        let rawOutput = result.rawOutput;
+        let { action, content } = parseNewsOutput(rawOutput);
+
+        if (!content) {
+            const retryPrompt = await buildNewsPostPromptStrict({
+                title: candidate.title,
+                source: candidate.source,
+                url: candidate.url,
+                publishedAt: candidate.publishedAt,
+                content: candidate.content
+            });
+            const retryResult = await llm.generate(retryPrompt);
+            rawOutput = retryResult.rawOutput;
+            const retryParsed = parseNewsOutput(rawOutput);
+            action = retryParsed.action;
+            content = retryParsed.content;
+        }
+
+        if (!bypassGates && (result.isSkip || action !== 'POST' || !content)) {
+            const reason = !content ? 'News output empty after second pass.' : (result.isSkip ? 'Model selected SKIP.' : 'No actionable news output.');
+            markNewsStatus(candidate.url, 'skipped', reason, undefined, rawOutput);
             const decision: GateDecision = {
                 action: 'SKIP',
                 gatesTriggered: [],
@@ -1248,26 +1275,20 @@ class AgentLoop {
             };
             this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, decision, 'post', {
                 promptSent: options.promptSent,
-                rawModelOutput: result.rawOutput
+                rawModelOutput: rawOutput
             });
             return;
         }
 
-        let content = contentMatch ? contentMatch[1].trim() : this.stripDiagnostics(result.rawOutput);
-        content = this.stripDiagnostics(content);
-        content = this.sanitizePublicText(content);
-        content = this.truncateGraphemes(content, 200);
-        content = content.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
-
         const finalContent = content;
 
         if (!finalContent) {
-            markNewsStatus(candidate.url, 'skipped', 'News output empty after sanitization.', undefined, result.rawOutput);
+            markNewsStatus(candidate.url, 'skipped', 'News output empty after second pass.', undefined, rawOutput);
             this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, {
                 action: 'SKIP',
                 gatesTriggered: bypassGates ? ['NEWS_BYPASS'] : [],
                 rationale: 'News output empty after sanitization.'
-            }, 'post', { promptSent: options.promptSent, rawModelOutput: result.rawOutput });
+            }, 'post', { promptSent: options.promptSent, rawModelOutput: rawOutput });
             return;
         }
 
@@ -1291,7 +1312,7 @@ class AgentLoop {
                 const reason = gateDecision.gatesTriggered.length
                     ? `Gated: ${gateDecision.gatesTriggered.join(', ')}`
                     : gateDecision.rationale;
-                markNewsStatus(candidate.url, 'skipped', reason, finalContent, result.rawOutput);
+                markNewsStatus(candidate.url, 'skipped', reason, finalContent, rawOutput);
                 return;
             }
         } else {
@@ -1305,7 +1326,7 @@ class AgentLoop {
                     rationale: 'News bypass enabled: autonomy gates skipped.'
                 },
                 'post',
-                { promptSent: options.promptSent, rawModelOutput: result.rawOutput }
+                { promptSent: options.promptSent, rawModelOutput: rawOutput }
             );
         }
 
@@ -1324,7 +1345,7 @@ class AgentLoop {
                 content: finalContent,
                 submolt: targetSubmolt
             });
-            markNewsPosted(candidate.url, finalContent, result.rawOutput);
+            markNewsPosted(candidate.url, finalContent, rawOutput);
 
             logger.log({
                 actionType: 'post',
@@ -1336,8 +1357,8 @@ class AgentLoop {
             });
         } catch (error) {
             const reason = error instanceof Error ? error.message : 'Post creation failed.';
-            markNewsStatus(candidate.url, 'error', reason, finalContent, result.rawOutput);
-            this.handleActionError(error, 'post', null, targetSubmolt, prompt, result.rawOutput);
+            markNewsStatus(candidate.url, 'error', reason, finalContent, rawOutput);
+            this.handleActionError(error, 'post', null, targetSubmolt, prompt, rawOutput);
         }
     }
 

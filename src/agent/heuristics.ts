@@ -286,6 +286,22 @@ ${lengthGuidance ? `${lengthGuidance}\n` : ''}${HUMANIZER_GUIDE}
 Respond with a Protocol Response defined in the Soul.`;
 }
 
+export async function buildNewsPostPromptStrict(article: {
+    title: string;
+    source: string;
+    url: string;
+    publishedAt?: string | null;
+    content: string;
+}): Promise<string> {
+    const base = await buildNewsPostPrompt(article);
+    return `${base}
+
+RETRY MODE:
+- You must output [ACTION]: POST and a non-empty [CONTENT].
+- Do not output SKIP.
+- Keep it under 200 characters.`;
+}
+
 /**
  * Build a prompt for responding to a comment or reply to the agent's own content.
  */
