@@ -36,6 +36,7 @@ export class RateLimiter {
     private adaptiveCommentMaxMs: number;
     private adaptiveHighFactor: number;
     private adaptiveLowFactor: number;
+    private adaptiveSilenceFactor: number;
 
     constructor() {
         this.stateManager = getStateManager();
@@ -53,6 +54,7 @@ export class RateLimiter {
         this.adaptiveCommentMaxMs = config.ADAPTIVE_COMMENT_SECONDS_MAX * 1000;
         this.adaptiveHighFactor = config.ADAPTIVE_FACTOR_HIGH;
         this.adaptiveLowFactor = config.ADAPTIVE_FACTOR_LOW;
+        this.adaptiveSilenceFactor = config.ADAPTIVE_SILENCE_FACTOR ?? 1;
     }
 
     private clamp(value: number, min: number, max: number): number {
@@ -62,6 +64,7 @@ export class RateLimiter {
     private getAdaptiveMultiplier(): number {
         if (!this.adaptiveEnabled) return 1;
         const engagement = this.stateManager.getRecentEngagementCount(this.adaptiveWindowMs);
+        if (engagement === 0) return this.adaptiveSilenceFactor;
         if (engagement >= this.adaptiveHigh) return this.adaptiveHighFactor;
         if (engagement <= this.adaptiveLow) return this.adaptiveLowFactor;
         return 1;
