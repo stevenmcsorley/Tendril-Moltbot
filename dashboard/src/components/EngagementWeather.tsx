@@ -26,6 +26,11 @@ export default function EngagementWeather({ weather, trend }: { weather?: Engage
     const progress = weather
         ? Math.min(1, weather.count / Math.max(1, weather.highThreshold))
         : 0;
+    const now = Date.now();
+    const windowMs = (weather?.windowMinutes ?? 0) * 60 * 1000;
+    const resetInMs = weather?.lastSignalAt
+        ? Math.max(0, new Date(weather.lastSignalAt).getTime() + windowMs - now)
+        : null;
     const sparkline = useMemo(() => {
         if (!trend || trend.length === 0) return '';
         const values = trend.map(p => p.count);
@@ -83,6 +88,9 @@ export default function EngagementWeather({ weather, trend }: { weather?: Engage
                     <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
                         Last signal: {weather?.lastSignalAt ? <RelativeTime value={weather.lastSignalAt} /> : '—'}
                     </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                        Window resets: {resetInMs !== null ? <RelativeTime value={new Date(now + resetInMs).toISOString()} /> : '—'}
+                    </div>
                     {sparkline && (
                         <div style={{ width: '100%' }}>
                             <svg viewBox="0 0 100 24" preserveAspectRatio="none" style={{ width: '100%', height: 26, marginTop: 10 }}>
@@ -119,6 +127,9 @@ export default function EngagementWeather({ weather, trend }: { weather?: Engage
                     )}
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                         Last: {weather?.lastSignalAt ? <RelativeTime value={weather.lastSignalAt} /> : '—'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Reset: {resetInMs !== null ? <RelativeTime value={new Date(now + resetInMs).toISOString()} /> : '—'}
                     </div>
                 </div>
             )}
