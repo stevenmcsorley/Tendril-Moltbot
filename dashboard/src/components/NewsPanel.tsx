@@ -116,6 +116,7 @@ export default function NewsPanel({
     const [editingUrl, setEditingUrl] = useState<string | null>(null);
     const [editContent, setEditContent] = useState('');
     const [showRawOutput, setShowRawOutput] = useState(false);
+    const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
     const [previewLimit, setPreviewLimit] = useState(config?.previewChars ?? 240);
     const [autoExpandPreview, setAutoExpandPreview] = useState(false);
     const [sourceOverride, setSourceOverride] = useState<string | null>(sourceOverrideProp ?? null);
@@ -313,6 +314,21 @@ export default function NewsPanel({
             console.error('Failed to retry news post:', error);
         } finally {
             setRetryingUrl(null);
+        }
+    };
+
+    const handleDelete = async (url: string) => {
+        setDeletingUrl(url);
+        try {
+            const res = await fetch(`/api/news/item?url=${encodeURIComponent(url)}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) throw new Error('Failed to delete');
+            setRefreshKey(prev => prev + 1);
+        } catch (error) {
+            console.error('Failed to delete news item:', error);
+        } finally {
+            setDeletingUrl(null);
         }
     };
 
@@ -631,6 +647,14 @@ export default function NewsPanel({
                                             style={{ fontSize: 11, marginLeft: 8 }}
                                         >
                                             Edit & Post
+                                        </button>
+                                        <button
+                                            className="btn-secondary"
+                                            onClick={() => handleDelete(item.url)}
+                                            disabled={deletingUrl === item.url}
+                                            style={{ fontSize: 11, marginLeft: 8 }}
+                                        >
+                                            {deletingUrl === item.url ? 'Deleting…' : 'Delete'}
                                         </button>
                                     </div>
                                 )}

@@ -374,6 +374,25 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * DELETE /api/news/item
+     * Delete a news record by URL
+     */
+    app.delete('/api/news/item', (req, res) => {
+        try {
+            const url = String(req.query.url || '').trim();
+            if (!url) {
+                res.status(400).json({ error: 'Missing url' });
+                return;
+            }
+            const db = getDatabaseManager().getDb();
+            db.prepare('DELETE FROM news_items WHERE url = ?').run(url);
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to delete news item' });
+        }
+    });
+
+    /**
      * GET /api/logs
      * Get activity logs (paginated)
      */
