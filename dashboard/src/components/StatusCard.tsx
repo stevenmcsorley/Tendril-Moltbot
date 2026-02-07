@@ -278,6 +278,17 @@ export default function StatusCard({ status }: StatusCardProps) {
             </div>
 
             <div className="status-row">
+                <span className="status-label">Next Post</span>
+                <span className="status-value" title={formatTime(status.rateLimit.nextPostAt)}>
+                    {status.rateLimit.canPost
+                        ? 'Now'
+                        : status.rateLimit.nextPostAt
+                            ? <RelativeTime value={status.rateLimit.nextPostAt} />
+                            : '—'}
+                </span>
+            </div>
+
+            <div className="status-row">
                 <span className="status-label">Comments Today</span>
                 <span className="status-value">
                     {status.rateLimit.dailyLimitEnabled && status.rateLimit.maxCommentsPerDay !== null
