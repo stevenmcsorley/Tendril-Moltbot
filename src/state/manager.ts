@@ -652,9 +652,13 @@ export class StateManager {
         }
     }
 
-    recordEngagementSignal(): void {
+    recordEngagementSignal(count: number = 1): void {
         const events = this.getKV('engagement_events', []) as string[];
-        events.push(new Date().toISOString());
+        const now = new Date().toISOString();
+        const safeCount = Math.max(1, Math.min(10, Math.floor(count)));
+        for (let i = 0; i < safeCount; i += 1) {
+            events.push(now);
+        }
         const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
         const pruned = events.filter(ts => new Date(ts).getTime() >= cutoff).slice(-1000);
         this.setKV('engagement_events', pruned);

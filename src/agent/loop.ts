@@ -607,6 +607,14 @@ class AgentLoop {
                     ? await client.getPostStats(post.id)
                     : null;
                 if (stats && (stats.likes !== undefined || stats.replies !== undefined)) {
+                    const currentLikes = post.likeCount ?? post.votes ?? 0;
+                    const currentReplies = post.replyCount ?? 0;
+                    const nextLikes = stats.likes ?? currentLikes;
+                    const nextReplies = stats.replies ?? currentReplies;
+                    const delta = Math.max(0, (nextLikes - currentLikes)) + Math.max(0, (nextReplies - currentReplies));
+                    if (delta > 0) {
+                        stateManager.recordEngagementSignal(Math.min(delta, 5));
+                    }
                     stateManager.updatePostEngagement(post.id, stats);
                 }
             } catch (error) {
@@ -638,6 +646,10 @@ class AgentLoop {
                         stateManager.updateCommentEngagement(comment.id, stats);
                         if (changed) {
                             stateManager.recordCommentEngagementEvent(comment.id, currentLikes, currentReplies, nextLikes, nextReplies);
+                            const delta = Math.max(0, (nextLikes - currentLikes)) + Math.max(0, (nextReplies - currentReplies));
+                            if (delta > 0) {
+                                stateManager.recordEngagementSignal(Math.min(delta, 5));
+                            }
                             getWebSocketBroadcaster().broadcast('comment_engagement', {
                                 id: comment.id,
                                 likes: nextLikes,
