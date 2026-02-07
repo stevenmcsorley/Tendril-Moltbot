@@ -412,11 +412,20 @@ export class BlueskyClient implements SocialClient {
         if (!uri) return;
         const rkey = uri.split('/').pop();
         if (!rkey) return;
-        await this.request('POST', 'com.atproto.repo.deleteRecord', {
-            repo: session.did,
-            collection: 'app.bsky.feed.post',
-            rkey,
-        });
+        try {
+            await this.request('POST', 'com.atproto.repo.deleteRecord', {
+                repo: session.did,
+                collection: 'app.bsky.feed.post',
+                rkey,
+            });
+        } catch (error: any) {
+            if (error instanceof PlatformApiError) {
+                if (error.statusCode === 404 || String(error.message).includes('NotFound')) {
+                    return;
+                }
+            }
+            throw error;
+        }
     }
 
     async deleteComment(commentId: string): Promise<void> {
@@ -425,11 +434,20 @@ export class BlueskyClient implements SocialClient {
         if (!uri) return;
         const rkey = uri.split('/').pop();
         if (!rkey) return;
-        await this.request('POST', 'com.atproto.repo.deleteRecord', {
-            repo: session.did,
-            collection: 'app.bsky.feed.post',
-            rkey,
-        });
+        try {
+            await this.request('POST', 'com.atproto.repo.deleteRecord', {
+                repo: session.did,
+                collection: 'app.bsky.feed.post',
+                rkey,
+            });
+        } catch (error: any) {
+            if (error instanceof PlatformApiError) {
+                if (error.statusCode === 404 || String(error.message).includes('NotFound')) {
+                    return;
+                }
+            }
+            throw error;
+        }
     }
 
     async upvotePost(_postId: string): Promise<void> {
