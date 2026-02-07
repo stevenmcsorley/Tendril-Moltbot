@@ -1045,6 +1045,7 @@ export function createDashboardServer(): express.Application {
             const config = getConfig();
             const state = getStateManager();
             const db = getDatabaseManager().getDb();
+            const queueRow = db.prepare("SELECT COUNT(*) as count FROM news_items WHERE status != 'posted'").get() as { count: number };
             const dbPath = (db as any).name as string | undefined;
             if (!dbPath || !existsSync(dbPath)) {
                 res.status(500).json({ error: 'Database file not found.' });
