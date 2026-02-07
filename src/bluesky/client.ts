@@ -21,6 +21,7 @@ export class BlueskyClient implements SocialClient {
     };
 
     private baseUrl: string;
+    private appViewUrl: string;
     private handle: string;
     private appPassword: string;
     private session: BlueskySession | null = null;
@@ -34,6 +35,7 @@ export class BlueskyClient implements SocialClient {
     constructor() {
         const config = getConfig();
         this.baseUrl = config.BSKY_SERVICE_URL;
+        this.appViewUrl = config.BSKY_APPVIEW_URL || config.BSKY_SERVICE_URL;
         this.handle = config.BSKY_HANDLE || '';
         this.appPassword = config.BSKY_APP_PASSWORD || '';
         this.maxGraphemes = Math.max(1, config.BSKY_MAX_GRAPHEMES || 300);
@@ -61,14 +63,19 @@ export class BlueskyClient implements SocialClient {
     }
 
     private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-        const session = await this.getSession();
-        const url = `${this.baseUrl}/xrpc/${path}`;
+        const useAppView = path.startsWith('app.bsky.');
+        const base = useAppView ? this.appViewUrl : this.baseUrl;
+        const url = `${base}/xrpc/${path}`;
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+        if (!useAppView) {
+            const session = await this.getSession();
+            headers.Authorization = `Bearer ${session.accessJwt}`;
+        }
         const response = await fetch(url, {
             method,
-            headers: {
-                Authorization: `Bearer ${session.accessJwt}`,
-                'Content-Type': 'application/json',
-            },
+            headers,
             body: body ? JSON.stringify(body) : undefined,
         });
         if (!response.ok) {

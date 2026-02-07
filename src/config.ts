@@ -50,6 +50,7 @@ const configSchema = z.object({
 
     // Bluesky
     BSKY_SERVICE_URL: z.string().url().default('https://bsky.social'),
+    BSKY_APPVIEW_URL: z.string().url().default('https://api.bsky.app'),
     BSKY_HANDLE: z.string().optional(),
     BSKY_APP_PASSWORD: z.string().optional(),
     BSKY_MAX_GRAPHEMES: z.coerce.number().positive().default(300),
