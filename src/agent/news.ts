@@ -1,5 +1,6 @@
 import { getConfig } from '../config.js';
 import { getDatabaseManager } from '../state/db.js';
+import { getStateManager } from '../state/manager.js';
 
 export interface NewsSource {
     name: string;
@@ -21,13 +22,23 @@ export interface NewsCandidate extends NewsItem {
 const DEFAULT_NEWS_SOURCES: NewsSource[] = [
     { name: 'BBC News', url: 'https://newsrss.bbc.co.uk/rss/newsonline_uk_edition/front_page/rss.xml' },
     { name: 'The Guardian', url: 'https://www.theguardian.com/world/rss' },
+    { name: 'Reuters', url: 'https://feeds.reuters.com/reuters/topNews' },
+    { name: 'Associated Press', url: 'https://apnews.com/rss/apnews/topnews' },
+    { name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+    { name: 'NPR', url: 'https://feeds.npr.org/1001/rss.xml' },
     { name: 'Ars Technica', url: 'http://feeds.arstechnica.com/arstechnica/index' },
+    { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+    { name: 'Wired', url: 'https://www.wired.com/feed/rss' },
+    { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+    { name: 'MIT Technology Review', url: 'https://www.technologyreview.com/feed/' },
+    { name: 'Nature News', url: 'https://www.nature.com/subjects/news/rss' },
+    { name: 'ScienceDaily', url: 'https://www.sciencedaily.com/rss/top/science.xml' },
     { name: 'Hacker News', url: 'https://hnrss.org/frontpage' },
 ];
 
 const USER_AGENT = 'MoltbotNews/1.0';
 
-function parseSources(raw?: string): NewsSource[] {
+function parseSources(raw?: string | null): NewsSource[] {
     if (!raw || !raw.trim()) {
         return DEFAULT_NEWS_SOURCES;
     }
@@ -184,32 +195,44 @@ function hasNewsItem(url: string): boolean {
     return !!row;
 }
 
-function recordNewsItem(item: NewsItem, status: string): void {
+function truncatePreview(text?: string | null): string | null {
+    if (!text) return null;
+    const config = getConfig();
+    const limit = Math.max(120, config.NEWS_PREVIEW_CHARS || 0);
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit).trim()}…`;
+}
+
+function recordNewsItem(item: NewsItem, status: string, reason?: string, previewText?: string, rawOutput?: string | null): void {
     const db = getDatabaseManager().getDb();
     const now = new Date().toISOString();
     db.prepare(`
-        INSERT OR REPLACE INTO news_items (url, title, source, published_at, status, created_at, posted_at)
-        VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT posted_at FROM news_items WHERE url = ?), NULL))
+        INSERT OR REPLACE INTO news_items (url, title, source, published_at, status, status_reason, preview_text, raw_output, created_at, posted_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT posted_at FROM news_items WHERE url = ?), NULL))
     `).run(
         item.url,
         item.title,
         item.source,
         item.publishedAt,
         status,
+        reason ?? null,
+        truncatePreview(previewText),
+        rawOutput ?? null,
         now,
         item.url
     );
 }
 
-export function markNewsPosted(url: string): void {
+export function markNewsPosted(url: string, previewText?: string, rawOutput?: string | null): void {
     const db = getDatabaseManager().getDb();
-    db.prepare('UPDATE news_items SET status = ?, posted_at = ? WHERE url = ?')
-        .run('posted', new Date().toISOString(), url);
+    db.prepare('UPDATE news_items SET status = ?, status_reason = ?, preview_text = COALESCE(?, preview_text), raw_output = COALESCE(?, raw_output), posted_at = ? WHERE url = ?')
+        .run('posted', 'posted', truncatePreview(previewText), rawOutput ?? null, new Date().toISOString(), url);
 }
 
-export function markNewsStatus(url: string, status: string): void {
+export function markNewsStatus(url: string, status: string, reason?: string, previewText?: string, rawOutput?: string | null): void {
     const db = getDatabaseManager().getDb();
-    db.prepare('UPDATE news_items SET status = ? WHERE url = ?').run(status, url);
+    db.prepare('UPDATE news_items SET status = ?, status_reason = ?, preview_text = COALESCE(?, preview_text), raw_output = COALESCE(?, raw_output) WHERE url = ?')
+        .run(status, reason ?? null, truncatePreview(previewText), rawOutput ?? null, url);
 }
 
 export async function getNewsCandidateByUrl(url: string): Promise<NewsCandidate | null> {
@@ -234,7 +257,8 @@ export async function getNewsCandidateByUrl(url: string): Promise<NewsCandidate 
 
 export async function getNewsCandidate(): Promise<NewsCandidate | null> {
     const config = getConfig();
-    const sources = parseSources(config.NEWS_RSS_SOURCES);
+    const override = getStateManager().getNewsSourcesOverride();
+    const sources = parseSources(override ?? config.NEWS_RSS_SOURCES ?? undefined);
     const maxAgeMs = config.NEWS_MAX_AGE_HOURS * 60 * 60 * 1000;
     const minContentChars = Math.max(100, config.NEWS_MIN_CONTENT_CHARS || 0);
     const maxCandidates = Math.max(5, (config.NEWS_MAX_ITEMS_PER_RUN || 1) * 5);
@@ -262,7 +286,7 @@ export async function getNewsCandidate(): Promise<NewsCandidate | null> {
         }
         const articleText = await fetchArticleText(item.url);
         if (!articleText || articleText.length < minContentChars) {
-            recordNewsItem(item, 'skipped');
+            recordNewsItem(item, 'skipped', 'Article content too short or unavailable.');
             continue;
         }
         recordNewsItem(item, 'seen');

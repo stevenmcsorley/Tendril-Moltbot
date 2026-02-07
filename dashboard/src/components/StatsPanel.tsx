@@ -245,14 +245,14 @@ export default function StatsPanel({ refreshToken, platform }: { refreshToken?: 
                         />
                         <MetricChart
                             title="Likes per bucket"
-                            subtitle="New likes on comments"
+                            subtitle="New likes on posts and comments"
                             series={engagement?.series ?? []}
                             color="var(--success)"
                             unit="likes"
                         />
                         <MetricChart
                             title="Replies per bucket"
-                            subtitle="New replies to comments"
+                            subtitle="New replies to posts and comments"
                             series={engagement?.series ?? []}
                             color="var(--warning)"
                             unit="replies"

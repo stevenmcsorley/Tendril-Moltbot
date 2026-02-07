@@ -127,6 +127,7 @@ const configSchema = z.object({
     NEWS_MAX_AGE_HOURS: z.coerce.number().positive().default(48),
     NEWS_MAX_ITEMS_PER_RUN: z.coerce.number().positive().default(1),
     NEWS_MIN_CONTENT_CHARS: z.coerce.number().positive().default(600),
+    NEWS_PREVIEW_CHARS: z.coerce.number().positive().default(400),
     NEWS_RSS_SOURCES: z.string().optional(),
     EVOLUTION_AUTOMATIC: z.coerce.boolean().default(true),
     DIALOGUE_INTERVAL_MS: z.coerce.number().positive().default(8000),

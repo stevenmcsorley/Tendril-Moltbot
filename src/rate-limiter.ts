@@ -16,7 +16,10 @@ export interface RateLimitStatus {
     canComment: boolean;
     nextPostAt: Date | null;
     nextCommentAt: Date | null;
-    commentsRemaining: number;
+    commentsRemaining: number | null;
+    commentsMadeToday: number;
+    maxCommentsPerDay: number | null;
+    dailyLimitEnabled: boolean;
     inBackoff: boolean;
     backoffUntil: Date | null;
 }
@@ -82,6 +85,10 @@ export class RateLimiter {
         return this.clamp(scaled, this.adaptiveCommentMinMs, this.adaptiveCommentMaxMs);
     }
 
+    private isDailyLimitEnabled(): boolean {
+        return this.maxCommentsPerDay > 0 && !this.adaptiveEnabled;
+    }
+
     /**
      * Check if we can make a post
      */
@@ -113,7 +120,7 @@ export class RateLimiter {
         if (this.stateManager.isInBackoff()) return false;
 
         // Check daily limit
-        if (this.stateManager.getCommentsMadeToday() >= this.maxCommentsPerDay) {
+        if (this.isDailyLimitEnabled() && this.stateManager.getCommentsMadeToday() >= this.maxCommentsPerDay) {
             return false;
         }
 
@@ -139,7 +146,8 @@ export class RateLimiter {
     /**
      * Get remaining comments for today
      */
-    getCommentsRemaining(): number {
+    getCommentsRemaining(): number | null {
+        if (!this.isDailyLimitEnabled()) return null;
         const used = this.stateManager.getCommentsMadeToday();
         return Math.max(0, this.maxCommentsPerDay - used);
     }
@@ -185,12 +193,18 @@ export class RateLimiter {
      * Get full rate limit status
      */
     getStatus(): RateLimitStatus {
+        const commentsMadeToday = this.stateManager.getCommentsMadeToday();
+        const dailyLimitEnabled = this.isDailyLimitEnabled();
+        const maxCommentsPerDay = dailyLimitEnabled ? this.maxCommentsPerDay : null;
         return {
             canPost: this.canPost(),
             canComment: this.canComment(),
             nextPostAt: this.getNextPostTime(),
             nextCommentAt: this.getNextCommentTime(),
             commentsRemaining: this.getCommentsRemaining(),
+            commentsMadeToday,
+            maxCommentsPerDay,
+            dailyLimitEnabled,
             inBackoff: this.stateManager.isInBackoff(),
             backoffUntil: this.stateManager.getBackoffUntil(),
         };

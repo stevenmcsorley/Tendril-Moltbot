@@ -144,12 +144,25 @@ export class DatabaseManager {
                 delta_replies INTEGER DEFAULT 0
             );
 
+            CREATE TABLE IF NOT EXISTS post_engagement_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                like_count INTEGER DEFAULT 0,
+                reply_count INTEGER DEFAULT 0,
+                delta_likes INTEGER DEFAULT 0,
+                delta_replies INTEGER DEFAULT 0
+            );
+
             CREATE TABLE IF NOT EXISTS news_items (
                 url TEXT PRIMARY KEY,
                 title TEXT,
                 source TEXT,
                 published_at TEXT,
                 status TEXT DEFAULT 'seen',
+                status_reason TEXT,
+                preview_text TEXT,
+                raw_output TEXT,
                 created_at TEXT NOT NULL,
                 posted_at TEXT
             );
@@ -189,6 +202,9 @@ export class DatabaseManager {
         this.ensureColumn('comments', 'like_count', 'INTEGER DEFAULT 0');
         this.ensureColumn('comments', 'reply_count', 'INTEGER DEFAULT 0');
         this.ensureColumn('comments', 'content', 'TEXT');
+        this.ensureColumn('news_items', 'status_reason', 'TEXT');
+        this.ensureColumn('news_items', 'preview_text', 'TEXT');
+        this.ensureColumn('news_items', 'raw_output', 'TEXT');
     }
 
     private ensureColumn(table: string, column: string, type: string): void {

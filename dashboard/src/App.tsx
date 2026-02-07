@@ -54,8 +54,10 @@ interface Status {
     rateLimit: {
         canPost: boolean;
         canComment: boolean;
-        commentsRemaining: number;
-        maxCommentsPerDay: number;
+        commentsRemaining: number | null;
+        maxCommentsPerDay: number | null;
+        commentsMadeToday: number;
+        dailyLimitEnabled: boolean;
         nextPostAt: string | null;
         nextCommentAt: string | null;
         inBackoff: boolean;
@@ -72,13 +74,16 @@ interface Status {
         evolutionAutomatic?: boolean;
         platform?: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         readOnly?: boolean;
+        newsSourcesOverride?: string | null;
     };
     news?: {
         checkMinutes?: number;
         maxAgeHours?: number;
         maxItemsPerRun?: number;
         minContentChars?: number;
+        previewChars?: number;
         sources?: string | null;
+        queueCount?: number;
     };
     evolution: {
         selfModificationCooldownUntil: string | null;
@@ -924,6 +929,9 @@ export default function App() {
                                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                             >
                                 <Newspaper size={16} /> News Scout
+                                {status?.news?.queueCount ? (
+                                    <span className="badge warning">{status.news.queueCount}</span>
+                                ) : null}
                             </button>
                         </Tooltip>
 
@@ -979,7 +987,11 @@ export default function App() {
                     ) : activeTab === 'stats' ? (
                         <StatsPanel refreshToken={statsRefreshToken} platform={status?.config.platform} />
                     ) : activeTab === 'news' ? (
-                        <NewsPanel refreshToken={statsRefreshToken} config={status?.news ?? null} />
+                        <NewsPanel
+                            refreshToken={statsRefreshToken}
+                            config={status?.news ?? null}
+                            sourceOverrideProp={status?.config?.newsSourcesOverride ?? null}
+                        />
                     ) : activeTab === 'intelligence' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>

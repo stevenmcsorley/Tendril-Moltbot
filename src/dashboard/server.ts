@@ -186,6 +186,11 @@ export function createDashboardServer(): express.Application {
             const evolutionWindow = state.getEvolutionWindow();
             const platformHandle = state.getPlatformHandle();
 
+            const queueRow = getDatabaseManager()
+                .getDb()
+                .prepare("SELECT COUNT(*) as count FROM news_items WHERE status != 'posted'")
+                .get() as { count: number };
+
             res.json({
                 agent: {
                     name: config.AGENT_NAME,
@@ -221,7 +226,9 @@ export function createDashboardServer(): express.Application {
                     canPost: rateStatus.canPost,
                     canComment: rateStatus.canComment,
                     commentsRemaining: rateStatus.commentsRemaining,
-                    maxCommentsPerDay: config.MAX_COMMENTS_PER_DAY,
+                    maxCommentsPerDay: rateStatus.maxCommentsPerDay,
+                    commentsMadeToday: rateStatus.commentsMadeToday,
+                    dailyLimitEnabled: rateStatus.dailyLimitEnabled,
                     nextPostAt: rateStatus.nextPostAt?.toISOString() ?? null,
                     nextCommentAt: rateStatus.nextCommentAt?.toISOString() ?? null,
                     inBackoff: rateStatus.inBackoff,
@@ -245,6 +252,7 @@ export function createDashboardServer(): express.Application {
                     activePersonaId,
                     activePersonaName: activePersona?.name ?? null,
                     activePersonaDefault: activePersona?.isDefault ?? false,
+                    newsSourcesOverride: state.getNewsSourcesOverride(),
                 },
                 evolution: {
                     selfModificationCooldownUntil: cooldownUntil?.toISOString() ?? null,
@@ -339,7 +347,7 @@ export function createDashboardServer(): express.Application {
             const limit = Math.min(maxLimit, parseInt(String(req.query.limit)) || 50);
             const offset = parseInt(String(req.query.offset)) || 0;
             const items = db.prepare(`
-                SELECT url, title, source, published_at, status, created_at, posted_at
+                SELECT url, title, source, published_at, status, status_reason, preview_text, raw_output, created_at, posted_at
                 FROM news_items
                 ORDER BY datetime(created_at) DESC
                 LIMIT ? OFFSET ?
@@ -351,11 +359,13 @@ export function createDashboardServer(): express.Application {
                 return acc;
             }, {} as Record<string, number>);
             const lastCheck = getStateManager().getLastNewsCheck();
+            const queueRow = db.prepare("SELECT COUNT(*) as count FROM news_items WHERE status != 'posted'").get() as { count: number };
 
             res.json({
                 items,
                 total: totalRow.count,
                 counts,
+                queueCount: queueRow.count,
                 lastCheckAt: lastCheck ? lastCheck.toISOString() : null,
             });
         } catch (error) {
@@ -741,7 +751,8 @@ export function createDashboardServer(): express.Application {
 
             const db = getDatabaseManager().getDb();
             const commentRows = db.prepare('SELECT timestamp FROM comments WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string }>;
-            const likeRows = db.prepare('SELECT timestamp, delta_likes, delta_replies FROM comment_engagement_events WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string; delta_likes: number; delta_replies: number }>;
+            const commentLikeRows = db.prepare('SELECT timestamp, delta_likes, delta_replies FROM comment_engagement_events WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string; delta_likes: number; delta_replies: number }>;
+            const postLikeRows = db.prepare('SELECT timestamp, delta_likes, delta_replies FROM post_engagement_events WHERE timestamp >= ?').all(startIso) as Array<{ timestamp: string; delta_likes: number; delta_replies: number }>;
 
             const buckets: Array<{ timestamp: string; comments: number; likes: number; replies: number }> = [];
             const bucketCount = Math.floor((now.getTime() - start.getTime()) / bucketMs) + 1;
@@ -761,7 +772,14 @@ export function createDashboardServer(): express.Application {
                 const idx = indexFor(row.timestamp);
                 if (idx >= 0) buckets[idx].comments += 1;
             }
-            for (const row of likeRows) {
+            for (const row of commentLikeRows) {
+                const idx = indexFor(row.timestamp);
+                if (idx >= 0) {
+                    buckets[idx].likes += Math.max(0, row.delta_likes || 0);
+                    buckets[idx].replies += Math.max(0, row.delta_replies || 0);
+                }
+            }
+            for (const row of postLikeRows) {
                 const idx = indexFor(row.timestamp);
                 if (idx >= 0) {
                     buckets[idx].likes += Math.max(0, row.delta_likes || 0);
@@ -1069,7 +1087,9 @@ export function createDashboardServer(): express.Application {
                     maxAgeHours: config.NEWS_MAX_AGE_HOURS,
                     maxItemsPerRun: config.NEWS_MAX_ITEMS_PER_RUN,
                     minContentChars: config.NEWS_MIN_CONTENT_CHARS,
-                    sources: config.NEWS_RSS_SOURCES ?? null
+                    previewChars: config.NEWS_PREVIEW_CHARS,
+                    sources: config.NEWS_RSS_SOURCES ?? null,
+                    queueCount: queueRow.count
                 },
                 evolution: {
                     mode: config.EVOLUTION_MODE,
@@ -1311,18 +1331,40 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * POST /api/control/news-sources
+     * Override RSS source list (comma/newline separated). Empty clears override.
+     */
+    app.post('/api/control/news-sources', (req, res) => {
+        try {
+            const raw = typeof req.body?.sources === 'string' ? req.body.sources.trim() : '';
+            const state = getStateManager();
+            if (!raw) {
+                state.setNewsSourcesOverride(null);
+                res.json({ success: true, override: null });
+                return;
+            }
+            state.setNewsSourcesOverride(raw);
+            res.json({ success: true, override: raw });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to update news sources' });
+        }
+    });
+
+    /**
      * POST /api/news/retry
      * Retry a news post by URL
      */
     app.post('/api/news/retry', async (req, res) => {
         try {
             const url = String(req.body?.url || '').trim();
+            const forceBypass = Boolean(req.body?.forceBypass);
+            const overrideContent = typeof req.body?.overrideContent === 'string' ? req.body.overrideContent : undefined;
             if (!url) {
                 res.status(400).json({ error: 'Missing url' });
                 return;
             }
             const loop = getAgentLoop();
-            const result = await loop.retryNewsPost(url);
+            const result = await loop.retryNewsPost(url, forceBypass, overrideContent);
             res.json(result);
         } catch (error) {
             res.status(500).json({ error: 'Failed to retry news post' });

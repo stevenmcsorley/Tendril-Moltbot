@@ -260,6 +260,14 @@ export class StateManager {
         this.setKV('news_bypass_gates', enabled);
     }
 
+    getNewsSourcesOverride(): string | null {
+        return this.getKV('news_sources_override', null);
+    }
+
+    setNewsSourcesOverride(sources: string | null): void {
+        this.setKV('news_sources_override', sources);
+    }
+
     getLastNewsCheck(): Date | null {
         const value = this.getKV('news_last_check', null) as string | null;
         return value ? new Date(value) : null;
@@ -933,6 +941,25 @@ export class StateManager {
             VALUES (?, ?, ?, ?, ?, ?)
         `).run(
             commentId,
+            new Date().toISOString(),
+            nextLikes,
+            nextReplies,
+            deltaLikes,
+            deltaReplies
+        );
+    }
+
+    recordPostEngagementEvent(postId: string, prevLikes: number, prevReplies: number, nextLikes: number, nextReplies: number): void {
+        if (!postId) return;
+        const db = getDatabaseManager().getDb();
+        const deltaLikes = nextLikes - prevLikes;
+        const deltaReplies = nextReplies - prevReplies;
+        if (deltaLikes === 0 && deltaReplies === 0) return;
+        db.prepare(`
+            INSERT INTO post_engagement_events (post_id, timestamp, like_count, reply_count, delta_likes, delta_replies)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(
+            postId,
             new Date().toISOString(),
             nextLikes,
             nextReplies,

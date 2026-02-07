@@ -358,13 +358,14 @@ class AgentLoop {
                     // Check rate limits before engaging
                     if (!rateLimiter.canComment() && canComment) {
                         const status = rateLimiter.getStatus();
+                        const remainingLabel = status.commentsRemaining === null ? 'adaptive' : status.commentsRemaining;
                         logger.log({
                             actionType: 'skip',
                             targetId: post.id,
                             targetSubmolt: post.submolt?.name,
                             promptSent: null,
                             rawModelOutput: null,
-                            finalAction: `Rate limited: ${status.commentsRemaining} comments remaining`,
+                            finalAction: `Rate limited: ${remainingLabel} comments remaining`,
                         });
                         continue;
                     }
@@ -611,9 +612,13 @@ class AgentLoop {
                     const currentReplies = post.replyCount ?? 0;
                     const nextLikes = stats.likes ?? currentLikes;
                     const nextReplies = stats.replies ?? currentReplies;
-                    const delta = Math.max(0, (nextLikes - currentLikes)) + Math.max(0, (nextReplies - currentReplies));
-                    if (delta > 0) {
-                        stateManager.recordEngagementSignal(Math.min(delta, 5));
+                    const changed = nextLikes !== currentLikes || nextReplies !== currentReplies;
+                    if (changed) {
+                        const delta = Math.max(0, (nextLikes - currentLikes)) + Math.max(0, (nextReplies - currentReplies));
+                        if (delta > 0) {
+                            stateManager.recordEngagementSignal(Math.min(delta, 5));
+                        }
+                        stateManager.recordPostEngagementEvent(post.id, currentLikes, currentReplies, nextLikes, nextReplies);
                     }
                     stateManager.updatePostEngagement(post.id, stats);
                 }
@@ -1133,7 +1138,7 @@ class AgentLoop {
         await this.createNewsPost(candidate, gateState, { promptSent: 'NEWS_POST' });
     }
 
-    async retryNewsPost(url: string): Promise<{ success: boolean; message: string }> {
+    async retryNewsPost(url: string, forceBypass = false, overrideContent?: string): Promise<{ success: boolean; message: string }> {
         if (this.isRunning) {
             return { success: false, message: 'Agent loop is currently running.' };
         }
@@ -1141,20 +1146,74 @@ class AgentLoop {
         if (!candidate) {
             return { success: false, message: 'Unable to load article content for retry.' };
         }
-        await this.createNewsPost(candidate, computeGateState(), { promptSent: 'NEWS_RETRY' });
+        await this.createNewsPost(candidate, computeGateState(), { promptSent: 'NEWS_RETRY', forceBypass, overrideContent });
         return { success: true, message: 'Retry queued.' };
     }
 
     private async createNewsPost(
         candidate: { title: string; source: string; url: string; publishedAt?: string | null; content: string },
         gateState: GateState,
-        options: { promptSent: string }
+        options: { promptSent: string; forceBypass?: boolean; overrideContent?: string }
     ): Promise<void> {
         const config = getConfig();
         const client = getSocialClient();
         const stateManager = getStateManager();
         const logger = getActivityLogger();
         const llm = getLLMClient();
+
+        if (options.overrideContent !== undefined) {
+            let content = options.overrideContent.trim();
+            content = this.stripDiagnostics(content);
+            content = this.sanitizePublicText(content);
+            content = this.truncateGraphemes(content, 200);
+            content = content.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
+
+            if (!content) {
+                markNewsStatus(candidate.url, 'skipped', 'Manual override empty after sanitization.');
+                this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, {
+                    action: 'SKIP',
+                    gatesTriggered: ['MANUAL_OVERRIDE'],
+                    rationale: 'Manual override empty after sanitization.'
+                }, 'post', { promptSent: options.promptSent, rawModelOutput: null });
+                return;
+            }
+
+            const targetSubmolt = config.TARGET_SUBMOLT || 'general';
+            try {
+                const post = await client.createPost({
+                    submolt: targetSubmolt,
+                    title: candidate.title.slice(0, 200),
+                    content,
+                    url: candidate.url
+                });
+
+                stateManager.recordPost({
+                    id: post.id,
+                    title: candidate.title,
+                    content,
+                    submolt: targetSubmolt
+                });
+                markNewsPosted(candidate.url, content, null);
+
+                this.logAutonomyDecision(
+                    logger,
+                    post.id,
+                    targetSubmolt,
+                    {
+                        action: 'POST',
+                        gatesTriggered: ['MANUAL_OVERRIDE'],
+                        rationale: 'Manual news retry posted.'
+                    },
+                    'post',
+                    { promptSent: options.promptSent, rawModelOutput: null }
+                );
+            } catch (error) {
+                const reason = error instanceof Error ? error.message : 'Post creation failed.';
+                markNewsStatus(candidate.url, 'error', reason, content, null);
+                this.handleActionError(error, 'post', null, targetSubmolt, '', null);
+            }
+            return;
+        }
 
         const prompt = await buildNewsPostPrompt({
             title: candidate.title,
@@ -1168,7 +1227,7 @@ class AgentLoop {
         try {
             result = await llm.generate(prompt);
         } catch (error) {
-            markNewsStatus(candidate.url, 'error');
+            markNewsStatus(candidate.url, 'error', 'LLM generation failed.', undefined, null);
             this.handleActionError(error, 'post', null, undefined, prompt, null);
             return;
         }
@@ -1177,13 +1236,15 @@ class AgentLoop {
         const actionMatch = result.rawOutput.match(/\[ACTION\]\s*:\s*(POST|SKIP)/i);
         const action = actionMatch ? actionMatch[1].toUpperCase() : 'SKIP';
         const contentMatch = result.rawOutput.match(/\[CONTENT\]\s*:\s*([\s\S]+)/i);
+        const bypassGates = options.forceBypass || stateManager.getNewsBypassEnabled(config.NEWS_BYPASS_GATES);
 
-        if (result.isSkip || action !== 'POST' || !contentMatch) {
-            markNewsStatus(candidate.url, 'skipped');
+        if (!bypassGates && (result.isSkip || action !== 'POST' || !contentMatch)) {
+            const reason = result.isSkip ? 'Model selected SKIP.' : 'No actionable news output.';
+            markNewsStatus(candidate.url, 'skipped', reason, undefined, result.rawOutput);
             const decision: GateDecision = {
                 action: 'SKIP',
                 gatesTriggered: [],
-                rationale: result.isSkip ? 'Model selected SKIP.' : 'No actionable news output.'
+                rationale: reason
             };
             this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, decision, 'post', {
                 promptSent: options.promptSent,
@@ -1200,7 +1261,16 @@ class AgentLoop {
 
         const finalContent = content;
 
-        const bypassGates = stateManager.getNewsBypassEnabled(config.NEWS_BYPASS_GATES);
+        if (!finalContent) {
+            markNewsStatus(candidate.url, 'skipped', 'News output empty after sanitization.', undefined, result.rawOutput);
+            this.logAutonomyDecision(logger, null, config.TARGET_SUBMOLT ?? undefined, {
+                action: 'SKIP',
+                gatesTriggered: bypassGates ? ['NEWS_BYPASS'] : [],
+                rationale: 'News output empty after sanitization.'
+            }, 'post', { promptSent: options.promptSent, rawModelOutput: result.rawOutput });
+            return;
+        }
+
         if (!bypassGates) {
             const gateDecision = applyAutonomyGates(gateState, {
                 desiredAction: 'POST',
@@ -1218,7 +1288,10 @@ class AgentLoop {
                 rawModelOutput: result.rawOutput
             });
             if (gateDecision.action !== 'POST') {
-                markNewsStatus(candidate.url, 'skipped');
+                const reason = gateDecision.gatesTriggered.length
+                    ? `Gated: ${gateDecision.gatesTriggered.join(', ')}`
+                    : gateDecision.rationale;
+                markNewsStatus(candidate.url, 'skipped', reason, finalContent, result.rawOutput);
                 return;
             }
         } else {
@@ -1251,7 +1324,7 @@ class AgentLoop {
                 content: finalContent,
                 submolt: targetSubmolt
             });
-            markNewsPosted(candidate.url);
+            markNewsPosted(candidate.url, finalContent, result.rawOutput);
 
             logger.log({
                 actionType: 'post',
@@ -1262,7 +1335,8 @@ class AgentLoop {
                 finalAction: `News post created: "${candidate.title}"`
             });
         } catch (error) {
-            markNewsStatus(candidate.url, 'error');
+            const reason = error instanceof Error ? error.message : 'Post creation failed.';
+            markNewsStatus(candidate.url, 'error', reason, finalContent, result.rawOutput);
             this.handleActionError(error, 'post', null, targetSubmolt, prompt, result.rawOutput);
         }
     }
@@ -1631,7 +1705,8 @@ class AgentLoop {
         if (!rateLimiter.canComment()) {
             // If we have comments remaining but are in cooldown, wait a bit
             const status = rateLimiter.getStatus();
-            if (status.commentsRemaining > 0 && status.nextCommentAt) {
+            const hasCapacity = status.commentsRemaining === null || status.commentsRemaining > 0;
+            if (hasCapacity && status.nextCommentAt) {
                 const waitMs = status.nextCommentAt.getTime() - Date.now();
                 if (waitMs > 0 && waitMs < 25000) { // Only wait if logic is sound
                     console.log(`Waiting ${Math.ceil(waitMs / 1000)}s for comment cooldown...`);

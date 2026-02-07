@@ -31,8 +31,10 @@ interface Status {
     rateLimit: {
         canPost: boolean;
         canComment: boolean;
-        commentsRemaining: number;
-        maxCommentsPerDay: number;
+        commentsRemaining: number | null;
+        maxCommentsPerDay: number | null;
+        commentsMadeToday: number;
+        dailyLimitEnabled: boolean;
         nextPostAt: string | null;
         nextCommentAt: string | null;
         inBackoff: boolean;
@@ -278,7 +280,9 @@ export default function StatusCard({ status }: StatusCardProps) {
             <div className="status-row">
                 <span className="status-label">Comments Today</span>
                 <span className="status-value">
-                    {status.rateLimit.maxCommentsPerDay - status.rateLimit.commentsRemaining} / {status.rateLimit.maxCommentsPerDay}
+                    {status.rateLimit.dailyLimitEnabled && status.rateLimit.maxCommentsPerDay !== null
+                        ? `${status.rateLimit.commentsMadeToday} / ${status.rateLimit.maxCommentsPerDay}`
+                        : `${status.rateLimit.commentsMadeToday} (adaptive)`}
                 </span>
             </div>
 
