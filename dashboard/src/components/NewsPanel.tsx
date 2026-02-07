@@ -122,6 +122,7 @@ export default function NewsPanel({
     const [sourceOverride, setSourceOverride] = useState<string | null>(sourceOverrideProp ?? null);
     const [techOnlyMode, setTechOnlyMode] = useState(false);
     const [showPendingOnly, setShowPendingOnly] = useState(false);
+    const [tick, setTick] = useState(0);
     const [approvingBatch, setApprovingBatch] = useState(false);
     const [selectedUrls, setSelectedUrls] = useState<Record<string, boolean>>({});
     const [refreshKey, setRefreshKey] = useState(0);
@@ -131,6 +132,20 @@ export default function NewsPanel({
 
     const effectiveSources = sourceOverride ?? config?.sources ?? null;
     const sourceList = useMemo(() => formatSourceList(effectiveSources), [effectiveSources]);
+    const activePresetLabel = useMemo(() => {
+        if (techOnlyMode) return 'Tech-only';
+        if (sourceOverride) {
+            const matched = SOURCE_PRESETS.find(preset => preset.sources === sourceOverride);
+            return matched ? matched.label : 'Custom override';
+        }
+        return 'Env default';
+    }, [techOnlyMode, sourceOverride]);
+    const nextCheckAt = useMemo(() => {
+        if (!lastCheckAt || !config?.checkMinutes) return null;
+        const base = new Date(lastCheckAt).getTime();
+        if (!Number.isFinite(base)) return null;
+        return new Date(base + config.checkMinutes * 60 * 1000);
+    }, [lastCheckAt, config?.checkMinutes, tick]);
 
     useEffect(() => {
         if (config?.previewChars) {
@@ -143,6 +158,11 @@ export default function NewsPanel({
             setSourceOverride(sourceOverrideProp ?? null);
         }
     }, [sourceOverrideProp]);
+
+    useEffect(() => {
+        const timer = setInterval(() => setTick(prev => prev + 1), 60000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         try {
@@ -367,6 +387,9 @@ export default function NewsPanel({
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                             Last check: {lastCheckAt ? <RelativeTime value={lastCheckAt} /> : '—'}
                         </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            Next check: {nextCheckAt ? <RelativeTime value={nextCheckAt.toISOString()} /> : '—'}
+                        </div>
                         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
                             <input
                                 type="checkbox"
@@ -398,9 +421,17 @@ export default function NewsPanel({
                 {config && (
                     <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
                         Interval: {config.checkMinutes ?? '—'} min · Max age: {config.maxAgeHours ?? '—'} h · Min chars: {config.minContentChars ?? '—'}
+                        <div style={{ marginTop: 6 }}>Preset: {activePresetLabel}</div>
                         {sourceList.length > 0 && (
                             <div style={{ marginTop: 6 }}>
-                                Sources: {sourceList.join(', ')}
+                                <div style={{ marginBottom: 4 }}>Sources:</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {sourceList.map(source => (
+                                        <span key={source} className="badge" style={{ fontSize: 11 }}>
+                                            {source}
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
                         )}
                         {sourceOverride && (
@@ -408,6 +439,9 @@ export default function NewsPanel({
                                 Override active · {sourceOverride.split(/[\n,]+/).length} sources
                             </div>
                         )}
+                        <div style={{ marginTop: 6 }}>
+                            News posts attempt only during idle cycles or comment cooldown.
+                        </div>
                     </div>
                 )}
                 <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
