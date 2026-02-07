@@ -336,6 +336,12 @@ export class BlueskyClient implements SocialClient {
                 return { comments };
             } catch (error) {
                 lastError = error;
+                if (error instanceof PlatformApiError) {
+                    const message = String(error.message || '');
+                    if (error.statusCode === 404 || message.includes('NotFound') || message.includes('Post not found')) {
+                        throw new PlatformApiError('Bluesky post not found', 404, 'bluesky');
+                    }
+                }
                 const statusCode = error instanceof PlatformApiError ? error.statusCode : undefined;
                 const isUpstream = statusCode === 502 || statusCode === 503;
                 if (!isUpstream || attempt === maxAttempts) {
