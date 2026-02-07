@@ -280,6 +280,7 @@ export default function App() {
     const [autoEvolutionUpdating, setAutoEvolutionUpdating] = useState(false);
     const [newsBypassUpdating, setNewsBypassUpdating] = useState(false);
     const [engagementWeather, setEngagementWeather] = useState<EngagementWeatherState | null>(null);
+    const [engagementTrend, setEngagementTrend] = useState<Array<{ timestamp: string; count: number }> | null>(null);
 
     // WebSocket reference + pagination refs
     const wsRef = useRef<WebSocket | null>(null);
@@ -309,6 +310,19 @@ export default function App() {
             }
         } catch (err) {
             console.error('Failed to fetch engagement weather:', err);
+        }
+    }, []);
+
+    const fetchEngagementTrend = useCallback(async () => {
+        try {
+            const res = await fetch('/api/engagement-weather/trend?hours=24');
+            if (!res.ok) throw new Error('Failed to fetch engagement trend');
+            const data = await res.json();
+            if (data?.points) {
+                setEngagementTrend(data.points);
+            }
+        } catch (err) {
+            console.error('Failed to fetch engagement trend:', err);
         }
     }, []);
 
@@ -599,11 +613,12 @@ export default function App() {
             fetchSynthesis(synthesisPageRef.current),
             fetchSovereignty(),
             fetchDataStats(),
-            fetchEngagementWeather()
+            fetchEngagementWeather(),
+            fetchEngagementTrend()
         ]);
         setLastRefresh(new Date());
         setStatsRefreshToken(prev => prev + 1);
-    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, fetchEngagementWeather, filterType]);
+    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, fetchEngagementWeather, fetchEngagementTrend, filterType]);
 
     const refreshPassive = useCallback(async () => {
         await Promise.all([
@@ -614,11 +629,12 @@ export default function App() {
             fetchSynthesis(synthesisPageRef.current),
             fetchSovereignty(),
             fetchDataStats(),
-            fetchEngagementWeather()
+            fetchEngagementWeather(),
+            fetchEngagementTrend()
         ]);
         setLastRefresh(new Date());
         setStatsRefreshToken(prev => prev + 1);
-    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, fetchEngagementWeather]);
+    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, fetchEngagementWeather, fetchEngagementTrend]);
 
     useEffect(() => {
         const limit = logSearch.trim().length > 0 || filterType === 'replies'
@@ -688,6 +704,7 @@ export default function App() {
                             break;
                         case 'engagement_update':
                             setEngagementWeather(msg.payload);
+                            fetchEngagementTrend();
                             break;
 
                         case 'stats_update':
@@ -767,9 +784,13 @@ export default function App() {
 
     useEffect(() => {
         fetchEngagementWeather();
-        const interval = setInterval(fetchEngagementWeather, 60000);
+        fetchEngagementTrend();
+        const interval = setInterval(() => {
+            fetchEngagementWeather();
+            fetchEngagementTrend();
+        }, 60000);
         return () => clearInterval(interval);
-    }, [fetchEngagementWeather]);
+    }, [fetchEngagementWeather, fetchEngagementTrend]);
 
     const handleControl = async (action: string) => {
         try {
@@ -833,7 +854,7 @@ export default function App() {
                         logs={terminalLogs}
                         isConnected={isWsConnected}
                     />
-                    <EngagementWeather weather={engagementWeather} />
+                    <EngagementWeather weather={engagementWeather} trend={engagementTrend} />
                     <StatusCard status={status} />
                     <Controls
                         status={status}

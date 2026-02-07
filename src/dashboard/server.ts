@@ -663,6 +663,20 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * GET /api/engagement-weather/trend
+     * Engagement signal trend (hourly buckets)
+     */
+    app.get('/api/engagement-weather/trend', (req, res) => {
+        try {
+            const hours = Math.min(168, Math.max(1, parseInt(String(req.query.hours)) || 24));
+            const state = getStateManager();
+            res.json({ success: true, points: state.getEngagementTrend(hours) });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to fetch engagement trend' });
+        }
+    });
+
+    /**
      * POST /api/delete-comment
      * Delete a comment created by this agent
      */

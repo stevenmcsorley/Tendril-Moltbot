@@ -705,6 +705,32 @@ export class StateManager {
         };
     }
 
+    getEngagementTrend(hours: number = 24): Array<{ timestamp: string; count: number }> {
+        const windowHours = Math.max(1, Math.min(168, Math.floor(hours)));
+        const now = new Date();
+        const start = new Date(now.getTime() - windowHours * 60 * 60 * 1000);
+        start.setUTCMinutes(0, 0, 0);
+        const buckets: Array<{ timestamp: string; count: number }> = [];
+        for (let i = 0; i <= windowHours; i += 1) {
+            const t = new Date(start.getTime() + i * 60 * 60 * 1000);
+            buckets.push({ timestamp: t.toISOString(), count: 0 });
+        }
+        const events = this.getKV('engagement_events', []) as string[];
+        const cutoff = start.getTime();
+        const trimmed = events.filter(ts => new Date(ts).getTime() >= cutoff);
+        if (trimmed.length !== events.length) {
+            this.setKV('engagement_events', trimmed.slice(-1000));
+        }
+        for (const ts of trimmed) {
+            const t = new Date(ts);
+            const bucketIndex = Math.floor((t.getTime() - start.getTime()) / (60 * 60 * 1000));
+            if (bucketIndex >= 0 && bucketIndex < buckets.length) {
+                buckets[bucketIndex].count += 1;
+            }
+        }
+        return buckets;
+    }
+
     getRecentEngagementCount(windowMs: number): number {
         const events = this.getKV('engagement_events', []) as string[];
         if (!events.length) return 0;
