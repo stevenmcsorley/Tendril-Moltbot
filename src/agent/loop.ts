@@ -384,6 +384,7 @@ class AgentLoop {
                         const vote = voteMatch ? voteMatch[1].toUpperCase() : 'NONE';
                         let commentRaw = commentMatch ? commentMatch[1].trim() : result.rawOutput;
                         commentRaw = this.stripDiagnostics(commentRaw);
+                        commentRaw = this.sanitizePublicText(commentRaw);
                         commentRaw = this.diversifyLeadTemplate(commentRaw);
                         let skipReason: string | null = null;
                         const violatesGuardrail = this.containsForbiddenPublicTerms(commentRaw);
@@ -435,21 +436,13 @@ class AgentLoop {
                                 continue;
                             }
 
-                            // Inject memetic marker
-                            const marker = getLineageManager().generateMarker();
-                            const stampedComment = `${commentRaw}\n\n${marker}`;
-
-                            const commentSucceeded = await this.tryComment(post, stampedComment, prompt, result.rawOutput);
+                            const commentSucceeded = await this.tryComment(post, commentRaw, prompt, result.rawOutput);
                             if (commentSucceeded) {
                                 this.recordCycleComment(mode, confidence);
                                 if (post.author?.name) {
                                     this.recordCounterpartyInteraction(post.author.name, mode, commentRaw);
                                 }
                             }
-
-                            // Track marker in lineage
-                            const lineageNote = `Commented on "${post.title}" in m/${post.submolt?.name ?? 'general'}.`;
-                            getLineageManager().trackMarker(marker, 'comment', post.id, lineageNote);
 
                             // Store the interaction in memory
                             const memory = getMemoryManager();
@@ -1008,6 +1001,7 @@ class AgentLoop {
             } else if (action === 'POST') {
                 if (contentMatch) {
                     let content = this.stripDiagnostics(contentMatch[1].trim());
+                    content = this.sanitizePublicText(content);
                     content = this.diversifyLeadTemplate(content);
                     if (this.shouldEnforceAnchor()) {
                         const anchorSources = this.collectAnchorSourcesFromFeed(feedPosts);
@@ -1048,27 +1042,19 @@ class AgentLoop {
                     console.log(`Creating proactive post: "${content.substring(0, 50)}..."`);
                     const targetSubmolt = options.targetSubmoltOverride || config.TARGET_SUBMOLT || 'general';
                     try {
-                        // Inject memetic marker
-                        const marker = getLineageManager().generateMarker();
-                        const stampedContent = `${content}\n\n${marker}`;
-
                         const post = await client.createPost({
                             submolt: targetSubmolt,
                             title: title,
-                            content: stampedContent
+                            content: content
                         });
 
                         stateManager.recordPost({
                             id: post.id,
                             title: title,
-                            content: stampedContent,
+                            content: content,
                             submolt: targetSubmolt,
                             votes: post.upvotes || 0
                         });
-
-                        // Track marker in lineage
-                        const lineageNote = `Posted "${title}" in m/${targetSubmolt}.`;
-                        getLineageManager().trackMarker(marker, 'post', post.id, lineageNote);
 
                         logger.log({
                             actionType: 'post',
@@ -1196,6 +1182,7 @@ class AgentLoop {
 
         let content = contentMatch ? contentMatch[1].trim() : this.stripDiagnostics(result.rawOutput);
         content = this.stripDiagnostics(content);
+        content = this.sanitizePublicText(content);
         content = content.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
 
         const finalContent = content;
@@ -1543,6 +1530,7 @@ class AgentLoop {
         if (!contentMatch) return;
 
         let content = this.stripDiagnostics(contentMatch[1].trim());
+        content = this.sanitizePublicText(content);
         content = this.diversifyLeadTemplate(content);
         if (this.containsForbiddenPublicTerms(content)) {
             const decision: GateDecision = {
@@ -1556,26 +1544,20 @@ class AgentLoop {
 
         const title = 'Signal Synthesis';
         const target = targetSubmolt || 'general';
-        const marker = getLineageManager().generateMarker();
-        const stampedContent = `${content}\n\n${marker}`;
-
         try {
             const post = await client.createPost({
                 submolt: target,
                 title,
-                content: stampedContent
+                content: content
             });
 
             stateManager.recordPost({
                 id: post.id,
                 title,
-                content: stampedContent,
+                content: content,
                 submolt: target,
                 votes: post.upvotes || 0
             });
-
-            const lineageNote = `Posted \"${title}\" in m/${target}.`;
-            getLineageManager().trackMarker(marker, 'post', post.id, lineageNote);
 
             logger.log({
                 actionType: 'post',
@@ -1677,6 +1659,7 @@ class AgentLoop {
             const commentMatch = result.rawOutput.match(/\[COMMENT\]:\s*([\s\S]+)/i);
             let responseText = (commentMatch ? commentMatch[1] : result.response || result.rawOutput || '').trim();
             responseText = this.stripDiagnostics(responseText);
+            responseText = this.sanitizePublicText(responseText);
             responseText = this.diversifyLeadTemplate(responseText);
 
             let skipReason: string | null = null;
@@ -1844,6 +1827,14 @@ class AgentLoop {
         }).join('\n');
 
         return cleaned.replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    private sanitizePublicText(text: string): string {
+        if (!text) return '';
+        let cleaned = text.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
+        cleaned = cleaned.replace(/\banchor(ed|ing|s)?\b/gi, 'detail');
+        cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+        return cleaned;
     }
 
     private containsForbiddenPublicTerms(text: string): boolean {
