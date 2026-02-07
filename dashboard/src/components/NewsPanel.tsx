@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import RelativeTime from './RelativeTime';
 
 interface NewsItem {
@@ -29,6 +29,8 @@ interface NewsConfig {
     minContentChars?: number;
     previewChars?: number;
     sources?: string | null;
+    nextCheckAt?: string | null;
+    lastCheckAt?: string | null;
 }
 
 const SOURCE_PRESETS: Array<{ id: string; label: string; sources: string }> = [
@@ -98,14 +100,74 @@ function formatSourceList(raw?: string | null): string[] {
         .map(entry => entry.split('|')[0]?.trim() || entry);
 }
 
+const SOURCE_COLORS: Record<string, string> = {
+    'BBC News': '#BB1919',
+    Reuters: '#FF9900',
+    'Associated Press': '#2D7DF6',
+    NPR: '#C9002B',
+    'Ars Technica': '#FF6F00',
+    'The Verge': '#E2127A',
+    Wired: '#000000',
+    TechCrunch: '#00C853',
+    'MIT Tech Review': '#A31D1D',
+    'Nature News': '#3A6EA5',
+    'The Guardian': '#052962',
+    'Al Jazeera': '#C59500',
+    'ScienceDaily': '#2E86C1',
+    'NPR Science': '#C9002B',
+    'Hacker News': '#FF6600'
+};
+
+function badgeStyleForSource(source: string): CSSProperties {
+    const color = SOURCE_COLORS[source];
+    if (!color) {
+        return { fontSize: 11 };
+    }
+    return {
+        fontSize: 11,
+        color: '#fff',
+        borderColor: color,
+        background: color
+    };
+}
+
+function parsePostOrigin(reason?: string | null): { label: string; tone: 'info' | 'warning' | 'neutral' }[] {
+    if (!reason) return [];
+    if (!reason.startsWith('posted:')) return [];
+    const parts = reason.replace('posted:', '').split(':').filter(Boolean);
+    const labels: { label: string; tone: 'info' | 'warning' | 'neutral' }[] = [];
+    if (parts.includes('auto')) labels.push({ label: 'AUTO', tone: 'info' });
+    if (parts.includes('manual-trigger')) labels.push({ label: 'MANUAL', tone: 'warning' });
+    if (parts.includes('manual-override')) labels.push({ label: 'OVERRIDE', tone: 'warning' });
+    if (parts.includes('fallback')) labels.push({ label: 'FALLBACK', tone: 'neutral' });
+    return labels;
+}
+
+function formatCountdown(target?: Date | null): string {
+    if (!target) return '—';
+    const diffMs = target.getTime() - Date.now();
+    if (!Number.isFinite(diffMs)) return '—';
+    if (diffMs <= 0) return 'due';
+    const totalSeconds = Math.floor(diffMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+}
+
 export default function NewsPanel({
     refreshToken,
     config,
-    sourceOverrideProp
+    sourceOverrideProp,
+    idleOnlyProp
 }: {
     refreshToken?: number;
     config?: NewsConfig | null;
     sourceOverrideProp?: string | null;
+    idleOnlyProp?: boolean | null;
 }) {
     const [items, setItems] = useState<NewsItem[]>([]);
     const [counts, setCounts] = useState<Record<string, number>>({});
@@ -121,6 +183,7 @@ export default function NewsPanel({
     const [autoExpandPreview, setAutoExpandPreview] = useState(false);
     const [sourceOverride, setSourceOverride] = useState<string | null>(sourceOverrideProp ?? null);
     const [techOnlyMode, setTechOnlyMode] = useState(false);
+    const [idleOnlyMode, setIdleOnlyMode] = useState<boolean>(idleOnlyProp ?? false);
     const [showPendingOnly, setShowPendingOnly] = useState(false);
     const [tick, setTick] = useState(0);
     const [approvingBatch, setApprovingBatch] = useState(false);
@@ -128,6 +191,9 @@ export default function NewsPanel({
     const [refreshKey, setRefreshKey] = useState(0);
     const [offset, setOffset] = useState(0);
     const [total, setTotal] = useState(0);
+    const [triggering, setTriggering] = useState(false);
+    const [triggerMessage, setTriggerMessage] = useState<string | null>(null);
+    const [actionFeedback, setActionFeedback] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
     const limit = 50;
 
     const effectiveSources = sourceOverride ?? config?.sources ?? null;
@@ -140,12 +206,24 @@ export default function NewsPanel({
         }
         return 'Env default';
     }, [techOnlyMode, sourceOverride]);
+    const activePresetId = useMemo(() => {
+        if (techOnlyMode) return 'tech';
+        if (sourceOverride) {
+            const matched = SOURCE_PRESETS.find(preset => preset.sources === sourceOverride);
+            return matched ? matched.id : null;
+        }
+        return null;
+    }, [techOnlyMode, sourceOverride]);
     const nextCheckAt = useMemo(() => {
-        if (!lastCheckAt || !config?.checkMinutes) return null;
-        const base = new Date(lastCheckAt).getTime();
+        if (config?.nextCheckAt) {
+            const parsed = new Date(config.nextCheckAt);
+            if (Number.isFinite(parsed.getTime())) return parsed;
+        }
+        if (!config?.checkMinutes) return null;
+        const base = lastCheckAt ? new Date(lastCheckAt).getTime() : Date.now();
         if (!Number.isFinite(base)) return null;
         return new Date(base + config.checkMinutes * 60 * 1000);
-    }, [lastCheckAt, config?.checkMinutes, tick]);
+    }, [config?.nextCheckAt, lastCheckAt, config?.checkMinutes, tick]);
 
     useEffect(() => {
         if (config?.previewChars) {
@@ -160,7 +238,13 @@ export default function NewsPanel({
     }, [sourceOverrideProp]);
 
     useEffect(() => {
-        const timer = setInterval(() => setTick(prev => prev + 1), 60000);
+        if (idleOnlyProp !== undefined && idleOnlyProp !== null) {
+            setIdleOnlyMode(idleOnlyProp);
+        }
+    }, [idleOnlyProp]);
+
+    useEffect(() => {
+        const timer = setInterval(() => setTick(prev => prev + 1), 1000);
         return () => clearInterval(timer);
     }, []);
 
@@ -193,6 +277,9 @@ export default function NewsPanel({
 
     useEffect(() => {
         setSelectedUrls({});
+    }, [items]);
+    useEffect(() => {
+        setActionFeedback({});
     }, [items]);
 
     const truncatePreview = (text?: string | null): string => {
@@ -230,6 +317,22 @@ export default function NewsPanel({
             setRefreshKey(prev => prev + 1);
         } catch (error) {
             console.error('Failed to clear news sources:', error);
+        }
+    };
+
+    const handleToggleIdleOnly = async () => {
+        const nextValue = !idleOnlyMode;
+        try {
+            const res = await fetch('/api/control/news-idle-only', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: nextValue })
+            });
+            if (!res.ok) throw new Error('Failed to update idle-only setting');
+            const data = await res.json();
+            setIdleOnlyMode(!!data.enabled);
+        } catch (error) {
+            console.error('Failed to update news idle-only setting:', error);
         }
     };
 
@@ -326,12 +429,21 @@ export default function NewsPanel({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, forceBypass: true })
             });
-            if (!res.ok) {
-                throw new Error('Retry failed');
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.success === false) {
+                throw new Error(data?.message || 'Retry failed');
             }
             setRefreshKey(prev => prev + 1);
+            setActionFeedback(prev => ({
+                ...prev,
+                [url]: { type: 'success', message: data?.message || 'Retry queued.' }
+            }));
         } catch (error) {
-            console.error('Failed to retry news post:', error);
+            const message = error instanceof Error ? error.message : 'Retry failed';
+            setActionFeedback(prev => ({
+                ...prev,
+                [url]: { type: 'error', message }
+            }));
         } finally {
             setRetryingUrl(null);
         }
@@ -360,16 +472,45 @@ export default function NewsPanel({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, forceBypass: true, overrideContent: editContent })
             });
-            if (!res.ok) {
-                throw new Error('Manual post failed');
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.success === false) {
+                throw new Error(data?.message || 'Manual post failed');
             }
             setRefreshKey(prev => prev + 1);
             setEditingUrl(null);
             setEditContent('');
+            setActionFeedback(prev => ({
+                ...prev,
+                [url]: { type: 'success', message: data?.message || 'Manual post queued.' }
+            }));
         } catch (error) {
-            console.error('Failed to post edited news content:', error);
+            const message = error instanceof Error ? error.message : 'Manual post failed';
+            setActionFeedback(prev => ({
+                ...prev,
+                [url]: { type: 'error', message }
+            }));
         } finally {
             setPostingUrl(null);
+        }
+    };
+
+    const handleTrigger = async () => {
+        setTriggering(true);
+        setTriggerMessage(null);
+        try {
+            const res = await fetch('/api/news/trigger', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: true })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || 'Trigger failed');
+            setTriggerMessage(data?.message || 'Triggered');
+            setRefreshKey(prev => prev + 1);
+        } catch (error) {
+            setTriggerMessage(error instanceof Error ? error.message : 'Trigger failed');
+        } finally {
+            setTriggering(false);
         }
     };
 
@@ -388,8 +529,22 @@ export default function NewsPanel({
                             Last check: {lastCheckAt ? <RelativeTime value={lastCheckAt} /> : '—'}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            Next check: {nextCheckAt ? <RelativeTime value={nextCheckAt.toISOString()} /> : '—'}
+                            Next check: {nextCheckAt ? formatCountdown(nextCheckAt) : '—'}
                         </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            Preset: <span className="badge info" style={{ fontSize: 10 }}>{activePresetLabel}</span>
+                        </div>
+                        <button
+                            className="btn-secondary"
+                            style={{ fontSize: 11 }}
+                            onClick={handleTrigger}
+                            disabled={triggering}
+                        >
+                            {triggering ? 'Running…' : 'Run News Scout'}
+                        </button>
+                        {triggerMessage && (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{triggerMessage}</div>
+                        )}
                         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
                             <input
                                 type="checkbox"
@@ -418,43 +573,45 @@ export default function NewsPanel({
                         <span className="status-value">{formatNumber(counts.error)}</span>
                     </div>
                 </div>
-                {config && (
-                    <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-                        Interval: {config.checkMinutes ?? '—'} min · Max age: {config.maxAgeHours ?? '—'} h · Min chars: {config.minContentChars ?? '—'}
-                        <div style={{ marginTop: 6 }}>Preset: {activePresetLabel}</div>
-                        {sourceList.length > 0 && (
-                            <div style={{ marginTop: 6 }}>
-                                <div style={{ marginBottom: 4 }}>Sources:</div>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+                    Interval: {config?.checkMinutes ?? '—'} min · Max age: {config?.maxAgeHours ?? '—'} h · Min chars: {config?.minContentChars ?? '—'}
+                    {sourceList.length > 0 ? (
+                        <div style={{ marginTop: 6 }}>
+                            <div style={{ marginBottom: 4 }}>Sources:</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                                     {sourceList.map(source => (
-                                        <span key={source} className="badge" style={{ fontSize: 11 }}>
+                                        <span key={source} className="badge" style={badgeStyleForSource(source)}>
                                             {source}
                                         </span>
                                     ))}
-                                </div>
                             </div>
-                        )}
-                        {sourceOverride && (
-                            <div style={{ marginTop: 6 }}>
-                                Override active · {sourceOverride.split(/[\n,]+/).length} sources
-                            </div>
-                        )}
-                        <div style={{ marginTop: 6 }}>
-                            News posts attempt only during idle cycles or comment cooldown.
                         </div>
+                    ) : (
+                        <div style={{ marginTop: 6 }}>Sources: default set</div>
+                    )}
+                    {sourceOverride && (
+                        <div style={{ marginTop: 6 }}>
+                            Override active · {sourceOverride.split(/[\n,]+/).length} sources
+                        </div>
+                    )}
+                    <div style={{ marginTop: 6 }}>
+                        News posts attempt on schedule; manual trigger runs immediately.
                     </div>
-                )}
-                <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {SOURCE_PRESETS.map(preset => (
-                        <button
-                            key={preset.id}
-                            className="btn-secondary"
-                            style={{ fontSize: 11 }}
-                            onClick={() => handlePreset(preset.sources)}
-                        >
-                            {preset.label} preset
-                        </button>
-                    ))}
+                </div>
+                    <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {SOURCE_PRESETS.map(preset => {
+                        const isActive = activePresetId === preset.id;
+                        return (
+                            <button
+                                key={preset.id}
+                                className={isActive ? 'btn-primary' : 'btn-secondary'}
+                                style={{ fontSize: 11 }}
+                                onClick={() => handlePreset(preset.sources)}
+                            >
+                                {preset.label} preset
+                            </button>
+                        );
+                    })}
                     <button className="btn-secondary" style={{ fontSize: 11 }} onClick={handleClearPreset}>
                         Clear override
                     </button>
@@ -465,6 +622,14 @@ export default function NewsPanel({
                             onChange={(event) => setTechOnlyMode(event.target.checked)}
                         />
                         Tech-only mode
+                    </label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+                        <input
+                            type="checkbox"
+                            checked={idleOnlyMode}
+                            onChange={handleToggleIdleOnly}
+                        />
+                        Auto posts: {idleOnlyMode ? 'Idle-only' : 'Always'}
                     </label>
                 </div>
                 <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -605,19 +770,36 @@ export default function NewsPanel({
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                                     <div style={{ fontWeight: 600, fontSize: 14 }}>{item.title}</div>
-                                    <span
-                                        className={
-                                            item.status === 'posted'
-                                                ? 'badge info'
-                                                : item.status === 'error'
-                                                    ? 'badge warning'
-                                                    : item.status === 'skipped'
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                        <span
+                                            className={
+                                                item.status === 'posted'
+                                                    ? 'badge info'
+                                                    : item.status === 'error'
                                                         ? 'badge warning'
-                                                        : 'badge'
-                                        }
-                                    >
-                                        {item.status}
-                                    </span>
+                                                        : item.status === 'skipped'
+                                                            ? 'badge warning'
+                                                            : 'badge'
+                                            }
+                                        >
+                                            {item.status}
+                                        </span>
+                                        {item.status === 'posted' && parsePostOrigin(item.status_reason).map((origin) => (
+                                            <span
+                                                key={origin.label}
+                                                className={
+                                                    origin.tone === 'warning'
+                                                        ? 'badge warning'
+                                                        : origin.tone === 'neutral'
+                                                            ? 'badge'
+                                                            : 'badge info'
+                                                }
+                                                style={{ fontSize: 10 }}
+                                            >
+                                                {origin.label}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                     {item.source} · Published {item.published_at ? new Date(item.published_at).toLocaleString() : '—'}
@@ -661,6 +843,11 @@ export default function NewsPanel({
                                 >
                                     Open source ↗
                                 </a>
+                                {actionFeedback[item.url] && (
+                                    <div style={{ fontSize: 11, color: actionFeedback[item.url].type === 'success' ? 'var(--success)' : 'var(--error)' }}>
+                                        {actionFeedback[item.url].message}
+                                    </div>
+                                )}
                                 {item.status !== 'posted' && (
                                     <div style={{ marginTop: 6 }}>
                                         <button

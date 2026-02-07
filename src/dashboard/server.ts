@@ -191,6 +191,12 @@ export function createDashboardServer(): express.Application {
                 .prepare("SELECT COUNT(*) as count FROM news_items WHERE status != 'posted'")
                 .get() as { count: number };
 
+            const lastNewsCheck = state.getLastNewsCheck();
+            const nextNewsCheckAt =
+                config.NEWS_CHECK_MINUTES && Number.isFinite(config.NEWS_CHECK_MINUTES)
+                    ? new Date((lastNewsCheck ?? new Date()).getTime() + config.NEWS_CHECK_MINUTES * 60 * 1000)
+                    : null;
+
             res.json({
                 agent: {
                     name: config.AGENT_NAME,
@@ -243,6 +249,7 @@ export function createDashboardServer(): express.Application {
                     enableSynthesisBroadcast: config.ENABLE_SYNTHESIS_BROADCAST,
                     enableNewsPosts: config.ENABLE_NEWS_POSTS,
                     newsBypassGates: state.getNewsBypassEnabled(config.NEWS_BYPASS_GATES),
+                    newsIdleOnly: state.getNewsIdleOnlyEnabled(config.NEWS_ONLY_WHEN_IDLE),
                     evolutionMode: config.EVOLUTION_MODE,
                     evolutionAutomatic: state.getAutoEvolutionEnabled(config.EVOLUTION_AUTOMATIC),
                     rollbacksEnabled: state.getRollbacksEnabled(config.ENABLE_ROLLBACKS),
@@ -253,6 +260,17 @@ export function createDashboardServer(): express.Application {
                     activePersonaName: activePersona?.name ?? null,
                     activePersonaDefault: activePersona?.isDefault ?? false,
                     newsSourcesOverride: state.getNewsSourcesOverride(),
+                },
+                news: {
+                    checkMinutes: config.NEWS_CHECK_MINUTES,
+                    maxAgeHours: config.NEWS_MAX_AGE_HOURS,
+                    maxItemsPerRun: config.NEWS_MAX_ITEMS_PER_RUN,
+                    minContentChars: config.NEWS_MIN_CONTENT_CHARS,
+                    previewChars: config.NEWS_PREVIEW_CHARS,
+                    sources: config.NEWS_RSS_SOURCES ?? null,
+                    queueCount: queueRow.count,
+                    lastCheckAt: lastNewsCheck ? lastNewsCheck.toISOString() : null,
+                    nextCheckAt: nextNewsCheckAt ? nextNewsCheckAt.toISOString() : null
                 },
                 evolution: {
                     selfModificationCooldownUntil: cooldownUntil?.toISOString() ?? null,
@@ -1351,6 +1369,21 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * POST /api/control/news-idle-only
+     * Enable/disable idle-only scheduling for news posts
+     */
+    app.post('/api/control/news-idle-only', (req, res) => {
+        try {
+            const enabled = !!req.body?.enabled;
+            const state = getStateManager();
+            state.setNewsIdleOnlyEnabled(enabled);
+            res.json({ success: true, enabled });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to update news idle-only setting' });
+        }
+    });
+
+    /**
      * POST /api/control/news-sources
      * Override RSS source list (comma/newline separated). Empty clears override.
      */
@@ -1388,6 +1421,21 @@ export function createDashboardServer(): express.Application {
             res.json(result);
         } catch (error) {
             res.status(500).json({ error: 'Failed to retry news post' });
+        }
+    });
+
+    /**
+     * POST /api/news/trigger
+     * Manually trigger a news scout run.
+     */
+    app.post('/api/news/trigger', async (req, res) => {
+        try {
+            const force = Boolean(req.body?.force);
+            const loop = getAgentLoop();
+            const result = await loop.triggerNewsScout(force);
+            res.json(result);
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to trigger news scout' });
         }
     });
 

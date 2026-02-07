@@ -71,6 +71,7 @@ interface Status {
         enableUnfollowing?: boolean;
         enableNewsPosts?: boolean;
         newsBypassGates?: boolean;
+        newsIdleOnly?: boolean;
         evolutionAutomatic?: boolean;
         platform?: 'moltbook' | 'reddit' | 'discord' | 'slack' | 'telegram' | 'matrix' | 'bluesky' | 'mastodon' | 'discourse';
         readOnly?: boolean;
@@ -84,6 +85,8 @@ interface Status {
         previewChars?: number;
         sources?: string | null;
         queueCount?: number;
+        lastCheckAt?: string | null;
+        nextCheckAt?: string | null;
     };
     evolution: {
         selfModificationCooldownUntil: string | null;
@@ -991,6 +994,7 @@ export default function App() {
                             refreshToken={statsRefreshToken}
                             config={status?.news ?? null}
                             sourceOverrideProp={status?.config?.newsSourcesOverride ?? null}
+                            idleOnlyProp={status?.config?.newsIdleOnly ?? null}
                         />
                     ) : activeTab === 'intelligence' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

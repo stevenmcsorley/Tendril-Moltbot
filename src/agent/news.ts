@@ -223,10 +223,10 @@ function recordNewsItem(item: NewsItem, status: string, reason?: string, preview
     );
 }
 
-export function markNewsPosted(url: string, previewText?: string, rawOutput?: string | null): void {
+export function markNewsPosted(url: string, previewText?: string, rawOutput?: string | null, reason: string = 'posted'): void {
     const db = getDatabaseManager().getDb();
     db.prepare('UPDATE news_items SET status = ?, status_reason = ?, preview_text = COALESCE(?, preview_text), raw_output = COALESCE(?, raw_output), posted_at = ? WHERE url = ?')
-        .run('posted', 'posted', truncatePreview(previewText), rawOutput ?? null, new Date().toISOString(), url);
+        .run('posted', reason, truncatePreview(previewText), rawOutput ?? null, new Date().toISOString(), url);
 }
 
 export function markNewsStatus(url: string, status: string, reason?: string, previewText?: string, rawOutput?: string | null): void {
@@ -253,6 +253,21 @@ export async function getNewsCandidateByUrl(url: string): Promise<NewsCandidate 
         publishedAt: row.published_at ?? null,
         content
     };
+}
+
+export function cleanupOldNews(retentionHours: number = 24): void {
+    const db = getDatabaseManager().getDb();
+    const cutoffIso = new Date(Date.now() - retentionHours * 60 * 60 * 1000).toISOString();
+    db.prepare(`
+        INSERT INTO news_daily_stats (day, skipped)
+        SELECT substr(created_at, 1, 10) as day, COUNT(*) as skipped
+        FROM news_items
+        WHERE status = 'skipped' AND datetime(created_at) < datetime(?)
+        GROUP BY day
+        ON CONFLICT(day) DO UPDATE SET
+            skipped = news_daily_stats.skipped + excluded.skipped
+    `).run(cutoffIso);
+    db.prepare("DELETE FROM news_items WHERE status = 'skipped' AND datetime(created_at) < datetime(?)").run(cutoffIso);
 }
 
 export async function getNewsCandidate(): Promise<NewsCandidate | null> {
@@ -286,7 +301,12 @@ export async function getNewsCandidate(): Promise<NewsCandidate | null> {
         }
         const articleText = await fetchArticleText(item.url);
         if (!articleText || articleText.length < minContentChars) {
-            recordNewsItem(item, 'skipped', 'Article content too short or unavailable.');
+            const preview = item.summary ?? item.title;
+            recordNewsItem(item, 'seen', 'Article content too short or unavailable; using summary fallback.', preview);
+            const fallbackContent = (item.summary ?? item.title ?? '').trim();
+            if (fallbackContent.length >= Math.min(60, minContentChars)) {
+                return { ...item, content: fallbackContent };
+            }
             continue;
         }
         recordNewsItem(item, 'seen');

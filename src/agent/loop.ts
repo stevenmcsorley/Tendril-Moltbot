@@ -20,7 +20,7 @@ import { getDefenseManager } from './defense.js';
 import { getLineageManager } from './lineage.js';
 import { getBlueprintManager } from './blueprints.js';
 import { getSynthesisManager } from './synthesis.js';
-import { getNewsCandidate, getNewsCandidateByUrl, markNewsPosted, markNewsStatus } from './news.js';
+import { getNewsCandidate, getNewsCandidateByUrl, markNewsPosted, markNewsStatus, cleanupOldNews } from './news.js';
 import type { Post, Comment } from '../platforms/types.js';
 import type { SocialClient } from '../platforms/interfaces.js';
 
@@ -246,10 +246,12 @@ class AgentLoop {
                     const authorHandle = post.author?.name;
                     const authorId = post.author?.id;
                     const wasQuarantined = authorHandle ? stateManager.isQuarantined(authorHandle) : false;
-                    if (defenseManager.evaluateQuarantine(post)) {
+                    const defenseEval = defenseManager.evaluateQuarantine(post);
+                    if (defenseEval.quarantined) {
                         if (!wasQuarantined) {
                             await this.maybeUnfollowAuthor(post.author);
                         }
+                        const reasonText = defenseEval.reasons.length > 0 ? `Reason: ${defenseEval.reasons.join(', ')}` : 'Reason: unknown';
                         if (!wasQuarantined && config.AGENT_PLATFORM === 'bluesky' && config.BSKY_DEFENSE_MUTE && authorId && client.muteUser) {
                             try {
                                 await client.muteUser(authorId);
@@ -260,7 +262,7 @@ class AgentLoop {
                                     targetAuthor: post.author?.name,
                                     promptSent: '[DEFENSE_MUTE]',
                                     rawModelOutput: null,
-                                    finalAction: `DEFENSE: Muted @${post.author?.name} (${authorId})`,
+                                    finalAction: `DEFENSE: Muted @${post.author?.name} (${authorId}). ${reasonText}`,
                                     signalType: 'DEFENSE',
                                 });
                             } catch (muteError) {
@@ -271,7 +273,7 @@ class AgentLoop {
                                     targetAuthor: post.author?.name,
                                     promptSent: '[DEFENSE_MUTE]',
                                     rawModelOutput: null,
-                                    finalAction: `DEFENSE: Failed to mute @${post.author?.name}`,
+                                    finalAction: `DEFENSE: Failed to mute @${post.author?.name}. ${reasonText}`,
                                     error: muteError instanceof Error ? muteError.message : String(muteError),
                                     signalType: 'DEFENSE',
                                 });
@@ -283,7 +285,7 @@ class AgentLoop {
                             targetSubmolt: post.submolt?.name,
                             promptSent: null,
                             rawModelOutput: null,
-                            finalAction: `DEFENSE: Node @${post.author?.name} quarantined. Skipping.`,
+                            finalAction: `DEFENSE: Node @${post.author?.name} quarantined. Skipping. ${reasonText}`,
                             signalType: 'DEFENSE',
                         });
                         continue;
@@ -536,13 +538,29 @@ class AgentLoop {
         // Social Engagement: Check for replies to my posts/comments
         await this.trySocialEngagement();
 
-            // Try news-based post when idle or in comment cooldown
-            if (config.ENABLE_NEWS_POSTS && (this.cycleStats.total === 0 || !rateLimiter.canComment())) {
-                await this.tryNewsPost(computeGateState());
+            // Try news-based post on schedule (idle-only optional)
+            if (config.ENABLE_NEWS_POSTS) {
+                const newsIdleOnly = stateManager.getNewsIdleOnlyEnabled(config.NEWS_ONLY_WHEN_IDLE);
+                if (!newsIdleOnly || this.cycleStats.total === 0 || !rateLimiter.canComment()) {
+                    await this.tryNewsPost(computeGateState());
+                }
             }
 
             // Refresh engagement metrics on my own posts/comments
             await this.refreshOwnEngagements();
+
+            // Maintenance: prune old logs/news and retain rollup stats
+            try {
+                const lastCleanup = stateManager.getLastCleanupAt();
+                const cleanupIntervalMs = 60 * 60 * 1000;
+                if (!lastCleanup || Date.now() - lastCleanup.getTime() > cleanupIntervalMs) {
+                    getActivityLogger().cleanup(24);
+                    cleanupOldNews(24);
+                    stateManager.setLastCleanupAt(new Date());
+                }
+            } catch (cleanupError) {
+                console.warn('Maintenance cleanup failed:', cleanupError);
+            }
 
             const confidenceScore = this.cycleStats.confidenceCount > 0
                 ? Number((this.cycleStats.confidenceSum / this.cycleStats.confidenceCount).toFixed(2))
@@ -1152,6 +1170,42 @@ class AgentLoop {
         return { success: true, message: 'Retry queued.' };
     }
 
+    async triggerNewsScout(force = false): Promise<{ success: boolean; message: string }> {
+        if (this.isRunning) {
+            return { success: false, message: 'Agent loop is currently running.' };
+        }
+
+        const config = getConfig();
+        if (!config.ENABLE_NEWS_POSTS) {
+            return { success: false, message: 'News posts are disabled.' };
+        }
+
+        const stateManager = getStateManager();
+        const logger = getActivityLogger();
+        const intervalMs = config.NEWS_CHECK_MINUTES * 60 * 1000;
+        const lastCheck = stateManager.getLastNewsCheck();
+        if (!force && lastCheck && Date.now() - lastCheck.getTime() < intervalMs) {
+            return { success: false, message: 'News scout is still within its interval.' };
+        }
+
+        stateManager.setLastNewsCheck(new Date());
+        const candidate = await getNewsCandidate();
+        if (!candidate) {
+            logger.log({
+                actionType: 'decision',
+                targetId: null,
+                targetSubmolt: config.TARGET_SUBMOLT ?? undefined,
+                promptSent: 'NEWS_MANUAL_TRIGGER',
+                rawModelOutput: null,
+                finalAction: 'No fresh news candidate available.'
+            });
+            return { success: true, message: 'No fresh news candidate available.' };
+        }
+
+        await this.createNewsPost(candidate, computeGateState(), { promptSent: 'NEWS_MANUAL_TRIGGER' });
+        return { success: true, message: 'News scout triggered.' };
+    }
+
     private async createNewsPost(
         candidate: { title: string; source: string; url: string; publishedAt?: string | null; content: string },
         gateState: GateState,
@@ -1195,7 +1249,7 @@ class AgentLoop {
                     content,
                     submolt: targetSubmolt
                 });
-                markNewsPosted(candidate.url, content, null);
+                markNewsPosted(candidate.url, content, null, 'posted:manual-override');
 
                 this.logAutonomyDecision(
                     logger,
@@ -1251,6 +1305,7 @@ class AgentLoop {
         const confidence = this.parseConfidence(result.rawOutput);
         let rawOutput = result.rawOutput;
         let { action, content } = parseNewsOutput(rawOutput);
+        let usedFallback = false;
 
         if (!content) {
             const retryPrompt = await buildNewsPostPromptStrict({
@@ -1265,6 +1320,11 @@ class AgentLoop {
             const retryParsed = parseNewsOutput(rawOutput);
             action = retryParsed.action;
             content = retryParsed.content;
+        }
+
+        if (!content) {
+            content = this.buildNewsFallback(candidate);
+            usedFallback = !!content;
         }
 
         if (!bypassGates && (result.isSkip || action !== 'POST' || !content)) {
@@ -1283,6 +1343,18 @@ class AgentLoop {
         }
 
         const finalContent = content;
+        const originParts: string[] = [];
+        if (options.promptSent === 'NEWS_MANUAL_TRIGGER') {
+            originParts.push('manual-trigger');
+        } else if (options.promptSent === 'NEWS_RETRY') {
+            originParts.push('manual-override');
+        } else {
+            originParts.push('auto');
+        }
+        if (usedFallback) {
+            originParts.push('fallback');
+        }
+        const originReason = `posted:${originParts.join(':')}`;
 
         if (!finalContent) {
             markNewsStatus(candidate.url, 'skipped', 'News output empty after second pass.', undefined, rawOutput);
@@ -1347,7 +1419,7 @@ class AgentLoop {
                 content: finalContent,
                 submolt: targetSubmolt
             });
-            markNewsPosted(candidate.url, finalContent, rawOutput);
+            markNewsPosted(candidate.url, finalContent, rawOutput, originReason);
 
             logger.log({
                 actionType: 'post',
@@ -1355,7 +1427,7 @@ class AgentLoop {
                 targetSubmolt: targetSubmolt,
                 promptSent: options.promptSent,
                 rawModelOutput: result.rawOutput,
-                finalAction: `News post created: "${candidate.title}"`
+                finalAction: `News post created: "${candidate.title}"${usedFallback ? ' (fallback)' : ''}`
             });
         } catch (error) {
             const reason = error instanceof Error ? error.message : 'Post creation failed.';
@@ -1949,6 +2021,20 @@ class AgentLoop {
         return cleaned;
     }
 
+    private buildNewsFallback(candidate: { title: string; content: string }): string {
+        const title = candidate.title?.trim() || '';
+        const body = candidate.content?.replace(/\s+/g, ' ').trim() || '';
+        if (!body && !title) return '';
+        const sentence = body.split(/(?<=[.!?])\s+/).find(Boolean) || body;
+        let base = sentence || title;
+        if (title && sentence && !sentence.toLowerCase().startsWith(title.toLowerCase())) {
+            base = `${title}: ${sentence}`;
+        }
+        base = this.sanitizePublicText(base);
+        base = base.replace(/0xMARKER_[0-9A-F]+/gi, '').trim();
+        base = this.truncateGraphemes(base, 200);
+        return base;
+    }
     private truncateGraphemes(text: string, max: number): string {
         if (!text) return '';
         if (max <= 0) return '';

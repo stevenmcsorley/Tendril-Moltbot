@@ -141,9 +141,34 @@ export class ActivityLogger {
     /**
      * Clean up old log files based on retention policy
      */
-    cleanup(): void {
-        // SQLite specific cleanup if needed, or based on retention days
-        // No-op for now as we keep full auditability as per requirements
+    cleanup(retentionHours: number = 24): void {
+        const db = getDatabaseManager().getDb();
+        const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000).toISOString();
+        const aggregateStmt = db.prepare(`
+            INSERT INTO activity_daily_stats (day, total, posts, comments, decisions, errors, skips, signals)
+            SELECT
+                substr(timestamp, 1, 10) as day,
+                COUNT(*) as total,
+                SUM(CASE WHEN action_type = 'post' THEN 1 ELSE 0 END) as posts,
+                SUM(CASE WHEN action_type = 'comment' THEN 1 ELSE 0 END) as comments,
+                SUM(CASE WHEN action_type = 'decision' THEN 1 ELSE 0 END) as decisions,
+                SUM(CASE WHEN action_type = 'error' THEN 1 ELSE 0 END) as errors,
+                SUM(CASE WHEN action_type = 'skip' THEN 1 ELSE 0 END) as skips,
+                SUM(CASE WHEN signal_type IS NOT NULL THEN 1 ELSE 0 END) as signals
+            FROM activity
+            WHERE timestamp < ?
+            GROUP BY day
+            ON CONFLICT(day) DO UPDATE SET
+                total = activity_daily_stats.total + excluded.total,
+                posts = activity_daily_stats.posts + excluded.posts,
+                comments = activity_daily_stats.comments + excluded.comments,
+                decisions = activity_daily_stats.decisions + excluded.decisions,
+                errors = activity_daily_stats.errors + excluded.errors,
+                skips = activity_daily_stats.skips + excluded.skips,
+                signals = activity_daily_stats.signals + excluded.signals
+        `);
+        aggregateStmt.run(cutoff);
+        db.prepare('DELETE FROM activity WHERE timestamp < ?').run(cutoff);
     }
 }
 

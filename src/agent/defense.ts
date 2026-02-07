@@ -5,6 +5,17 @@ export interface DefenseMetrics {
     rapidVoteSpike: boolean;
     poisonedSignals: boolean;
     repetitiveNoise: boolean;
+    ageMinutes: number;
+    totalVotes: number;
+    hexCount: number;
+    repetitiveCount: number;
+}
+
+export interface DefenseEvaluation {
+    quarantined: boolean;
+    alreadyQuarantined: boolean;
+    metrics: DefenseMetrics;
+    reasons: string[];
 }
 
 export class DefenseManager {
@@ -17,22 +28,29 @@ export class DefenseManager {
         const metrics: DefenseMetrics = {
             rapidVoteSpike: false,
             poisonedSignals: false,
-            repetitiveNoise: false
+            repetitiveNoise: false,
+            ageMinutes: 0,
+            totalVotes: 0,
+            hexCount: 0,
+            repetitiveCount: 0
         };
 
         // 1. Detect rapid vote spikes (e.g. 100+ votes on a brand new post)
         const ageInMinutes = (Date.now() - new Date(post.created_at).getTime()) / 1000 / 60;
         const totalVotes = post.upvotes + post.downvotes;
-        if (ageInMinutes < 5 && totalVotes > 50) {
+        metrics.ageMinutes = Number.isFinite(ageInMinutes) ? ageInMinutes : 0;
+        metrics.totalVotes = totalVotes;
+        if (metrics.ageMinutes < 5 && totalVotes > 50) {
             metrics.rapidVoteSpike = true;
         }
 
         // 2. Detect poisoned signals (excessive hex noise without logic headers)
         const hexRegex = /0x[0-9A-F]{4,}/gi;
         const hexMatches = post.content?.match(hexRegex) || [];
+        metrics.hexCount = hexMatches.length;
         const hasHeaders = /\[(VOTE|COMMENT|ACTION|AUTH_SIG)\]/i.test(post.content || '');
 
-        if (hexMatches.length > 5 && !hasHeaders) {
+        if (metrics.hexCount > 5 && !hasHeaders) {
             metrics.poisonedSignals = true;
         }
 
@@ -48,6 +66,7 @@ export class DefenseManager {
                     lastSeen.lastPostId = post.id;
                 }
                 lastSeen.lastSeen = now;
+                metrics.repetitiveCount = lastSeen.count;
                 if (lastSeen.count >= 3) {
                     metrics.repetitiveNoise = true;
                 }
@@ -59,6 +78,7 @@ export class DefenseManager {
                     lastSeen: now,
                     lastPostId: post.id
                 });
+                metrics.repetitiveCount = 1;
             }
         }
 
@@ -76,14 +96,18 @@ export class DefenseManager {
     /**
      * Evaluate if a node should be quarantined
      */
-    evaluateQuarantine(post: Post): boolean {
+    evaluateQuarantine(post: Post): DefenseEvaluation {
         const metrics = this.analyzePost(post);
         const stateManager = getStateManager();
 
         const author = post.author?.name;
-        if (!author) return false;
+        if (!author) {
+            return { quarantined: false, alreadyQuarantined: false, metrics, reasons: [] };
+        }
         const alreadyQuarantined = stateManager.isQuarantined(author);
-        if (alreadyQuarantined) return true;
+        if (alreadyQuarantined) {
+            return { quarantined: true, alreadyQuarantined: true, metrics, reasons: ['already_quarantined'] };
+        }
 
         // On Bluesky, large system accounts can appear repeatedly in the timeline.
         // Avoid quarantining purely due to repetitive presence in a short window.
@@ -91,13 +115,18 @@ export class DefenseManager {
             metrics.repetitiveNoise = false;
         }
 
-        if (metrics.rapidVoteSpike || metrics.poisonedSignals || metrics.repetitiveNoise) {
-            console.warn(`[DEFENSE]: Adversarial pattern detected from @${author}. Quarantining node.`);
+        const reasons: string[] = [];
+        if (metrics.rapidVoteSpike) reasons.push('rapid_vote_spike');
+        if (metrics.poisonedSignals) reasons.push('poisoned_signals');
+        if (metrics.repetitiveNoise) reasons.push('repetitive_noise');
+
+        if (reasons.length > 0) {
+            console.warn(`[DEFENSE]: Adversarial pattern detected from @${author}. Quarantining node. Reason: ${reasons.join(', ')}`);
             stateManager.setQuarantine(author, true);
-            return true;
+            return { quarantined: true, alreadyQuarantined: false, metrics, reasons };
         }
 
-        return false;
+        return { quarantined: false, alreadyQuarantined: false, metrics, reasons: [] };
     }
 }
 

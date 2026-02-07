@@ -167,6 +167,22 @@ export class DatabaseManager {
                 posted_at TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS activity_daily_stats (
+                day TEXT PRIMARY KEY,
+                total INTEGER DEFAULT 0,
+                posts INTEGER DEFAULT 0,
+                comments INTEGER DEFAULT 0,
+                decisions INTEGER DEFAULT 0,
+                errors INTEGER DEFAULT 0,
+                skips INTEGER DEFAULT 0,
+                signals INTEGER DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS news_daily_stats (
+                day TEXT PRIMARY KEY,
+                skipped INTEGER DEFAULT 0
+            );
+
             CREATE TABLE IF NOT EXISTS personas (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,

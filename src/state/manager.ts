@@ -268,6 +268,15 @@ export class StateManager {
         this.setKV('news_sources_override', sources);
     }
 
+    getNewsIdleOnlyEnabled(defaultValue: boolean = false): boolean {
+        const value = this.getKV('news_idle_only', null) as boolean | null;
+        return typeof value === 'boolean' ? value : defaultValue;
+    }
+
+    setNewsIdleOnlyEnabled(enabled: boolean): void {
+        this.setKV('news_idle_only', enabled);
+    }
+
     getLastNewsCheck(): Date | null {
         const value = this.getKV('news_last_check', null) as string | null;
         return value ? new Date(value) : null;
@@ -275,6 +284,15 @@ export class StateManager {
 
     setLastNewsCheck(date: Date | null): void {
         this.setKV('news_last_check', date ? date.toISOString() : null);
+    }
+
+    getLastCleanupAt(): Date | null {
+        const value = this.getKV('last_cleanup_at', null) as string | null;
+        return value ? new Date(value) : null;
+    }
+
+    setLastCleanupAt(date: Date | null): void {
+        this.setKV('last_cleanup_at', date ? date.toISOString() : null);
     }
 
     /**
