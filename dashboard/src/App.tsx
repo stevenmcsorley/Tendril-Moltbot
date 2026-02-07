@@ -14,6 +14,7 @@ import EvolutionHistory from './components/EvolutionHistory';
 import SovereigntyPanel from './components/SovereigntyPanel';
 import SynthesisHistory from './components/SynthesisHistory';
 import SoulPanel from './components/SoulPanel';
+import EngagementWeather, { type EngagementWeatherState } from './components/EngagementWeather';
 import Tooltip from './components/Tooltip';
 import RelativeTime from './components/RelativeTime';
 import {
@@ -278,6 +279,7 @@ export default function App() {
     const [dataStats, setDataStats] = useState<DataStats | null>(null);
     const [autoEvolutionUpdating, setAutoEvolutionUpdating] = useState(false);
     const [newsBypassUpdating, setNewsBypassUpdating] = useState(false);
+    const [engagementWeather, setEngagementWeather] = useState<EngagementWeatherState | null>(null);
 
     // WebSocket reference + pagination refs
     const wsRef = useRef<WebSocket | null>(null);
@@ -294,6 +296,19 @@ export default function App() {
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Unknown error');
+        }
+    }, []);
+
+    const fetchEngagementWeather = useCallback(async () => {
+        try {
+            const res = await fetch('/api/engagement-weather');
+            if (!res.ok) throw new Error('Failed to fetch engagement weather');
+            const data = await res.json();
+            if (data?.weather) {
+                setEngagementWeather(data.weather);
+            }
+        } catch (err) {
+            console.error('Failed to fetch engagement weather:', err);
         }
     }, []);
 
@@ -583,11 +598,12 @@ export default function App() {
             fetchEvolution(evolutionPageRef.current),
             fetchSynthesis(synthesisPageRef.current),
             fetchSovereignty(),
-            fetchDataStats()
+            fetchDataStats(),
+            fetchEngagementWeather()
         ]);
         setLastRefresh(new Date());
         setStatsRefreshToken(prev => prev + 1);
-    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, filterType]);
+    }, [fetchStatus, fetchLogs, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, fetchEngagementWeather, filterType]);
 
     const refreshPassive = useCallback(async () => {
         await Promise.all([
@@ -597,11 +613,12 @@ export default function App() {
             fetchEvolution(evolutionPageRef.current),
             fetchSynthesis(synthesisPageRef.current),
             fetchSovereignty(),
-            fetchDataStats()
+            fetchDataStats(),
+            fetchEngagementWeather()
         ]);
         setLastRefresh(new Date());
         setStatsRefreshToken(prev => prev + 1);
-    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats]);
+    }, [fetchStatus, fetchSubmolts, fetchTopology, fetchEvolution, fetchSynthesis, fetchSovereignty, fetchDataStats, fetchEngagementWeather]);
 
     useEffect(() => {
         const limit = logSearch.trim().length > 0 || filterType === 'replies'
@@ -668,6 +685,9 @@ export default function App() {
                         case 'comment_engagement':
                             setMyCommentsRefreshToken(prev => prev + 1);
                             setStatsRefreshToken(prev => prev + 1);
+                            break;
+                        case 'engagement_update':
+                            setEngagementWeather(msg.payload);
                             break;
 
                         case 'stats_update':
@@ -745,6 +765,12 @@ export default function App() {
         return () => clearInterval(interval);
     }, [refresh, refreshPassive]);
 
+    useEffect(() => {
+        fetchEngagementWeather();
+        const interval = setInterval(fetchEngagementWeather, 60000);
+        return () => clearInterval(interval);
+    }, [fetchEngagementWeather]);
+
     const handleControl = async (action: string) => {
         try {
             const res = await fetch(`/api/control/${action}`, { method: 'POST' });
@@ -808,6 +834,7 @@ export default function App() {
                         isConnected={isWsConnected}
                     />
                     <StatusCard status={status} />
+                    <EngagementWeather weather={engagementWeather} />
                     <Controls
                         status={status}
                         onPause={() => handleControl('pause')}

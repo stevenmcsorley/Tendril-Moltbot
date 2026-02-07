@@ -650,6 +650,19 @@ export function createDashboardServer(): express.Application {
     });
 
     /**
+     * GET /api/engagement-weather
+     * Engagement signal summary for adaptive throttling
+     */
+    app.get('/api/engagement-weather', (req, res) => {
+        try {
+            const state = getStateManager();
+            res.json({ success: true, weather: state.getEngagementWeather() });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to fetch engagement weather' });
+        }
+    });
+
+    /**
      * POST /api/delete-comment
      * Delete a comment created by this agent
      */

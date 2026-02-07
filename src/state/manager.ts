@@ -662,6 +662,47 @@ export class StateManager {
         const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
         const pruned = events.filter(ts => new Date(ts).getTime() >= cutoff).slice(-1000);
         this.setKV('engagement_events', pruned);
+        import('../dashboard/websocket.js').then(m => {
+            m.getWebSocketBroadcaster().broadcast('engagement_update', this.getEngagementWeather());
+        });
+    }
+
+    getEngagementWeather(): {
+        status: 'silence' | 'low' | 'steady' | 'high';
+        count: number;
+        windowMinutes: number;
+        lowThreshold: number;
+        highThreshold: number;
+        lastSignalAt: string | null;
+    } {
+        const config = getConfig();
+        const windowMs = config.ADAPTIVE_WINDOW_MINUTES * 60 * 1000;
+        const cutoff = Date.now() - windowMs;
+        const events = this.getKV('engagement_events', []) as string[];
+        const recent = events.filter(ts => new Date(ts).getTime() >= cutoff);
+        if (recent.length !== events.length) {
+            this.setKV('engagement_events', recent.slice(-1000));
+        }
+        const count = recent.length;
+        const lastSignalAt = count > 0 ? recent[recent.length - 1] : null;
+        let status: 'silence' | 'low' | 'steady' | 'high' = 'silence';
+        if (count === 0) {
+            status = 'silence';
+        } else if (count <= config.ADAPTIVE_ENGAGEMENT_LOW) {
+            status = 'low';
+        } else if (count >= config.ADAPTIVE_ENGAGEMENT_HIGH) {
+            status = 'high';
+        } else {
+            status = 'steady';
+        }
+        return {
+            status,
+            count,
+            windowMinutes: config.ADAPTIVE_WINDOW_MINUTES,
+            lowThreshold: config.ADAPTIVE_ENGAGEMENT_LOW,
+            highThreshold: config.ADAPTIVE_ENGAGEMENT_HIGH,
+            lastSignalAt
+        };
     }
 
     getRecentEngagementCount(windowMs: number): number {
